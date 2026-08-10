@@ -1,0 +1,68 @@
+services:
+  postgres:
+    build:
+      context: ./deploy/postgres
+    environment:
+      POSTGRES_DB: destinos_dev
+      POSTGRES_USER: destinos
+      POSTGRES_PASSWORD: destinos_dev_pw
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U destinos -d destinos_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  backend:
+    build:
+      context: ./backend
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://destinos:destinos_dev_pw@postgres:5432/destinos_dev
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - ./backend/app:/app/app
+
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      NEXT_PUBLIC_API_URL: http://backend:8000
+      BACKEND_URL: http://backend:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+  playwright:
+    image: mcr.microsoft.com/playwright:v1.62.1-jammy
+    profiles: ["test"]
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      PLAYWRIGHT_BASE_URL: http://frontend:3000
+      PLAYWRIGHT_SKIP_WEBSERVER: "1"
+    depends_on:
+      - frontend
+    command: sh -c "npm ci && npx playwright test"
+
+volumes:
+  pg_data:

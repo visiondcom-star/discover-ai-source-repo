@@ -1,0 +1,50 @@
+# macOS
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.env
+.env.*.local
+
+# Node
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Flutter / Dart
+mobile/.dart_tool/
+mobile/build/
+mobile/.flutter-plugins-dependencies
+
+# Environment files
+frontend/.env.local
+backend/.env
+
+# IDE files
+.vscode/
+*.swp
+
+# Package manager lock files
+# keep package-lock.json and pubspec.lock under version control
+
+# Misc
+*.orig

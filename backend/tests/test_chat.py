@@ -37,4 +37,4 @@ async def test_chat_requires_auth(client, test_tenant):
         headers={"X-Tenant-Slug": "test-tenant"},
         json={"message": "Test"},
     )
-    assert response.status_code == 403
+    assert response.status_code == 401

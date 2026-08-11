@@ -88,14 +88,15 @@ async def dashboard_overview(
             )
         )
     )
+    events_today = active_today.scalar()
 
     return DashboardOverview(
         total_users=total_users.scalar(),
         total_pois=total_pois.scalar(),
         total_trips=total_trips.scalar(),
         total_bookings=total_bookings.scalar(),
-        active_users_today=active_today.scalar(),
-        events_today=active_today.scalar(),
+        active_users_today=events_today,
+        events_today=events_today,
     )
 
 

@@ -2,7 +2,9 @@
 import csv
 import json as json_mod
 from io import StringIO
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Header, status
+from typing import List
+from uuid import UUID
+from fastapi import APIRouter, Body, Depends, UploadFile, File, HTTPException, Header, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from app.database import get_db
@@ -155,7 +157,7 @@ async def get_pending(
 
 @router.post("/validate")
 async def validate_pois(
-    poi_ids: list,
+    poi_ids: List[UUID] = Body(...),
     db: AsyncSession = Depends(get_db),
     x_tenant_slug: str = Header(default="algeria"),
     current_user = Depends(get_current_user),

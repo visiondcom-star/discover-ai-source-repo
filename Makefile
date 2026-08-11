@@ -1,4 +1,4 @@
-.PHONY: dev build test backend frontend mobile clean
+.PHONY: dev build test backend frontend mobile flutter-app clean
 
 # Development
 dev:
@@ -8,6 +8,7 @@ dev:
 test:
 	cd backend && pytest tests/ -v --cov=app
 	cd mobile && flutter test --coverage
+	cd flutter_app && flutter test --coverage
 
 # Backend only
 backend:
@@ -20,6 +21,10 @@ frontend:
 # Mobile
 mobile:
 	cd mobile && flutter run
+
+# New Flutter block
+flutter-app:
+	cd flutter_app && flutter run
 
 # Build production images
 build:

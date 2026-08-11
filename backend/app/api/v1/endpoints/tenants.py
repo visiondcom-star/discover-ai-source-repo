@@ -1,6 +1,6 @@
 """Tenant management endpoints."""
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Header, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.database import get_db
@@ -13,10 +13,10 @@ router = APIRouter()
 
 @router.get("/current", response_model=TenantResponse)
 async def get_current_tenant_config(
-    slug: str = "algeria",
+    x_tenant_slug: str = Header(default="algeria"),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(Tenant).where(Tenant.slug == slug))
+    result = await db.execute(select(Tenant).where(Tenant.slug == x_tenant_slug))
     tenant = result.scalar_one_or_none()
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")

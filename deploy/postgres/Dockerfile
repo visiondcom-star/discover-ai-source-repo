@@ -1,4 +1,5 @@
 FROM pgvector/pgvector:pg16
 
-# Additional extensions can be added here if needed
-# The base image already includes pgvector
+# Create the test database used by the backend pytest suite
+# on first container initialization.
+COPY init-test-db.sql /docker-entrypoint-initdb.d/init-test-db.sql

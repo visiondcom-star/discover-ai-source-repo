@@ -1,0 +1,13 @@
+resources:
+  - ../../namespace.yaml
+  - ../../secrets.yaml
+  - ../../postgres.yaml
+  - ../../redis.yaml
+  - ../../backend.yaml
+  - ../../frontend.yaml
+  - ../../ingress.yaml
+  - ../../backend-hpa.yaml
+  - ../../frontend-hpa.yaml
+
+patchesStrategicMerge:
+  - staging-patch.yaml

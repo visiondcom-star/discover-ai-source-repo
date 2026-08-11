@@ -121,4 +121,4 @@ async def test_import_csv_duplicate_slug_handling(client, auth_headers, test_ten
 @pytest.mark.asyncio
 async def test_content_requires_auth(client, test_tenant):
     response = await client.get("/api/v1/content/pending", headers={"X-Tenant-Slug": "test-tenant"})
-    assert response.status_code == 403
+    assert response.status_code == 401

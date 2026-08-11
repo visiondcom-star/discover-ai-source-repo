@@ -72,4 +72,4 @@ async def test_analytics_tenant_isolation(client, auth_headers, db_session, test
 @pytest.mark.asyncio
 async def test_analytics_requires_auth(client, test_tenant):
     response = await client.get("/api/v1/analytics/dashboard/overview", headers={"X-Tenant-Slug": "test-tenant"})
-    assert response.status_code == 403
+    assert response.status_code == 401

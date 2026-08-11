@@ -93,8 +93,13 @@ class TripPlannerService:
                 self.db.add(trip_item)
 
         await self.db.commit()
-        await self.db.refresh(trip)
-        return trip
+        from sqlalchemy.orm import selectinload
+        result = await self.db.execute(
+            select(Trip)
+            .options(selectinload(Trip.items).selectinload(TripItem.poi))
+            .where(Trip.id == trip.id)
+        )
+        return result.scalar_one_or_none()
 
     async def get_trip_with_items(self, trip_id: str, user_id: str) -> Optional[Trip]:
         from sqlalchemy.orm import selectinload

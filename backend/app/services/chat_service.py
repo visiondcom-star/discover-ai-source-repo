@@ -1,10 +1,10 @@
 """AI Chat service with RAG enhancement."""
-import json
 from typing import List, Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
-from app.models import ChatMessage, POI, Tenant
+from app.models import ChatMessage, Tenant
 from app.config import get_settings
+from app.services.llm_providers.factory import get_llm_provider
 
 settings = get_settings()
 
@@ -39,29 +39,12 @@ Sois concis mais complet."""
 
         messages.append({"role": "user", "content": message})
 
-        # Call OpenAI if key is available
-        if settings.OPENAI_API_KEY:
-            try:
-                import openai
-                client = openai.AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-
-                response = await client.chat.completions.create(
-                    model=settings.OPENAI_MODEL,
-                    messages=messages,
-                    temperature=0.7,
-                    max_tokens=800,
-                )
-
-                assistant_message = response.choices[0].message.content
-                suggestions = self._extract_suggestions(assistant_message)
-
-            except Exception as e:
-                assistant_message = f"Je suis désolé, je rencontre un problème technique. ({str(e)})"
-                suggestions = []
-        else:
-            # Fallback without OpenAI
-            assistant_message = self._fallback_response(message)
-            suggestions = ["Meilleurs sites historiques", "Gastronomie locale", "Itinéraire 3 jours"]
+        provider = get_llm_provider()
+        try:
+            assistant_message = await provider.complete(messages, temperature=0.7, max_tokens=800)
+        except Exception as e:
+            assistant_message = f"Je suis désolé, je rencontre un problème technique. ({str(e)})"
+        suggestions = self._extract_suggestions(assistant_message)
 
         # Save messages
         await self._save_message(user_id, "user", message, context)
@@ -116,18 +99,3 @@ Sois concis mais complet."""
         if not suggestions:
             suggestions = ["Explorer les POIs", "Planifier un voyage", "Histoire locale"]
         return suggestions[:3]
-
-    def _fallback_response(self, message: str) -> str:
-        msg_lower = message.lower()
-        if "casbah" in msg_lower or "alger" in msg_lower:
-            return "La Casbah d'Alger est un site UNESCO incontournable avec ses ruelles étroites, ses palais ottomans et sa vue panoramique sur la baie. Je recommande une visite guidée de 2-3 heures."
-        elif "tipaza" in msg_lower:
-            return "Les ruines romaines de Tipaza sont magnifiques, situées en bord de mer. C'est un site UNESCO qui mérite une demi-journée. N'oubliez pas le musée sur place !"
-        elif "constantine" in msg_lower:
-            return "Constantine, la ville des ponts suspendus, offre des vues spectaculaires sur le canyon du Rhummel. Le pont Sidi M'Cid est emblématique."
-        elif "manger" in msg_lower or "restaurant" in msg_lower or "cuisine" in msg_lower:
-            return "La cuisine algérienne est riche et variée ! Essayez le couscous, le chorba, les brick à l'œuf, et le méchoui. Chaque région a ses spécialités."
-        elif "itinéraire" in msg_lower or "voyage" in msg_lower or "plan" in msg_lower:
-            return "Je peux vous aider à planifier un itinéraire personnalisé ! Dites-moi combien de jours vous avez, votre budget, et vos centres d'intérêt (culture, nature, aventure...)."
-        else:
-            return f"Merci pour votre question ! En tant que guide pour {self.tenant.name}, je suis là pour vous aider. Pourriez-vous me donner plus de détails sur ce que vous cherchez ?"

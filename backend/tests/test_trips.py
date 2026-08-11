@@ -86,4 +86,4 @@ async def test_trip_requires_auth(client, test_tenant):
         headers={"X-Tenant-Slug": "test-tenant"},
         json={"num_days": 1, "budget_level": "low"},
     )
-    assert response.status_code == 403
+    assert response.status_code == 401

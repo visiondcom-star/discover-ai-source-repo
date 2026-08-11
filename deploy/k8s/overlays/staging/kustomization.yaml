@@ -9,5 +9,5 @@ resources:
   - ../../backend-hpa.yaml
   - ../../frontend-hpa.yaml
 
-patchesStrategicMerge:
+patches:
   - staging-patch.yaml

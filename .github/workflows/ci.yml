@@ -85,9 +85,10 @@ jobs:
       - name: Run tests
         working-directory: ./mobile
         run: flutter test --coverage
-      - name: Build APK
-        working-directory: ./mobile
-        run: flutter build apk --release
+      # NOTE: `flutter build apk` disabled — the mobile module has no android/
+      # platform scaffold in this repo, so an APK build always fails on CI.
+      # If a real APK is required, run `flutter create --platforms=android .`
+      # in ./mobile and commit the generated android/ directory first.
 
   docker-build:
     runs-on: ubuntu-latest

@@ -14,7 +14,7 @@ export function Footer({ tenant }: { tenant: any }) {
           <div>
             <h4 className="font-semibold mb-4">Navigation</h4>
             <ul className="space-y-2 text-gray-400 text-sm">
-              <li><a href="/pois" className="hover:text-white">Points d'intérêt</a></li>
+              <li><a href="/pois" className="hover:text-white">Points d&apos;intérêt</a></li>
               <li><a href="/trips" className="hover:text-white">Planifier un voyage</a></li>
               <li><a href="/chat" className="hover:text-white">Guide IA</a></li>
             </ul>

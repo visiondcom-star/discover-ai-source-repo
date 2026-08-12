@@ -170,7 +170,7 @@ function AssistantTab() {
 
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("/api/v1/chat", {
+      const res = await fetch("/api/v1/chat/", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

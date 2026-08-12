@@ -6,12 +6,12 @@ import { LandingPage, LoginForm } from "@/components/LandingPage";
 import { AppShell } from "@/components/AppShell";
 
 export default function Home() {
-  const { user, login, logout, isLoading } = useAuth();
+  const { user, login, logout, loading } = useAuth();
   const [view, setView] = useState<"landing" | "login" | "register">("landing");
   const [loginError, setLoginError] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
 
-  if (isLoading) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-700"></div>

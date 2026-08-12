@@ -8,7 +8,7 @@ settings = get_settings()
 
 
 def get_llm_provider() -> LLMProvider:
-    """Return the configured LLM provider. Falls back to MockProvider without an API key."""
-    if settings.OPENAI_API_KEY:
+    """Return the configured LLM provider. Falls back to MockProvider without an API key or explicit config."""
+    if settings.LLM_PROVIDER == "openai" and settings.OPENAI_API_KEY:
         return OpenAIProvider(api_key=settings.OPENAI_API_KEY, model=settings.OPENAI_MODEL)
     return MockProvider()

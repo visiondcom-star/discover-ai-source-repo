@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 1 day
 
+    # LLM Provider
+    LLM_PROVIDER: str = "mock"
+
     # OpenAI
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o"

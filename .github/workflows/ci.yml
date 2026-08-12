@@ -65,12 +65,19 @@ jobs:
       - name: Lint
         working-directory: ./frontend
         run: npm run lint
-      - name: Install Playwright browsers
-        working-directory: ./frontend
-        run: npx playwright install --with-deps
-      - name: Run Playwright tests
-        working-directory: ./frontend
-        run: npx playwright test
+      - name: Configure minimal backend env for docker compose
+        run: |
+          cat > backend/.env <<'EOF'
+          SECRET_KEY=ci-secret-for-tests
+          ALGORITHM=HS256
+          ACCESS_TOKEN_EXPIRE_MINUTES=1440
+          OPENAI_API_KEY=
+          OPENAI_MODEL=gpt-4o
+          EMBEDDING_MODEL=text-embedding-3-small
+          DEFAULT_TENANT_SLUG=algeria
+          EOF
+      - name: Run Playwright E2E via docker compose (full stack)
+        run: docker compose --profile test up --abort-on-container-exit --force-recreate
 
   flutter-tests:
     runs-on: ubuntu-latest

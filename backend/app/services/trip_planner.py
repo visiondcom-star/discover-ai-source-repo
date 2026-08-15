@@ -3,6 +3,7 @@ import json
 from typing import List, Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
+from sqlalchemy.orm import selectinload
 from app.models import POI, Trip, TripItem, Tenant
 from app.schemas import TripGenerateRequest
 from app.services.constraint_solver import ConstraintSolver
@@ -93,7 +94,6 @@ class TripPlannerService:
                 self.db.add(trip_item)
 
         await self.db.commit()
-        from sqlalchemy.orm import selectinload
         result = await self.db.execute(
             select(Trip)
             .options(selectinload(Trip.items).selectinload(TripItem.poi))
@@ -102,7 +102,6 @@ class TripPlannerService:
         return result.scalar_one_or_none()
 
     async def get_trip_with_items(self, trip_id: str, user_id: str) -> Optional[Trip]:
-        from sqlalchemy.orm import selectinload
         result = await self.db.execute(
             select(Trip)
             .options(selectinload(Trip.items).selectinload(TripItem.poi))

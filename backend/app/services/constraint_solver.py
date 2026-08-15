@@ -1,7 +1,12 @@
 """Constraint solver for trip itinerary optimization."""
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, TypeVar, TYPE_CHECKING
 from dataclasses import dataclass
 import random
+
+if TYPE_CHECKING:
+    from app.models import POI
+
+T = TypeVar("T")
 
 
 @dataclass
@@ -27,13 +32,13 @@ class ConstraintSolver:
 
     def solve(
         self,
-        pois: List[Any],
+        pois: List[T],
         num_days: int,
         budget_level: str,
         travel_style: str,
         accessibility_needs: List[str],
         interests: List[str],
-    ) -> List[List[Any]]:
+    ) -> List[List[T]]:
         """Returns list of days, each day is a list of POIs."""
 
         # Convert to proxies

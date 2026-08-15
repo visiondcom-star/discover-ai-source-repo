@@ -12,3 +12,8 @@ class LLMProvider(ABC):
         max_tokens: int = 800,
     ) -> str:
         raise NotImplementedError
+
+    @abstractmethod
+    async def embed(self, text: str) -> List[float]:
+        """Return a vector embedding for the given text, for RAG similarity search."""
+        raise NotImplementedError

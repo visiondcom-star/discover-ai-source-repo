@@ -21,6 +21,7 @@ class Settings(BaseSettings):
 
     # LLM Provider
     LLM_PROVIDER: str = "mock"
+    USE_PGVECTOR: bool = False
 
     # OpenAI
     OPENAI_API_KEY: str = ""

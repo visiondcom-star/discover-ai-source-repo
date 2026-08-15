@@ -1,6 +1,6 @@
 """AI Chat endpoints."""
-from fastapi import APIRouter, Depends, Header
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, Header  # type: ignore
+from sqlalchemy.ext.asyncio import AsyncSession  # type: ignore
 from app.database import get_db
 from app.schemas import ChatRequest, ChatResponse
 from app.core.tenant import get_tenant_from_header
@@ -10,6 +10,7 @@ from app.services.chat_service import ChatService
 router = APIRouter()
 
 
+@router.post("", response_model=ChatResponse)
 @router.post("/", response_model=ChatResponse)
 async def chat(
     data: ChatRequest,

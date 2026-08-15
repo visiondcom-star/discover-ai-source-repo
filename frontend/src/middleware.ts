@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { TENANT_SLUG } from "@/lib/tenant";
 
 export function middleware(request: NextRequest) {
   // Add tenant header to all requests
   const requestHeaders = new Headers(request.headers);
-  requestHeaders.set("x-tenant-slug", "algeria");
+  requestHeaders.set("x-tenant-slug", TENANT_SLUG);
 
   return NextResponse.next({
     request: {

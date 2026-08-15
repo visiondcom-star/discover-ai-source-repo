@@ -48,3 +48,7 @@ backend/.env
 
 # Misc
 *.orig
+backend/.venv/
+backend/.coverage
+backend/coverage.xml
+frontend/tsconfig.tsbuildinfo

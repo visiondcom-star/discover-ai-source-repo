@@ -20,7 +20,10 @@ class ApiService {
 
   Future<dynamic> _get(String path) async {
     final res = await http.get(Uri.parse('$baseUrl$path'), headers: _headers);
-    return jsonDecode(res.body);
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      return jsonDecode(res.body);
+    }
+    throw Exception('HTTP ${res.statusCode}: ${res.body}');
   }
 
   Future<dynamic> _post(String path, Map<String, dynamic> body) async {
@@ -29,7 +32,10 @@ class ApiService {
       headers: _headers,
       body: jsonEncode(body),
     );
-    return jsonDecode(res.body);
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      return jsonDecode(res.body);
+    }
+    throw Exception('HTTP ${res.statusCode}: ${res.body}');
   }
 
   Future<Map<String, dynamic>> getTenant() async => await _get('/tenants/current');
@@ -53,7 +59,7 @@ class ApiService {
     if (city != null) params['city'] = city;
     if (category != null) params['category'] = category;
     if (search != null) params['search'] = search;
-    final query = params.isNotEmpty ? '?${params.entries.map((e) => '${e.key}=${e.value}').join('&')}' : '';
+    final query = params.isNotEmpty ? '?${params.entries.map((e) => '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}').join('&')}' : '';
     return await _get('/pois/$query');
   }
 

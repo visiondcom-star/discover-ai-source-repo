@@ -30,3 +30,11 @@ class MockProvider(LLMProvider):
             return "Je peux vous aider à planifier un itinéraire personnalisé ! Dites-moi combien de jours vous avez, votre budget, et vos centres d'intérêt (culture, nature, aventure...)."
         else:
             return "Merci pour votre question ! Je suis votre guide touristique local, je suis là pour vous aider. Pourriez-vous me donner plus de détails sur ce que vous cherchez ?"
+
+    async def embed(self, text: str) -> List[float]:
+        """Deterministic fake embedding — hash-based, no network call, 1536 dims to match text-embedding-3-small."""
+        import hashlib
+        h = hashlib.sha256(text.encode()).digest()
+        # Répète le hash pour remplir 1536 dimensions, normalisé entre -1 et 1
+        raw = (h * (1536 // len(h) + 1))[:1536]
+        return [(b - 128) / 128.0 for b in raw]

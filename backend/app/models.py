@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime
 from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, Text, ForeignKey, JSON, ARRAY
 from sqlalchemy.dialects.postgresql import UUID
+from pgvector.sqlalchemy import Vector
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -75,7 +76,7 @@ class POI(Base):
     opening_hours = Column(JSON, default=dict)
     is_verified = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
-    embedding = Column(Text, nullable=True)  # pgvector storage
+    embedding = Column(Vector(1536), nullable=True)  # pgvector, 1536 for text-embedding-3-small
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

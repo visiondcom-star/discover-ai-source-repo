@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/lib/api";
+import { TENANT_SLUG } from "@/lib/tenant";
 import { Map, Search, MessageCircle, Calendar, User, Home } from "lucide-react";
 
 export function AppShell() {
@@ -90,7 +91,7 @@ function ExploreTab() {
     setLoading(true);
     try {
       const res = await fetch(`/api/v1/pois/?search=${encodeURIComponent(query)}&page_size=20`, {
-        headers: { "X-Tenant-Slug": "algeria" },
+        headers: { "X-Tenant-Slug": TENANT_SLUG },
       });
       const data = await res.json();
       setPois(data.items || []);
@@ -174,7 +175,7 @@ function AssistantTab() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Tenant-Slug": "algeria",
+          "X-Tenant-Slug": TENANT_SLUG,
           "Authorization": `Bearer ${token}`,
         },
         body: JSON.stringify({ message: input }),

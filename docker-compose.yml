@@ -45,7 +45,7 @@ services:
     build:
       context: ./frontend
     environment:
-      NEXT_PUBLIC_API_URL: http://backend:8000
+      # Browser loads the SPA same-origin and Next.js proxies /api/* to the backend.
       BACKEND_URL: http://backend:8000
     ports:
       - "3000:3000"

@@ -20,8 +20,9 @@ spec:
           ports:
             - containerPort: 3000
           env:
-            - name: NEXT_PUBLIC_API_URL
-              value: "https://api.your-domain.com"
+            # Next.js rewrites /api/* from the browser (same-origin) to the backend.
+            - name: BACKEND_URL
+              value: "http://backend:8000"
           resources:
             requests:
               cpu: "100m"

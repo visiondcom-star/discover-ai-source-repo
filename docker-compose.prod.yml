@@ -64,10 +64,9 @@ services:
   frontend:
     build:
       context: ./frontend
-      args:
-        NEXT_PUBLIC_API_URL: https://api.your-domain.com
     environment:
-      NEXT_PUBLIC_API_URL: https://api.your-domain.com
+      # Browser requests the SPA same-origin; Next.js proxies /api/* to BACKEND_URL.
+      BACKEND_URL: https://api.your-domain.com
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.frontend.rule=Host(`your-domain.com`)"

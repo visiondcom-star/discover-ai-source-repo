@@ -13,7 +13,12 @@ from slugify import slugify
 router = APIRouter()
 
 
+# Both "/pois" and "/pois/" are registered: FastAPI's redirect_slashes would
+# otherwise 307-redirect between the two with an ABSOLUTE Location built from
+# the proxied Host (e.g. http://backend:8000/...) — unreachable for browsers
+# that talk to the frontend same-origin and break behind the Next.js rewrite.
 @router.get("/", response_model=POIListResponse)
+@router.get("", response_model=POIListResponse, include_in_schema=False)
 async def list_pois(
     db: AsyncSession = Depends(get_db),
     x_tenant_slug: str = Header(default="algeria"),

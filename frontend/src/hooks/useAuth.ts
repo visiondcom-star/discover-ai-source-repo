@@ -26,8 +26,8 @@ export function useAuth() {
 
     try {
       // Assuming api.get handles setting the auth header
-      const userData = await api.get<User>("/api/v1/auth/me");
-      setUser(userData);
+      const userData = await api.get<User>("/auth/me");
+      setUser(userData.data);
     } catch (error) {
       console.error("Failed to fetch user:", error);
       localStorage.removeItem("token");
@@ -43,17 +43,17 @@ export function useAuth() {
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      const loginResponse = await api.post<{ access_token: string }>("/api/v1/auth/login", {
+      const loginResponse = await api.post<{ access_token: string }>("/auth/login", {
         email,
         password,
       });
 
-      localStorage.setItem("token", loginResponse.access_token);
+      localStorage.setItem("token", loginResponse.data.access_token);
 
       // After setting the token, fetch the user data to ensure consistency.
       // The api module should now use the new token for its requests.
-      const userData = await api.get<User>("/api/v1/auth/me");
-      setUser(userData);
+      const userData = await api.get<User>("/auth/me");
+      setUser(userData.data);
       return true;
     } catch (error) {
       console.error("Login failed:", error);
@@ -66,8 +66,9 @@ export function useAuth() {
   const logout = useCallback(() => {
     localStorage.removeItem("token");
     setUser(null);
-    // Redirect to login page instead of forcing a reload for a smoother UX.
-    router.push("/login");
+    // Single-page app: "/" renders the landing page once unauthenticated.
+    // There is no "/login" route (the login form lives on the landing page).
+    router.push("/");
   }, [router]);
 
   return {

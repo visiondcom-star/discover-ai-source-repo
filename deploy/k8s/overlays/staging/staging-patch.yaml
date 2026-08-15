@@ -9,7 +9,7 @@ spec:
       containers:
         - name: frontend
           env:
-            - name: NEXT_PUBLIC_API_URL
+            - name: BACKEND_URL
               value: "https://staging-api.your-domain.com"
 ---
 apiVersion: apps/v1

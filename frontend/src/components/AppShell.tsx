@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 import { TENANT_SLUG } from "@/lib/tenant";
 import { Map, Search, MessageCircle, Calendar, User, Home } from "lucide-react";
 
-export function AppShell() {
+export function AppShell({ onLogout }: { onLogout?: () => void }) {
   const [activeTab, setActiveTab] = useState("home");
   const { user, logout } = useAuth();
 
@@ -32,7 +32,7 @@ export function AppShell() {
         {activeTab === "explore" && <ExploreTab />}
         {activeTab === "bookings" && <BookingsTab />}
         {activeTab === "assistant" && <AssistantTab />}
-        {activeTab === "profile" && <ProfileTab user={user} onLogout={logout} />}
+        {activeTab === "profile" && <ProfileTab user={user} onLogout={onLogout ?? logout} />}
       </main>
 
       {/* Bottom Tabs */}

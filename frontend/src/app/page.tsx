@@ -20,7 +20,14 @@ export default function Home() {
   }
 
   if (user) {
-    return <AppShell />;
+    return (
+      <AppShell
+        onLogout={() => {
+          logout();
+          setView("landing");
+        }}
+      />
+    );
   }
 
   if (view === "login") {

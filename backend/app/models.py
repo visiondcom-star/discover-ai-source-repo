@@ -1,11 +1,15 @@
 """SQLAlchemy ORM models with multi-tenant isolation."""
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, Text, ForeignKey, JSON, ARRAY
+from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, Text, ForeignKey, JSON, ARRAY, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from pgvector.sqlalchemy import Vector
 from sqlalchemy.orm import relationship
 from app.database import Base
+
+
+def utcnow():
+    return datetime.utcnow()
 
 
 def generate_uuid():
@@ -15,7 +19,8 @@ def generate_uuid():
 class Tenant(Base):
     __tablename__ = "tenants"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(UUID(
+        as_uuid=True), primary_key=True, default=uuid.uuid4)
     slug = Column(String(50), unique=True, nullable=False, index=True)
     name = Column(String(100), nullable=False)
     default_language = Column(String(10), default="fr")
@@ -25,11 +30,15 @@ class Tenant(Base):
     secondary_color = Column(String(7), default="#FFFFFF")
     is_active = Column(Boolean, default=True)
     config = Column(JSON, default=dict)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     users = relationship("User", back_populates="tenant")
     pois = relationship("POI", back_populates="tenant")
     trips = relationship("Trip", back_populates="tenant")
+    bookings = relationship("Booking", back_populates="tenant")
+    reviews = relationship("Review", back_populates="tenant")
+    analytics_events = relationship("AnalyticsEvent", back_populates="tenant")
+    chat_messages = relationship("ChatMessage", back_populates="tenant")
 
 
 class User(Base):
@@ -43,15 +52,17 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     is_admin = Column(Boolean, default=False)
     preferences = Column(JSON, default=dict)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     tenant = relationship("Tenant", back_populates="users")
     trips = relationship("Trip", back_populates="user")
     bookings = relationship("Booking", back_populates="user")
+    reviews = relationship("Review", back_populates="user")
+    analytics_events = relationship("AnalyticsEvent", back_populates="user")
+    chat_messages = relationship("ChatMessage", back_populates="user")
 
     __table_args__ = (
-        # Unique email per tenant
-        {"comment": "Unique constraint on email per tenant"},
+        UniqueConstraint("tenant_id", "email", name="uq_user_tenant_email"),
     )
 
 
@@ -74,14 +85,18 @@ class POI(Base):
     tags = Column(ARRAY(String), default=list)
     accessibility = Column(ARRAY(String), default=list)
     opening_hours = Column(JSON, default=dict)
+    average_rating = Column(Float, nullable=True, index=True)
+    review_count = Column(Integer, default=0)
     is_verified = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
     embedding = Column(Vector(1536), nullable=True)  # pgvector, 1536 for text-embedding-3-small
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     tenant = relationship("Tenant", back_populates="pois")
     trip_items = relationship("TripItem", back_populates="poi")
+    bookings = relationship("Booking", back_populates="poi")
+    reviews = relationship("Review", back_populates="poi")
 
 
 class Trip(Base):
@@ -106,8 +121,8 @@ class Trip(Base):
     end_date = Column(DateTime, nullable=True)
     total_cost_estimate = Column(Float, nullable=True)
     metadata_ = Column("metadata", JSON, default=dict)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     tenant = relationship("Tenant", back_populates="trips")
     user = relationship("User", back_populates="trips")
@@ -145,10 +160,33 @@ class Booking(Base):
     price = Column(Float, nullable=True)
     currency = Column(String(10), default="DZD")
     booking_data = Column(JSON, default=dict)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
+    tenant = relationship("Tenant", back_populates="bookings")
     user = relationship("User", back_populates="bookings")
+    poi = relationship("POI", back_populates="bookings")
+
+
+class Review(Base):
+    __tablename__ = "reviews"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    poi_id = Column(UUID(as_uuid=True), ForeignKey("pois.id"), nullable=False, index=True)
+    rating = Column(Integer, nullable=False, index=True)  # From 1 to 5
+    comment = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=utcnow, index=True)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+    tenant = relationship("Tenant", back_populates="reviews")
+    user = relationship("User", back_populates="reviews")
+    poi = relationship("POI", back_populates="reviews")
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "user_id", "poi_id", name="uq_review_tenant_user_poi"),
+    )
 
 
 class AnalyticsEvent(Base):
@@ -162,7 +200,10 @@ class AnalyticsEvent(Base):
     session_id = Column(String(255), nullable=True)
     ip_address = Column(String(45), nullable=True)
     user_agent = Column(String(500), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+
+    tenant = relationship("Tenant", back_populates="analytics_events")
+    user = relationship("User", back_populates="analytics_events")
 
 
 class ChatMessage(Base):
@@ -174,4 +215,7 @@ class ChatMessage(Base):
     role = Column(String(20), nullable=False)  # user, assistant, system
     content = Column(Text, nullable=False)
     context = Column(JSON, default=dict)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+
+    tenant = relationship("Tenant", back_populates="chat_messages")
+    user = relationship("User", back_populates="chat_messages")

@@ -32,3 +32,27 @@ class OpenAIProvider(LLMProvider):
             model=self._embedding_model,
         )
         return response.data[0].embedding
+
+    async def identify_image(
+        self,
+        image_data_url: str,
+        prompt: str,
+        temperature: float = 0.2,
+        max_tokens: int = 500,
+    ) -> str:
+        response = await self._client.chat.completions.create(
+            model=self._model,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": image_data_url}},
+                    ],
+                }
+            ],
+            response_format={"type": "json_object"},
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        return response.choices[0].message.content

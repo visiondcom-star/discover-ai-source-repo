@@ -116,6 +116,8 @@ class POIResponse(POIBase):
     tenant_id: UUID
     is_verified: bool
     is_active: bool
+    average_rating: Optional[float] = None
+    review_count: int = 0
     created_at: datetime
     updated_at: datetime
 
@@ -277,3 +279,27 @@ class BookingResponse(BaseModel):
 
 class ConsentRequest(BaseModel):
     consent: bool = True
+
+
+# ============= Review Schemas =============
+class ReviewCreate(BaseModel):
+    rating: int = Field(..., ge=1, le=5)
+    comment: Optional[str] = Field(default=None, max_length=2000)
+
+
+class ReviewUpdate(BaseModel):
+    rating: Optional[int] = Field(default=None, ge=1, le=5)
+    comment: Optional[str] = Field(default=None, max_length=2000)
+
+
+class ReviewResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    tenant_id: UUID
+    user_id: UUID
+    poi_id: UUID
+    rating: int
+    comment: Optional[str]
+    created_at: datetime
+    updated_at: datetime

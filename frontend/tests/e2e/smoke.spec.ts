@@ -26,7 +26,10 @@ test.describe('Landing page (nicht eingeloggt)', () => {
     const response = await page.goto('/');
     expect(response?.status()).toBe(200);
 
-    await expect(page.locator('[data-nextjs-dialog-overlay], nextjs-portal')).toHaveCount(0);
+    // Next.js 16 keeps a <nextjs-portal> element in the DOM at all times
+    // (dev-tools indicator). A real error renders as
+    // [data-nextjs-dialog-overlay], so only that counts as an overlay.
+    await expect(page.locator('[data-nextjs-dialog-overlay]')).toHaveCount(0);
     await expect(page.getByText(/Votre voyage commence ici/i)).toBeVisible();
     await expect(page.getByRole('button', { name: /Commencer l.aventure/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /J.ai déjà un compte/i })).toBeVisible();

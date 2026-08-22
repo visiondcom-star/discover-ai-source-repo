@@ -1,7 +1,33 @@
 """Deterministischer Mock-Provider — kein externer API-Call, für Dev/Tests ohne Kosten."""
+import hashlib
+import json
 from typing import Dict, List
 
 from app.services.llm_providers.base import LLMProvider
+
+# Deterministic candidate answers for the mock vision path (mirrors the previous
+# hardcoded mock list in cv.py, but selection is hash-based instead of random so
+# tests are reproducible).
+_MOCK_IDENTIFICATIONS = [
+    {
+        "label": "Monument historique",
+        "confidence": 0.92,
+        "description": "Cela ressemble à un monument historique de style mauresque.",
+        "possible_pois": ["Casbah d'Alger", "Palais des Rais"],
+    },
+    {
+        "label": "Site naturel",
+        "confidence": 0.85,
+        "description": "Paysage désertique avec formations rocheuses.",
+        "possible_pois": ["Tassili n'Ajjer", "Hoggar"],
+    },
+    {
+        "label": "Pont historique",
+        "confidence": 0.88,
+        "description": "Pont suspendu en pierre, architecture ottomane.",
+        "possible_pois": ["Ponts de Constantine"],
+    },
+]
 
 
 class MockProvider(LLMProvider):
@@ -33,8 +59,23 @@ class MockProvider(LLMProvider):
 
     async def embed(self, text: str) -> List[float]:
         """Deterministic fake embedding — hash-based, no network call, 1536 dims to match text-embedding-3-small."""
-        import hashlib
         h = hashlib.sha256(text.encode()).digest()
         # Répète le hash pour remplir 1536 dimensions, normalisé entre -1 et 1
         raw = (h * (1536 // len(h) + 1))[:1536]
         return [(b - 128) / 128.0 for b in raw]
+
+    async def identify_image(
+        self,
+        image_data_url: str,
+        prompt: str,
+        temperature: float = 0.2,
+        max_tokens: int = 500,
+    ) -> str:
+        """Deterministic fake vision — no network call.
+
+        Picks one of the canned identifications based on a hash of the image data,
+        so identical images always produce the same, testable label.
+        """
+        digest = hashlib.sha256(image_data_url.encode()).hexdigest()
+        idx = int(digest[:4], 16) % len(_MOCK_IDENTIFICATIONS)
+        return json.dumps(_MOCK_IDENTIFICATIONS[idx], ensure_ascii=False)

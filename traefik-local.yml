@@ -1,0 +1,20 @@
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+
+api:
+  insecure: true
+  dashboard: true
+
+providers:
+  docker:
+    exposedByDefault: false
+
+certificates:
+  - certFile: /certs/localhost.crt
+    keyFile: /certs/localhost.key
+
+log:
+  level: DEBUG

@@ -17,6 +17,7 @@ __pycache__/
 venv/
 .env
 .env.*.local
+.env.production
 
 # Node
 node_modules/
@@ -51,4 +52,8 @@ backend/.env
 backend/.venv/
 backend/.coverage
 backend/coverage.xml
+
+# Local certs (self-signed for dev/testing)
+certs/
+
 frontend/tsconfig.tsbuildinfo

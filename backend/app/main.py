@@ -1,5 +1,10 @@
 """FastAPI application entry point."""
+import asyncio
 from contextlib import asynccontextmanager
+from pathlib import Path
+
+from alembic import command
+from alembic.config import Config
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -12,12 +17,45 @@ from app.initial_data import init_db
 
 settings = get_settings()
 
+ALEMBIC_INI = Path(__file__).resolve().parent.parent / "alembic.ini"
+
+
+def _run_migrations() -> None:
+    """Apply pending Alembic migrations (runs in a worker thread: the async
+    env.py spins up its own event loop via asyncio.run).
+
+    Handles adoption of legacy databases whose schema was created by the old
+    ``Base.metadata.create_all`` bootstrap: they have tables but no
+    ``alembic_version`` row. Instead of crashing on "table already exists",
+    we stamp the baseline revision and continue upgrading from there.
+    """
+    alembic_cfg = Config(str(ALEMBIC_INI))
+    if asyncio.run(_has_unversioned_schema()):
+        command.stamp(alembic_cfg, "0001_initial")
+    command.upgrade(alembic_cfg, "head")
+
+
+async def _has_unversioned_schema() -> bool:
+    """True when the target DB already has app tables but no alembic_version."""
+    from sqlalchemy import inspect
+    from sqlalchemy.ext.asyncio import create_async_engine
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with engine.connect() as conn:
+            def _check(sync_conn) -> bool:
+                table_names = inspect(sync_conn).get_table_names()
+                return bool(table_names) and "alembic_version" not in table_names
+
+            return await conn.run_sync(_check)
+    finally:
+        await engine.dispose()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Startup — schema is owned by Alembic (no more create_all), then seed demo data.
+    await asyncio.to_thread(_run_migrations)
     await init_db()
     yield
     # Shutdown

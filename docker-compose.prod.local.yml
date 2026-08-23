@@ -10,8 +10,12 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./traefik-local.yml:/etc/traefik/traefik.yml:ro
       - ./certs:/certs:ro
-    networks:
+    # No custom network: join the project's implicit "default" network where
+    # backend/frontend/postgres/redis already live. A dedicated network here
+    # would isolate Traefik from the services it has to route to.
+    depends_on:
       - backend
+      - frontend
 
   backend:
     environment:
@@ -24,16 +28,17 @@ services:
       traefik.http.routers.backend.rule: "Host(`api.localhost`)"
       traefik.http.routers.backend.entrypoints: "websecure"
       traefik.http.routers.backend.tls: "true"
-      traefik.http.routers.backend.tls.certresolver: ""
       traefik.http.services.backend.loadbalancer.server.port: "8000"
 
   frontend:
     environment:
-      BACKEND_URL: "https://api.localhost"
+      # Next.js proxies /api/* server-side. Inside the docker network the
+      # backend is reachable as "backend:8000" over plain HTTP; TLS is
+      # terminated by Traefik at the edge (browser -> https://localhost).
+      BACKEND_URL: "http://backend:8000"
     labels:
       traefik.enable: "true"
       traefik.http.routers.frontend.rule: "Host(`localhost`)"
       traefik.http.routers.frontend.entrypoints: "websecure"
       traefik.http.routers.frontend.tls: "true"
-      traefik.http.routers.frontend.tls.certresolver: ""
       traefik.http.services.frontend.loadbalancer.server.port: "3000"

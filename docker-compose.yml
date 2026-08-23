@@ -40,6 +40,8 @@ services:
     volumes:
       - ./backend/app:/app/app
       - ./backend/tests:/app/tests
+      # Keep migrations hot-mounted so new revisions apply on restart without a rebuild.
+      - ./backend/alembic:/app/alembic
 
   frontend:
     build:

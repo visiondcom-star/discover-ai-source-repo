@@ -1,12 +1,20 @@
-"""RAG (Retrieval Augmented Generation) service with pgvector."""
-import json
-from typing import List, Dict, Any, Optional
+"""RAG (Retrieval Augmented Generation) service with pgvector.
+
+One embedding per POI (1536 dims, text-embedding-3-small), stored in the
+pois.embedding vector column and searched server-side with pgvector's
+cosine-distance operator (<=>) backed by an HNSW index.
+"""
+from typing import List, Dict, Any
+
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, text, and_
+from sqlalchemy import select, and_
 from app.models import POI, Tenant
 from app.config import get_settings
 
 settings = get_settings()
+
+# OpenAI embeddings API accepts up to ~2048 inputs per call; stay conservative.
+EMBEDDING_BATCH_SIZE = 100
 
 
 class RAGService:
@@ -14,8 +22,17 @@ class RAGService:
         self.db = db
         self.tenant = tenant
 
+    @staticmethod
+    def _poi_to_text(poi: POI) -> str:
+        """Canonical text representation used both at index and (implicitly) query time."""
+        return (
+            f"{poi.name}. {poi.description or ''}. "
+            f"Catégorie: {poi.category}. Ville: {poi.city}. "
+            f"Tags: {', '.join(poi.tags or [])}"
+        )
+
     async def index_pois(self) -> Dict[str, Any]:
-        """Index all POIs for this tenant into vector store."""
+        """Embed every active POI of this tenant and store vectors in Postgres."""
         if not settings.OPENAI_API_KEY:
             return {"indexed": 0, "error": "OpenAI API key not configured"}
 
@@ -25,34 +42,37 @@ class RAGService:
 
             result = await self.db.execute(
                 select(POI).where(
-                    and_(POI.tenant_id == self.tenant.id, POI.is_active == True)
+                    and_(POI.tenant_id == self.tenant.id, POI.is_active == True)  # noqa: E712
                 )
             )
             pois = result.scalars().all()
+            if not pois:
+                return {"indexed": 0, "tenant": self.tenant.slug}
 
+            # Batch: one API call per EMBEDDING_BATCH_SIZE POIs instead of one call each.
             indexed = 0
-            for poi in pois:
-                content = f"{poi.name}. {poi.description or ''}. Catégorie: {poi.category}. Ville: {poi.city}. Tags: {', '.join(poi.tags or [])}"
-
+            for start in range(0, len(pois), EMBEDDING_BATCH_SIZE):
+                chunk = pois[start:start + EMBEDDING_BATCH_SIZE]
                 response = client.embeddings.create(
                     model=settings.EMBEDDING_MODEL,
-                    input=content,
+                    input=[self._poi_to_text(poi) for poi in chunk],
                 )
-                embedding = response.data[0].embedding
-
-                poi.embedding = json.dumps(embedding)
-                indexed += 1
+                # API returns embeddings ordered by input index.
+                for poi, item in zip(chunk, sorted(response.data, key=lambda d: d.index)):
+                    poi.embedding = item.embedding
+                    indexed += 1
 
             await self.db.commit()
             return {"indexed": indexed, "tenant": self.tenant.slug}
 
         except Exception as e:
+            await self.db.rollback()
             return {"indexed": 0, "error": str(e)}
 
     async def search(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
-        """Semantic search over POIs using vector similarity."""
+        """Semantic search over POIs using pgvector cosine distance (SQL-side KNN,
+        HNSW-indexed) — never loads the whole table into memory."""
         if not settings.OPENAI_API_KEY:
-            # Fallback to text search
             return await self._text_search(query, top_k)
 
         try:
@@ -63,41 +83,32 @@ class RAGService:
                 model=settings.EMBEDDING_MODEL,
                 input=query,
             )
-            query_embedding = response.data[0].embedding
+            query_vec = response.data[0].embedding
 
-            # Get all POIs with embeddings for this tenant
             result = await self.db.execute(
-                select(POI).where(
+                select(POI)
+                .where(
                     and_(
                         POI.tenant_id == self.tenant.id,
-                        POI.is_active == True,
-                        POI.embedding != None,
+                        POI.is_active == True,  # noqa: E712
+                        POI.embedding.isnot(None),
                     )
                 )
+                .order_by(POI.embedding.cosine_distance(query_vec))
+                .limit(top_k)
             )
             pois = result.scalars().all()
 
-            # Calculate cosine similarity
-            import numpy as np
-            query_vec = np.array(query_embedding)
-
-            scored = []
-            for poi in pois:
-                try:
-                    poi_vec = np.array(json.loads(poi.embedding))
-                    similarity = np.dot(query_vec, poi_vec) / (np.linalg.norm(query_vec) * np.linalg.norm(poi_vec))
-                    scored.append((similarity, poi))
-                except:
-                    continue
-
-            scored.sort(reverse=True, key=lambda x: x[0])
-
             results = []
-            for score, poi in scored[:top_k]:
+            for poi in pois:
+                # Recompute exact cosine similarity for the returned rows only.
+                distance = await self.db.scalar(
+                    select(POI.embedding.cosine_distance(query_vec)).where(POI.id == poi.id)
+                )
                 results.append({
                     "poi_id": str(poi.id),
                     "name": poi.name,
-                    "score": float(score),
+                    "score": float(1 - distance) if distance is not None else None,
                     "description": poi.description,
                     "city": poi.city,
                     "category": poi.category,
@@ -105,7 +116,8 @@ class RAGService:
 
             return results
 
-        except Exception as e:
+        except Exception:
+            # Any failure (API down, dimension mismatch...) degrades gracefully.
             return await self._text_search(query, top_k)
 
     async def _text_search(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
@@ -114,7 +126,7 @@ class RAGService:
             select(POI).where(
                 and_(
                     POI.tenant_id == self.tenant.id,
-                    POI.is_active == True,
+                    POI.is_active == True,  # noqa: E712
                 )
             )
         )

@@ -117,7 +117,7 @@ async def _create_demo_pois(session: AsyncSession):
         {
             "slug": "ruines-tipaza",
             "name": "Ruines de Tipaza",
-            "description": "Site archéologique romain exceptionnel situé en bord de mer, classé au patrimoine mondial de l'UNESCO. Théâtre, basiliques, nécropoles et musée.",
+            "description": "Tipasa abrite l'un des plus vastes ensembles archéologiques romains d'Afrique du Nord, classé UNESCO depuis 1982 sur la rive algérienne de la Méditerranée. Le parc archéologique réunit le théâtre romain, l'amphithéâtre, le forum, les thermes de l'Ouest, la basilique judiciaire chrétienne et la nécropole qui s'étend vers le mont Chenoua, avec un musée présentant mosaïques et stèles puniques et romaines. Ancien port carthaginois puis colonie de l'empereur Claude, le site se visite en 2 à 3 heures en bord de mer, à 70 km à l'ouest d'Alger — prévoir chaussures confortables ; entrée payante sauf le premier dimanche du mois.",
             "city": "Tipaza",
             "category": "historical",
             "duration_minutes": 120,
@@ -130,7 +130,7 @@ async def _create_demo_pois(session: AsyncSession):
         {
             "slug": "ponts-constantine",
             "name": "Ponts de Constantine",
-            "description": "Constantine, la ville des ponts suspendus, offre des vues spectaculaires sur le canyon du Rhummel. Le pont Sidi M'Cid est l'emblème de la ville.",
+            "description": "Constantine, la « ville des ponts suspendus », est construite à cheval sur les gorges profondes de 175 m du Rhummel. Sept ouvrages relient les deux rives, dont le célèbre pont Sidi M'Cid (1912, 175 m de hauteur), le pont Sidi Rached et ses 27 arches, et la passerelle Mellah Slimane. Ne pas manquer le Palais du Bey et ses jardins andalous, la mosquée Emir Abdelkader, le musée national Cirta et les panoramas sur le canyon au lever du jour. Capitale de l'Orient algérien, elle a été désignée capitale de la culture arabe en 2015.",
             "city": "Constantine",
             "category": "culture",
             "duration_minutes": 150,
@@ -143,7 +143,7 @@ async def _create_demo_pois(session: AsyncSession):
         {
             "slug": "tassili-najjer",
             "name": "Tassili n'Ajjer",
-            "description": "Vaste plateau du Sahara avec des gravures rupestres millénaires et des formations rocheuses spectaculaires. Classé au patrimoine mondial de l'UNESCO.",
+            "description": "Le parc culturel du Tassili n'Ajjer, classé au patrimoine mondial de l'UNESCO (mixte, nature et culture), couvre 72 000 km² de plateau gréseux au cœur du Sahara algérien, à la frontière libyenne et nigérienne. On y recense plus de 15 000 gravures et peintures rupestres vieilles de 10 000 ans (bovidienne, étage des chars...), témoins d'un Sahara alors verdoyant, ainsi que des forêts relictuelles de cyprès de Duprez — arbres millénaires uniques au monde. Point de départ : Djanet, accessible en avion depuis Alger ; excursions 4x4 et trekking de plusieurs jours avec guide obligatoire, bivouacs sous les étoiles, meilleure saison d'octobre à avril.",
             "city": "Djanet",
             "category": "adventure",
             "duration_minutes": 480,
@@ -169,7 +169,7 @@ async def _create_demo_pois(session: AsyncSession):
         {
             "slug": "ruines-djemila",
             "name": "Ruines de Djemila",
-            "description": "Site archéologique romain parmi les mieux conservés d'Afrique du Nord. Théâtre, temples, forums et maisons romaines. Classé UNESCO.",
+            "description": "Djémila (Cuicul), classée au patrimoine mondial de l'UNESCO depuis 1982, est la ville romaine la mieux conservée d'Afrique du Nord. Fondée sous Trajan au 1er siècle sur un éperon rocheux à 900 m d'altitude, elle conserve son forum, son capitole, ses temples de Septime Sévère et de Vénus Genitrix, un théâtre pouvant accueillir 3 000 spectateurs, des thermes, l'arc de Caracalla et de somptueuses maisons à mosaïques ; le musée de Djémila expose parmi les plus riches collections de mosaïques romaines au monde. Site ouvert toute l'année, à 50 km de Sétif ; visiter tôt le matin en été.",
             "city": "Sétif",
             "category": "historical",
             "duration_minutes": 180,

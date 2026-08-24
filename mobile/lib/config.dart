@@ -19,4 +19,12 @@ class AppConfig {
     'TENANT_SLUG',
     defaultValue: 'algeria',
   );
+
+  /// Demo account prefill, mirroring the backend seed convention in
+  /// backend/app/initial_data.py: demo@{TENANT_SLUG}.travel.
+  /// Overridable at build time: --dart-define=DEMO_EMAIL=you@example.com
+  static const String demoEmail = String.fromEnvironment(
+    'DEMO_EMAIL',
+    defaultValue: 'demo@$tenantSlug.travel',
+  );
 }

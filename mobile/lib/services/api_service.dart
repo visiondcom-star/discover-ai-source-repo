@@ -62,6 +62,7 @@ class ApiService implements AuthApi, PoisApi {
 
   String _token = '';
 
+  @override
   void setToken(String token) => _token = token;
 
   Map<String, String> get _headers => {

@@ -30,6 +30,9 @@ services:
       DATABASE_URL: postgresql+asyncpg://destinos:destinos_dev_pw@postgres:5432/destinos_dev
       REDIS_URL: redis://redis:6379/0
       TEST_DATABASE_URL: postgresql+asyncpg://destinos:destinos_dev_pw@postgres:5432/discoverai_test
+    # The image ENTRYPOINT runs Alembic migrations then exec's this command.
+    # Dev keeps hot-reload (the production image intentionally ships without it).
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
       - "8000:8000"
     depends_on:

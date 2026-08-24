@@ -1,29 +1,78 @@
 import 'dart:convert';
+
 import 'package:http/http.dart' as http;
 
-class ApiService {
+import '../config.dart';
+
+/// Abstraction seams so providers/screens can be tested with fakes instead
+/// of hitting the network.
+abstract class AuthApi {
+  /// Attaches (or clears) the bearer token used on subsequent requests.
+  void setToken(String token);
+
+  Future<Map<String, dynamic>> login(String email, String password);
+  Future<Map<String, dynamic>> register(
+    String email,
+    String password, {
+    String? fullName,
+  });
+  Future<Map<String, dynamic>> getMe();
+}
+
+abstract class PoisApi {
+  Future<Map<String, dynamic>> getPOIs({
+    String? city,
+    String? category,
+    String? search,
+  });
+}
+
+/// HTTP failure carrying status code and body.
+class ApiException implements Exception {
+  ApiException(this.statusCode, this.body);
+
+  final int? statusCode;
+  final String body;
+
+  @override
+  String toString() => 'ApiException($statusCode): $body';
+}
+
+/// Thin HTTP client speaking the same contract as the web frontend:
+/// `X-Tenant-Slug` on every request, `Authorization: Bearer` once a token is
+/// attached.
+///
+/// Host and tenant slug come exclusively from [AppConfig]
+/// (`--dart-define`) — never hardcoded in business code.
+class ApiService implements AuthApi, PoisApi {
+  ApiService._internal()
+      : baseUrl = AppConfig.apiBaseUrl,
+        tenantSlug = AppConfig.tenantSlug;
+
   static final ApiService _instance = ApiService._internal();
   factory ApiService() => _instance;
-  ApiService._internal();
 
-  static const String baseUrl = 'http://10.0.2.2:8000/api/v1';
-  static const String tenantSlug = 'algeria';
+  /// Explicit-configuration constructor (tests / tooling).
+  ApiService.withConfig({String? baseUrl, String? tenantSlug})
+      : baseUrl = baseUrl ?? AppConfig.apiBaseUrl,
+        tenantSlug = tenantSlug ?? AppConfig.tenantSlug;
+
+  final String baseUrl;
+  final String tenantSlug;
+
   String _token = '';
 
   void setToken(String token) => _token = token;
 
   Map<String, String> get _headers => {
-    'Content-Type': 'application/json',
-    'X-Tenant-Slug': tenantSlug,
-    if (_token.isNotEmpty) 'Authorization': 'Bearer $_token',
-  };
+        'Content-Type': 'application/json',
+        'X-Tenant-Slug': tenantSlug,
+        if (_token.isNotEmpty) 'Authorization': 'Bearer $_token',
+      };
 
   Future<dynamic> _get(String path) async {
     final res = await http.get(Uri.parse('$baseUrl$path'), headers: _headers);
-    if (res.statusCode >= 200 && res.statusCode < 300) {
-      return jsonDecode(res.body);
-    }
-    throw Exception('HTTP ${res.statusCode}: ${res.body}');
+    return _decode(res);
   }
 
   Future<dynamic> _post(String path, Map<String, dynamic> body) async {
@@ -32,55 +81,54 @@ class ApiService {
       headers: _headers,
       body: jsonEncode(body),
     );
+    return _decode(res);
+  }
+
+  dynamic _decode(http.Response res) {
     if (res.statusCode >= 200 && res.statusCode < 300) {
       return jsonDecode(res.body);
     }
-    throw Exception('HTTP ${res.statusCode}: ${res.body}');
+    throw ApiException(res.statusCode, res.body);
   }
 
-  Future<Map<String, dynamic>> getTenant() async => await _get('/tenants/current');
+  @override
+  Future<Map<String, dynamic>> getMe() async =>
+      Map<String, dynamic>.from(await _get('/auth/me') as Map);
 
-  Future<Map<String, dynamic>> login(String email, String password) async {
-    return await _post('/auth/login', {'email': email, 'password': password});
-  }
+  @override
+  Future<Map<String, dynamic>> login(String email, String password) async =>
+      Map<String, dynamic>.from(await _post('/auth/login', {
+        'email': email,
+        'password': password,
+      }) as Map);
 
-  Future<Map<String, dynamic>> register(String email, String password, {String? fullName}) async {
-    return await _post('/auth/register', {
-      'email': email,
-      'password': password,
-      if (fullName != null) 'full_name': fullName,
-    });
-  }
+  @override
+  Future<Map<String, dynamic>> register(
+    String email,
+    String password, {
+    String? fullName,
+  }) async =>
+      Map<String, dynamic>.from(await _post('/auth/register', {
+        'email': email,
+        'password': password,
+        if (fullName != null) 'full_name': fullName,
+      }) as Map);
 
-  Future<Map<String, dynamic>> getMe() async => await _get('/auth/me');
-
-  Future<Map<String, dynamic>> getPOIs({String? city, String? category, String? search}) async {
-    final params = <String, String>{};
-    if (city != null) params['city'] = city;
-    if (category != null) params['category'] = category;
-    if (search != null) params['search'] = search;
-    final query = params.isNotEmpty ? '?${params.entries.map((e) => '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}').join('&')}' : '';
-    return await _get('/pois/$query');
-  }
-
-  Future<Map<String, dynamic>> generateTrip({
-    required int numDays,
-    required String budgetLevel,
-    required String travelStyle,
-    required String groupType,
-    List<String>? interests,
+  @override
+  Future<Map<String, dynamic>> getPOIs({
+    String? city,
+    String? category,
+    String? search,
   }) async {
-    return await _post('/trips/generate', {
-      'num_days': numDays,
-      'budget_level': budgetLevel,
-      'travel_style': travelStyle,
-      'group_type': groupType,
-      'interests': interests ?? [],
-      'budget_currency': 'DZD',
-    });
-  }
-
-  Future<Map<String, dynamic>> chat(String message) async {
-    return await _post('/chat/', {'message': message});
+    final params = <String, String>{
+      if (city != null && city.isNotEmpty) 'city': city,
+      if (category != null && category.isNotEmpty) 'category': category,
+      if (search != null && search.isNotEmpty) 'search': search,
+    };
+    // Keep the trailing-slash form the backend has always served.
+    final suffix = params.isEmpty
+        ? '/'
+        : '/?${params.entries.map((e) => '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}').join('&')}';
+    return Map<String, dynamic>.from(await _get('/pois$suffix') as Map);
   }
 }

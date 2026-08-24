@@ -1,9 +1,24 @@
-import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart';
+
 import '../models/user.dart';
 import '../services/api_service.dart';
+import '../services/secure_storage_service.dart';
 
+/// Auth state holder. The JWT lives exclusively in a [TokenStore]
+/// (iOS Keychain / Android Keystore via flutter_secure_storage) — never in
+/// SharedPreferences.
 class AuthProvider extends ChangeNotifier {
+  AuthProvider({AuthApi? api, TokenStore? tokenStore})
+      : _api = api ?? ApiService(),
+        _store = tokenStore ?? SecureStorageService() {
+    _initialized = _restoreSession();
+  }
+
+  final AuthApi _api;
+  final TokenStore _store;
+
+  late final Future<void> _initialized;
+
   User? _user;
   String? _token;
   bool _isLoading = true;
@@ -13,21 +28,21 @@ class AuthProvider extends ChangeNotifier {
   bool get isAuthenticated => _token != null && _user != null;
   bool get isLoading => _isLoading;
 
-  AuthProvider() {
-    _loadToken();
-  }
+  /// Resolves once the initial session restore finished (tests, splash UX).
+  Future<void> get initialized => _initialized;
 
-  Future<void> _loadToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    _token = prefs.getString('token');
+  Future<void> _restoreSession() async {
+    _token = await _store.readToken();
     if (_token != null) {
-      ApiService().setToken(_token!);
+      _api.setToken(_token!);
       try {
-        final data = await ApiService().getMe();
-        _user = User.fromJson(data);
-      } catch (e) {
+        _user = User.fromJson(await _api.getMe());
+      } catch (_) {
+        // Stale or invalid token: forget it silently.
         _token = null;
         _user = null;
+        await _store.deleteToken();
+        _api.setToken('');
       }
     }
     _isLoading = false;
@@ -36,35 +51,37 @@ class AuthProvider extends ChangeNotifier {
 
   Future<bool> login(String email, String password) async {
     try {
-      final data = await ApiService().login(email, password);
-      _token = data['access_token'];
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('token', _token!);
-      ApiService().setToken(_token!);
-      final me = await ApiService().getMe();
-      _user = User.fromJson(me);
+      final data = await _api.login(email, password);
+      _token = data['access_token'] as String?;
+      if (_token == null || _token!.isEmpty) return false;
+      await _store.writeToken(_token!);
+      _api.setToken(_token!);
+      _user = User.fromJson(await _api.getMe());
       notifyListeners();
       return true;
-    } catch (e) {
+    } catch (_) {
       return false;
     }
+  }
+
+  Future<bool> register(
+    String email,
+    String password, {
+    String? fullName,
+  }) async {
+    try {
+      await _api.register(email, password, fullName: fullName);
+    } catch (_) {
+      return false;
+    }
+    return await login(email, password);
   }
 
   Future<void> logout() async {
     _token = null;
     _user = null;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('token');
-    ApiService().setToken('');
+    await _store.deleteToken();
+    _api.setToken('');
     notifyListeners();
-  }
-
-  Future<bool> register(String email, String password, {String? fullName}) async {
-    try {
-      await ApiService().register(email, password, fullName: fullName);
-      return await login(email, password);
-    } catch (e) {
-      return false;
-    }
   }
 }

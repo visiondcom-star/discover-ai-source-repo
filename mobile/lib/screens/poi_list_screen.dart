@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import '../providers/auth_provider.dart';
 import '../providers/poi_provider.dart';
-import 'poi_detail_screen.dart';
+import '../widgets/poi_card.dart';
 
 class POIListScreen extends StatefulWidget {
   const POIListScreen({super.key});
@@ -11,65 +13,75 @@ class POIListScreen extends StatefulWidget {
 }
 
 class _POIListScreenState extends State<POIListScreen> {
-  final _searchCtrl = TextEditingController();
-
   @override
   void initState() {
     super.initState();
-    context.read<POIProvider>().loadPOIs();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<POIProvider>().loadPOIs();
+    });
   }
+
+  Future<void> _refresh() => context.read<POIProvider>().loadPOIs();
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<POIProvider>();
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: TextField(
-            controller: _searchCtrl,
-            decoration: InputDecoration(
-              hintText: 'Search POIs...',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: _searchCtrl.text.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.clear),
-                      onPressed: () {
-                        _searchCtrl.clear();
-                        provider.filter('');
-                      },
-                    )
-                  : null,
-              border: const OutlineInputBorder(),
-            ),
-            onChanged: provider.filter,
+    final pois = context.watch<POIProvider>();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Discover AI'),
+        actions: [
+          IconButton(
+            key: const Key('logout_button'),
+            icon: const Icon(Icons.logout),
+            tooltip: 'Log out',
+            onPressed: () => context.read<AuthProvider>().logout(),
           ),
-        ),
-        Expanded(
-          child: provider.isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : provider.error != null
-                  ? Center(child: Text('Error: ${provider.error}'))
-                  : ListView.builder(
-                      itemCount: provider.pois.length,
-                      itemBuilder: (context, index) {
-                        final poi = provider.pois[index];
-                        return ListTile(
-                          leading: CircleAvatar(
-                            child: Text(poi.name[0]),
-                          ),
-                          title: Text(poi.name),
-                          subtitle: Text('${poi.city} • ${poi.category} • ${poi.durationMinutes}min'),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => POIDetailScreen(poi: poi)),
-                          ),
-                        );
-                      },
-                    ),
-        ),
-      ],
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: _refresh,
+        child: _buildBody(pois),
+      ),
+    );
+  }
+
+  Widget _buildBody(POIProvider pois) {
+    if (pois.isLoading && pois.items.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (pois.error != null && pois.items.isEmpty) {
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Center(child: Text('Error: ${pois.error}')),
+          ),
+        ],
+      );
+    }
+    if (pois.items.isEmpty) {
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: const [
+          SizedBox(height: 160),
+          Center(
+            child: Column(
+              children: [
+                Icon(Icons.explore_off, size: 48, color: Colors.grey),
+                SizedBox(height: 12),
+                Text('No places yet.', key: Key('poi_empty')),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+    return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
+      itemCount: pois.items.length,
+      itemBuilder: (context, index) => POICard(poi: pois.items[index]),
     );
   }
 }

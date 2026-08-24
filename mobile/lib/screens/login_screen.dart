@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../providers/auth_provider.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -10,79 +11,91 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _emailCtrl = TextEditingController();
-  final _passCtrl = TextEditingController();
-  bool _isLogin = true;
-  bool _isLoading = false;
+  final _formKey = GlobalKey<FormState>();
+  final _emailController = TextEditingController(text: 'demo@discoverai.dz');
+  final _passwordController = TextEditingController(text: 'demo1234');
+  bool _submitting = false;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   Future<void> _submit() async {
-    setState(() => _isLoading = true);
-    final auth = context.read<AuthProvider>();
-    bool success;
-    if (_isLogin) {
-      success = await auth.login(_emailCtrl.text, _passCtrl.text);
-    } else {
-      success = await auth.register(_emailCtrl.text, _passCtrl.text);
-    }
-    setState(() => _isLoading = false);
-    if (!success && mounted) {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _submitting = true);
+    final ok = await context.read<AuthProvider>().login(
+          _emailController.text.trim(),
+          _passwordController.text,
+        );
+    if (!mounted) return;
+    setState(() => _submitting = false);
+    if (!ok) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_isLogin ? 'Login failed' : 'Registration failed')),
+        const SnackBar(
+          content: Text('Invalid email or password.', key: Key('login_error')),
+        ),
       );
     }
+    // On success the AuthGate switches to POIListScreen automatically.
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: Padding(
+      appBar: AppBar(title: const Text('Discover AI')),
+      body: Center(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.explore, size: 80, color: Colors.green),
-              const SizedBox(height: 24),
-              Text(
-                _isLogin ? 'Welcome Back' : 'Create Account',
-                style: Theme.of(context).textTheme.headlineMedium,
-              ),
-              const SizedBox(height: 32),
-              TextField(
-                controller: _emailCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Email',
-                  prefixIcon: Icon(Icons.email),
-                  border: OutlineInputBorder(),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Icon(Icons.travel_explore, size: 72),
+                const SizedBox(height: 24),
+                TextFormField(
+                  key: const Key('login_email'),
+                  controller: _emailController,
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.emailAddress,
+                  validator: (v) =>
+                      (v == null || !v.contains('@')) ? 'Enter a valid email' : null,
                 ),
-                keyboardType: TextInputType.emailAddress,
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _passCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Password',
-                  prefixIcon: Icon(Icons.lock),
-                  border: OutlineInputBorder(),
+                const SizedBox(height: 16),
+                TextFormField(
+                  key: const Key('login_password'),
+                  controller: _passwordController,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Password',
+                    border: OutlineInputBorder(),
+                  ),
+                  enableSuggestions: false,
+                  autocorrect: false,
+                  validator: (v) =>
+                      (v == null || v.isEmpty) ? 'Enter your password' : null,
                 ),
-                obscureText: true,
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _submit,
-                  child: _isLoading
-                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                      : Text(_isLogin ? 'Login' : 'Register'),
+                const SizedBox(height: 24),
+                FilledButton(
+                  key: const Key('login_submit'),
+                  onPressed: _submitting ? null : _submit,
+                  child: _submitting
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Sign in'),
                 ),
-              ),
-              const SizedBox(height: 16),
-              TextButton(
-                onPressed: () => setState(() => _isLogin = !_isLogin),
-                child: Text(_isLogin ? 'Create account' : 'Already have account? Login'),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

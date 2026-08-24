@@ -49,6 +49,8 @@ services:
   frontend:
     build:
       context: ./frontend
+      # Dev uses the hot-reload stage; prod targets the standalone 'runner'.
+      target: development
     environment:
       # Browser loads the SPA same-origin and Next.js proxies /api/* to the backend.
       BACKEND_URL: http://backend:8000

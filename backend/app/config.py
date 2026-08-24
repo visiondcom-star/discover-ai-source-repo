@@ -42,13 +42,29 @@ class Settings(BaseSettings):
     # Default tenant
     DEFAULT_TENANT_SLUG: str = "algeria"
 
+    # Comma-separated list of origins allowed by the browser CORS policy,
+    # e.g. "https://your-domain.com,https://admin.your-domain.com".
+    # The literal "*" keeps local development frictionless but is refused at
+    # startup in production (see guard below), where an explicit list is
+    # mandatory.
+    CORS_ORIGINS: str = "*"
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        """Parsed CORS origins (whitespace-tolerant, empty items dropped)."""
+        return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+
     @model_validator(mode="after")
     def _reject_insecure_production_config(self) -> "Settings":
-        """Fail fast when booting production with an unsafe SECRET_KEY.
+        """Fail fast when booting production with insecure defaults.
 
-        The application must never start in production while JWTs would be
-        signed with the well-known repository default (or with nothing at
-        all): anyone with access to the public source could forge tokens.
+        Two checks, both fatal at Settings construction time (the earliest
+        possible failure point):
+        - SECRET_KEY missing, empty, or still equal to the well-known
+          repository default: anyone with access to the public source could
+          forge tokens.
+        - CORS_ORIGINS unset or containing the wildcard "*": browsers would
+          let any origin read authenticated API responses.
         """
         if self.ENV.strip().lower() == "production":
             if not self.SECRET_KEY or self.SECRET_KEY == INSECURE_DEFAULT_SECRET_KEY:
@@ -56,6 +72,18 @@ class Settings(BaseSettings):
                     "SECRET_KEY is not configured for production: refusing to "
                     "start. Set SECRET_KEY to a long random value when "
                     "ENV=production (e.g. `openssl rand -hex 32`)."
+                )
+            origins = self.cors_origins_list
+            if not origins:
+                raise ValueError(
+                    "CORS_ORIGINS is not configured for production: refusing "
+                    "to start. Set it to an explicit comma-separated list of "
+                    'allowed origins (e.g. "https://your-domain.com").'
+                )
+            if "*" in origins:
+                raise ValueError(
+                    "CORS_ORIGINS contains the wildcard '*' in production: "
+                    "refusing to start. List explicit allowed origins instead."
                 )
         return self
 

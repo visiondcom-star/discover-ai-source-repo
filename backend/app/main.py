@@ -69,10 +69,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS
+# CORS — origins come from CORS_ORIGINS (comma-separated). In production the
+# settings guard refuses to boot when it is unset or contains "*".
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure properly in production
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -211,8 +211,9 @@ docker compose --env-file .env.production -f docker-compose.prod.yml start backe
 ```
 
 **Hardening notes**
-- CORS is currently permissive (`allow_origins=["*"]` in `app/main.py`) —
-  restrict it to `https://your-domain.com` before public launch.
+- CORS is enforced by configuration: set `CORS_ORIGINS` (comma-separated list)
+  in `.env.production`; the backend refuses to start if it is missing or
+  contains the wildcard `*` when `ENV=production`.
 - Rotating `SECRET_KEY` immediately invalidates all issued JWTs (users just
   log in again).
 - The Traefik dashboard is intentionally not exposed; inspect routing via

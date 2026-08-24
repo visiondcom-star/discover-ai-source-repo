@@ -1,8 +1,26 @@
+# Standalone LOCAL validation copy of the production stack (NOT an overlay).
+#
+# Differences vs docker-compose.prod.yml:
+#   - Traefik serves static self-signed certs (./certs) for localhost hosts
+#     instead of Let's Encrypt — no real certificates consumed, no domain/DNS
+#     needed. ACME staging/production is therefore never touched locally.
+#   - ./backend/tests is bind-mounted into the backend so the full pytest
+#     suite runs against the PRODUCTION images and schema.
+#
+# Usage (repo root):
+#   cp .env.production.example .env.production   # fill DB_PASSWORD, SECRET_KEY…
+#   docker compose --env-file .env.production \
+#     -f docker-compose.prod.local.yml up -d --build
+#   curl -k https://localhost/health                       # frontend
+#   curl -k --resolve api.localhost:443:127.0.0.1 \
+#     https://api.localhost/health                         # API
+#   docker compose --env-file .env.production \
+#     -f docker-compose.prod.local.yml exec backend pytest tests/ -q
+
 services:
   traefik:
     image: traefik:v2.11
-    command:
-      - "--configFile=/etc/traefik/traefik.yml"
+    command: ["--configFile=/etc/traefik/traefik.yml"]
     ports:
       - "80:80"
       - "443:443"
@@ -10,35 +28,108 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./traefik-local.yml:/etc/traefik/traefik.yml:ro
       - ./certs:/certs:ro
-    # No custom network: join the project's implicit "default" network where
-    # backend/frontend/postgres/redis already live. A dedicated network here
-    # would isolate Traefik from the services it has to route to.
-    depends_on:
-      - backend
-      - frontend
+    restart: unless-stopped
+    networks:
+      - web
+
+  db:
+    build:
+      context: ./deploy/postgres # pgvector/pgvector:pg16 + discoverai_test bootstrap
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD required}
+      POSTGRES_DB: ${DB_NAME:-discoverai}
+    volumes:
+      - postgres_data_local:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-discoverai}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - web
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD required}"]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a '${REDIS_PASSWORD}' ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - web
 
   backend:
+    build:
+      context: ./backend
     environment:
-      LLM_PROVIDER: "openai"
+      ENV: production
+      DATABASE_URL: postgresql+asyncpg://${DB_USER:-postgres}:${DB_PASSWORD}@db:5432/${DB_NAME:-discoverai}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      # Same contract as prod: empty/default SECRET_KEY must crash the guard.
+      SECRET_KEY: ${SECRET_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
       USE_PGVECTOR: "true"
-      OPENAI_MODEL: "gpt-4o"
-      EMBEDDING_MODEL: "text-embedding-3-small"
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      DEFAULT_TENANT_SLUG: ${DEFAULT_TENANT_SLUG:-algeria}
+      # Validation-only: lets the pytest suite run inside this container
+      # against a second database created by deploy/postgres init script.
+      TEST_DATABASE_URL: postgresql+asyncpg://${DB_USER:-postgres}:${DB_PASSWORD}@db:5432/discoverai_test
+    volumes:
+      - ./backend/tests:/app/tests:ro
     labels:
-      traefik.enable: "true"
-      traefik.http.routers.backend.rule: "Host(`api.localhost`)"
-      traefik.http.routers.backend.entrypoints: "websecure"
-      traefik.http.routers.backend.tls: "true"
-      traefik.http.services.backend.loadbalancer.server.port: "8000"
+      - "traefik.enable=true"
+      - "traefik.http.services.backend.loadbalancer.server.port=8000"
+      - "traefik.http.routers.backend.rule=Host(`api.localhost`)"
+      - "traefik.http.routers.backend.entrypoints=websecure"
+      - "traefik.http.routers.backend.tls=true"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - web
 
   frontend:
+    build:
+      context: ./frontend
+      target: runner # production standalone server — validated locally as-is
     environment:
-      # Next.js proxies /api/* server-side. Inside the docker network the
-      # backend is reachable as "backend:8000" over plain HTTP; TLS is
-      # terminated by Traefik at the edge (browser -> https://localhost).
-      BACKEND_URL: "http://backend:8000"
+      BACKEND_URL: http://backend:8000
     labels:
-      traefik.enable: "true"
-      traefik.http.routers.frontend.rule: "Host(`localhost`)"
-      traefik.http.routers.frontend.entrypoints: "websecure"
-      traefik.http.routers.frontend.tls: "true"
-      traefik.http.services.frontend.loadbalancer.server.port: "3000"
+      - "traefik.enable=true"
+      - "traefik.http.services.frontend.loadbalancer.server.port=3000"
+      - "traefik.http.routers.frontend.rule=Host(`localhost`)"
+      - "traefik.http.routers.frontend.entrypoints=websecure"
+      - "traefik.http.routers.frontend.tls=true"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - web
+
+volumes:
+  postgres_data_local:
+
+networks:
+  web:

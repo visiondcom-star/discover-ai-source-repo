@@ -71,10 +71,11 @@ app = FastAPI(
 
 # CORS — origins come from CORS_ORIGINS (comma-separated). In production the
 # settings guard refuses to boot when it is unset or contains "*".
+# allow_credentials keeps its default (False): authentication is Bearer-token
+# based and the API sets no cookies anywhere, so credentialed CORS is unused.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
-    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )

@@ -1,6 +1,6 @@
 """SQLAlchemy ORM models with multi-tenant isolation."""
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, Text, ForeignKey, JSON, ARRAY, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from pgvector.sqlalchemy import Vector
@@ -8,8 +8,25 @@ from sqlalchemy.orm import relationship
 from app.database import Base
 
 
-def utcnow():
-    return datetime.utcnow()
+def utcnow() -> datetime:
+    """Current UTC instant as a *naive* datetime (tzinfo stripped).
+
+    Convention du projet : toutes les colonnes temporelles sont déclarées
+    ``DateTime`` (PostgreSQL ``TIMESTAMP WITHOUT TIME ZONE``) et le driver
+    asyncpg refuse les datetimes timezone-aware sur ce type de colonne.
+    On garde donc la sémantique naive-UTC, mais via l'API moderne —
+    ``datetime.utcnow()`` est déprécié et sera supprimé d'une future
+    version de Python.
+
+    Si un jour les colonnes passent en ``DateTime(timezone=True)`` /
+    ``TIMESTAMPTZ``, il suffira de retirer le ``.replace(tzinfo=None)``
+    ici et aux rares endroits qui utilisent ce helper.
+
+    Note : on utilise ``timezone.utc`` plutôt que l'alias ``datetime.UTC``
+    (Python 3.11+) car le venv local peut tourner sous Python 3.9 ; c'est
+    aussi la convention de ``app/core/security.py``.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def generate_uuid():

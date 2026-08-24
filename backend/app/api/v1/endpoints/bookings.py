@@ -3,9 +3,8 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Header, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
-from datetime import datetime
 from app.database import get_db
-from app.models import Booking, POI, Tenant
+from app.models import Booking, POI, Tenant, utcnow
 from app.schemas import BookingCreate, BookingResponse, ConsentRequest
 from app.core.tenant import get_tenant_from_header
 from app.dependencies import get_current_user
@@ -122,7 +121,7 @@ async def give_consent(
 
     if data.consent:
         booking.consent_given = True
-        booking.consent_timestamp = datetime.utcnow()
+        booking.consent_timestamp = utcnow()
         booking.status = "confirmed"
         # Here you would call the actual adapter
         booking.external_id = f"EXT-{booking_id[:8]}"

@@ -3,9 +3,9 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, Header, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func
-from datetime import datetime, timedelta
+from datetime import timedelta
 from app.database import get_db
-from app.models import Tenant
+from app.models import Tenant, utcnow
 from app.schemas import WeatherResponse, ContextEventCreate
 from app.core.tenant import get_tenant_from_header
 from app.dependencies import get_current_user
@@ -49,7 +49,7 @@ async def get_weather(
     conditions = ["Ensoleillé", "Partiellement nuageux", "Nuageux", "Pluie légère"]
     for i in range(1, 4):
         forecast.append({
-            "day": (datetime.utcnow() + timedelta(days=i)).strftime("%A"),
+            "day": (utcnow() + timedelta(days=i)).strftime("%A"),
             "temp": weather["temp"] + random.randint(-3, 3),
             "condition": random.choice(conditions),
             "humidity": max(20, min(90, weather["humidity"] + random.randint(-10, 10))),
@@ -78,9 +78,10 @@ async def get_forecast(
 
     forecast = []
     for i in range(1, days + 1):
+        day = utcnow() + timedelta(days=i)
         forecast.append({
-            "date": (datetime.utcnow() + timedelta(days=i)).strftime("%Y-%m-%d"),
-            "day": (datetime.utcnow() + timedelta(days=i)).strftime("%A"),
+            "date": day.strftime("%Y-%m-%d"),
+            "day": day.strftime("%A"),
             "temp_max": base_temp + random.randint(0, 5),
             "temp_min": base_temp - random.randint(3, 8),
             "condition": random.choice(conditions),
@@ -166,7 +167,7 @@ async def get_notifications(
             "message": "Un nouveau site historique a été ajouté à Alger",
             "type": "poi",
             "read": False,
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": utcnow().isoformat(),
         },
         {
             "id": "notif-2",
@@ -174,7 +175,7 @@ async def get_notifications(
             "message": "Des vents forts sont prévus à Constantine demain",
             "type": "weather",
             "read": False,
-            "created_at": (datetime.utcnow() - timedelta(hours=2)).isoformat(),
+            "created_at": (utcnow() - timedelta(hours=2)).isoformat(),
         },
     ]
 

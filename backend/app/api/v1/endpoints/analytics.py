@@ -3,9 +3,9 @@ from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, Header, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func
-from datetime import datetime, timedelta
+from datetime import timedelta
 from app.database import get_db
-from app.models import AnalyticsEvent, User, POI, Trip, Booking, Tenant
+from app.models import AnalyticsEvent, User, POI, Trip, Booking, Tenant, utcnow
 from app.schemas import AnalyticsTrackRequest, DashboardOverview
 from app.core.tenant import get_tenant_from_header
 from app.dependencies import get_current_user
@@ -79,7 +79,7 @@ async def dashboard_overview(
         select(func.count(Booking.id)).where(Booking.tenant_id == tenant.id)
     )
 
-    today = datetime.utcnow().date()
+    today = utcnow().date()
     active_today = await db.execute(
         select(func.count(AnalyticsEvent.id)).where(
             and_(
@@ -133,7 +133,7 @@ async def user_analytics(
     # New users per day (last 7 days)
     days = []
     for i in range(6, -1, -1):
-        day = datetime.utcnow().date() - timedelta(days=i)
+        day = utcnow().date() - timedelta(days=i)
         count_result = await db.execute(
             select(func.count(User.id)).where(
                 and_(

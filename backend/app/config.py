@@ -1,9 +1,11 @@
 """Application configuration with Pydantic Settings."""
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
+
     APP_NAME: str = "Discover AI"
     VERSION: str = "1.0.0"
     DEBUG: bool = False
@@ -30,10 +32,6 @@ class Settings(BaseSettings):
 
     # Default tenant
     DEFAULT_TENANT_SLUG: str = "algeria"
-
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
 
 
 @lru_cache()

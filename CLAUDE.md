@@ -80,6 +80,10 @@ Diese Regeln gelten für **jede** Änderung, unabhängig davon, wie klein die Au
 - Neue Datenquellen/Anbieter: immer als Adapter mit klarem Interface anlegen, auch wenn aktuell nur ein Anbieter existiert.
 - Bei Unsicherheit, ob etwas Kernlogik oder Tenant-Konfiguration ist: im Zweifel als Konfiguration behandeln — das ist der teurere Fehler, wenn er andersherum passiert.
 - Tests für Tenant-Isolation (Daten aus Tenant A dürfen nie in Tenant B sichtbar sein) sind Pflichtbestandteil, nicht optional.
+- **Aufgabenumfang ist der aktuelle Prompt, nicht TODO.md.** Eine Aufgabe, die im laufenden Prompt nicht ausdrücklich gefordert ist, wird weder ausgeführt noch committet — auch wenn sie in TODO.md als geplanter Chantier vermerkt ist. „Mach weiter" ist keine Aufgabenwahl; TODO.md ist ein Inventar, kein Auftrag. Der Umfang wird zu Beginn explizit bestätigt oder nachgefragt.
+- **Entdecktes außerhalb des Umfangs wird gemeldet, nicht nebenbei repariert** (z. B. ein hartkodierte Marktwerte enthaltender Backend-Default gehört in den Bericht, nicht in eine Eigeninitiative).
+- **Committen braucht einen eigenen Auftrag:** auch ausdrücklich angeforderte Arbeit wird nur dann committet, wenn der Commit selbst gefordert wurde; andernfalls auf Freigabe warten.
+- **Gefundenes unfertiges Work-in-Progress:** bei einer „nur verifizieren"-Aufgabe endet der Auftrag mit dem Abweichungsbericht; Ergänzungen erst nach Freigabe.
 
 ## Phasenrahmen
 

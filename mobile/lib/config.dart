@@ -27,4 +27,26 @@ class AppConfig {
     'DEMO_EMAIL',
     defaultValue: 'demo@$tenantSlug.travel',
   );
+
+  /// Interest choices offered on the trip-generation form. Generic category
+  /// labels by default; overridable per deployment without code change:
+  /// --dart-define=TRIP_INTERESTS=culture,food,history
+  static final List<String> tripInterestOptions =
+      const String.fromEnvironment(
+        'TRIP_INTERESTS',
+        defaultValue: 'culture,food,history,nature,beaches,adventure,shopping,nightlife',
+      )
+          .split(',')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toList(growable: false);
+
+  /// Budget levels accepted by POST /trips/generate — mirrors the backend
+  /// schema constraint `budget_level: ^(low|medium|high)$` (API contract,
+  /// not market content).
+  static const List<String> budgetLevels = ['low', 'medium', 'high'];
+
+  /// Upper bound of the num-days selector — mirrors the backend schema
+  /// constraint `num_days: ge=1, le=14`.
+  static const int maxTripDays = 14;
 }

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/poi_provider.dart';
 import '../widgets/poi_card.dart';
+import 'trip_form_screen.dart';
 
 class POIListScreen extends StatefulWidget {
   const POIListScreen({super.key});
@@ -38,6 +39,14 @@ class _POIListScreenState extends State<POIListScreen> {
             onPressed: () => context.read<AuthProvider>().logout(),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        key: const Key('plan_trip_fab'),
+        icon: const Icon(Icons.map_outlined),
+        label: const Text('Plan a trip'),
+        onPressed: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const TripFormScreen()),
+        ),
       ),
       body: RefreshIndicator(
         onRefresh: _refresh,

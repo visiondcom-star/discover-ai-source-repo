@@ -27,6 +27,18 @@ abstract class PoisApi {
   });
 }
 
+abstract class TripsApi {
+  /// Generates an itinerary; mirrors POST /trips/generate (201).
+  Future<Map<String, dynamic>> generateTrip({
+    required List<String> interests,
+    required String budgetLevel,
+    required int numDays,
+  });
+
+  /// Lists the current user's trips; mirrors GET /trips/.
+  Future<List<Map<String, dynamic>>> listTrips();
+}
+
 /// HTTP failure carrying status code and body.
 class ApiException implements Exception {
   ApiException(this.statusCode, this.body);
@@ -44,7 +56,7 @@ class ApiException implements Exception {
 ///
 /// Host and tenant slug come exclusively from [AppConfig]
 /// (`--dart-define`) — never hardcoded in business code.
-class ApiService implements AuthApi, PoisApi {
+class ApiService implements AuthApi, PoisApi, TripsApi {
   ApiService._internal()
       : baseUrl = AppConfig.apiBaseUrl,
         tenantSlug = AppConfig.tenantSlug;
@@ -131,5 +143,25 @@ class ApiService implements AuthApi, PoisApi {
         ? '/'
         : '/?${params.entries.map((e) => '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}').join('&')}';
     return Map<String, dynamic>.from(await _get('/pois$suffix') as Map);
+  }
+
+  @override
+  Future<Map<String, dynamic>> generateTrip({
+    required List<String> interests,
+    required String budgetLevel,
+    required int numDays,
+  }) async =>
+      Map<String, dynamic>.from(await _post('/trips/generate', {
+        'interests': interests,
+        'budget_level': budgetLevel,
+        'num_days': numDays,
+      }) as Map);
+
+  @override
+  Future<List<Map<String, dynamic>>> listTrips() async {
+    final data = await _get('/trips/');
+    return (data as List)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
   }
 }

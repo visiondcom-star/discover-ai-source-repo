@@ -114,6 +114,92 @@ class FakePoisApi implements PoisApi {
   }
 }
 
+/// Fresh copy each call so mutation-prone consumers can't corrupt the fixture.
+/// Field-for-field mirror of the backend TripResponse schema.
+Map<String, dynamic> sampleTripJson() => {
+      'id': 'tr-1',
+      'tenant_id': 't-1',
+      'user_id': 'u-1',
+      'title': 'Algiers highlights',
+      'description': 'Two days through the white city.',
+      'num_days': 2,
+      'budget_level': 'medium',
+      'budget_currency': 'DZD',
+      'travel_style': 'balanced',
+      'interests': ['history', 'food'],
+      'group_type': 'solo',
+      'children': false,
+      'status': 'draft',
+      'total_cost_estimate': 1200.5,
+      'items': [
+        {
+          'id': 'i-1',
+          'poi_id': 'p-1',
+          'day_number': 1,
+          'order_index': 0,
+          'start_time': '2026-08-24T09:00:00Z',
+          'end_time': '2026-08-24T11:00:00Z',
+          'notes': 'Morning walk through the medina.',
+          'poi': samplePoisJson[0],
+        },
+        {
+          'id': 'i-2',
+          'poi_id': 'p-2',
+          'day_number': 1,
+          'order_index': 1,
+          'start_time': '2026-08-24T14:00:00Z',
+          'end_time': null,
+          'notes': null,
+          'poi': samplePoisJson[1],
+        },
+        {
+          'id': 'i-3',
+          'poi_id': 'p-1',
+          'day_number': 2,
+          'order_index': 0,
+          'start_time': null,
+          'end_time': null,
+          'notes': 'Second visit at a slower pace.',
+          'poi': null,
+        },
+      ],
+      'created_at': '2026-08-24T08:00:00Z',
+      'updated_at': '2026-08-24T08:00:00Z',
+    };
+
+class FakeTripsApi implements TripsApi {
+  FakeTripsApi({this.failGenerate = false});
+
+  final bool failGenerate;
+  int generateCalls = 0;
+  int listCalls = 0;
+  Map<String, dynamic>? lastGeneratePayload;
+
+  @override
+  Future<Map<String, dynamic>> generateTrip({
+    required List<String> interests,
+    required String budgetLevel,
+    required int numDays,
+  }) async {
+    generateCalls++;
+    lastGeneratePayload = {
+      'interests': List<String>.from(interests),
+      'budget_level': budgetLevel,
+      'num_days': numDays,
+    };
+    if (failGenerate) {
+      throw ApiException(500, '{"detail":"trip planner failed"}');
+    }
+    return sampleTripJson();
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> listTrips() async {
+    listCalls++;
+    return [sampleTripJson()];
+  }
+}
+
 /// In-memory TokenStore for tests (no platform channels involved).
 class InMemoryTokenStore implements TokenStore {
   String? token;

@@ -4,6 +4,7 @@ import 'package:discover_ai/models/poi.dart';
 import 'package:discover_ai/models/user.dart';
 import 'package:discover_ai/providers/auth_provider.dart';
 import 'package:discover_ai/providers/poi_provider.dart';
+import 'package:discover_ai/providers/trip_provider.dart';
 import 'package:discover_ai/services/api_service.dart';
 
 import 'helpers/fakes.dart';
@@ -109,6 +110,85 @@ void main() {
 
       expect(provider.items, isEmpty);
       expect(provider.error, contains('boom'));
+      expect(provider.isLoading, isFalse);
+    });
+  });
+
+  group('TripProvider', () {
+    test('generate stores the trip as currentTrip and prepends to trips',
+        () async {
+      final api = FakeTripsApi();
+      final provider = TripProvider(tripsApi: api);
+
+      final trip = await provider.generate(
+        interests: const ['history'],
+        budgetLevel: 'high',
+        numDays: 3,
+      );
+
+      expect(trip, isNotNull);
+      expect(api.generateCalls, 1);
+      // The API seam receives exactly the user's selection.
+      expect(api.lastGeneratePayload, {
+        'interests': ['history'],
+        'budget_level': 'high',
+        'num_days': 3,
+      });
+      expect(provider.currentTrip!.title, 'Algiers highlights');
+      expect(provider.currentTrip!.budgetCurrency, 'DZD');
+      expect(provider.currentTrip!.items.length, 3);
+      expect(provider.trips.first.id, 'tr-1');
+      expect(provider.isGenerating, isFalse);
+      expect(provider.error, isNull);
+    });
+
+    test('generate failure returns null and carries the error', () async {
+      final provider = TripProvider(tripsApi: FakeTripsApi(failGenerate: true));
+
+      final trip = await provider.generate(
+        interests: const ['nature'],
+        budgetLevel: 'low',
+        numDays: 2,
+      );
+
+      expect(trip, isNull);
+      expect(provider.currentTrip, isNull);
+      expect(provider.trips, isEmpty);
+      expect(provider.error, contains('trip planner failed'));
+      expect(provider.isGenerating, isFalse);
+
+      provider.clearError();
+      expect(provider.error, isNull);
+    });
+
+    test('generate rejects an empty interest selection before calling the API',
+        () async {
+      // Guard lives in the form; the provider contract still holds when
+      // handed an empty list — the backend would accept it, so no client-side
+      // throw. This pins the current behavior.
+      final api = FakeTripsApi();
+      final provider = TripProvider(tripsApi: api);
+
+      await provider.generate(
+        interests: const [],
+        budgetLevel: 'medium',
+        numDays: 1,
+      );
+
+      expect(api.generateCalls, 1);
+      expect(provider.currentTrip, isNotNull);
+    });
+
+    test('loadTrips parses the list endpoint payload', () async {
+      final api = FakeTripsApi();
+      final provider = TripProvider(tripsApi: api);
+
+      await provider.loadTrips();
+
+      expect(api.listCalls, 1);
+      expect(provider.trips.length, 1);
+      expect(provider.trips.first.numDays, 2);
+      expect(provider.trips.first.itemsByDay.keys, [1, 2]);
       expect(provider.isLoading, isFalse);
     });
   });

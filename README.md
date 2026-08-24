@@ -45,28 +45,46 @@ docker compose up --build
 # API Docs: http://localhost:8000/docs
 ```
 
-### Local Production (HTTPS via Traefik) — verified deployment
+### Local Production (HTTPS via Traefik) — validated deployment
 ```bash
 # 1. Configure secrets
 cp .env.production.example .env.production
-# Fill: DB_PASSWORD, SECRET_KEY, DOMAIN, OPENAI_API_KEY
+# Fill at minimum: DB_PASSWORD, SECRET_KEY, REDIS_PASSWORD, OPENAI_API_KEY
 
-# 2. Generate self-signed TLS cert (local only)
+# 2. Generate self-signed TLS cert (local only — no Let's Encrypt traffic)
 mkdir -p certs
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
   -keyout certs/localhost.key -out certs/localhost.crt \
   -subj "/CN=localhost/O=Discover AI"
 
-# 3. Launch stack behind Traefik
+# 3. Launch the standalone local production stack
 docker compose --env-file .env.production \
-  -f docker-compose.prod.yml -f docker-compose.prod.local.yml up -d --build
+  -f docker-compose.prod.local.yml up -d --build
 
 # 4. Access (browser warning expected: self-signed certificate → Accept)
 # Frontend: https://localhost
 # API Docs: https://api.localhost/docs
 ```
 
-Stop: `docker compose -f docker-compose.prod.yml -f docker-compose.prod.local.yml down`
+Stop & clean volumes:
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.local.yml down -v
+```
+
+Run the test suite against the PRODUCTION images (tests are bind-mounted
+by the local stack only):
+```bash
+docker compose --env-file .env.production \
+  -f docker-compose.prod.local.yml exec backend pytest tests/ -q
+```
+
+Safety guard demo — the backend refuses to boot in production without a
+real SECRET_KEY (empty or repository default both crash the container):
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.local.yml \
+  run --rm --no-deps -e SECRET_KEY= backend
+# -> ValidationError: "SECRET_KEY is not configured for production: refusing to start"
+```
 
 ### Demo Credentials
 - **Email**: `demo@algeria.travel`
@@ -111,20 +129,94 @@ cd mobile && flutter test
 
 ## Deployment
 
-### Local Production HTTPS (current, verified ✅)
+### Local Production HTTPS (current, validated ✅)
 Traefik v2.11 terminates TLS with a self-signed cert (`certs/`) →
 frontend `https://localhost`, API `https://api.localhost/docs`.
-See [Quick Start → Local Production](#local-production-https-via-traefik--verified-deployment).
+The local stack is a standalone file (`docker-compose.prod.local.yml`)
+that never contacts Let's Encrypt and mounts `backend/tests` so pytest can
+run against the production images.
+See [Quick Start → Local Production](#local-production-https-via-traefik--validated-deployment).
 
 Smoke-tested live: healthcheck healthy, demo login, `/me`, POIs listing, RAG chat (real OpenAI call, graceful fallback).
 
 ### VPS Production (Docker Compose + Traefik + Let's Encrypt)
+
+**Prerequisites**
+1. A server (VM/VPS) with Docker + Docker Compose v2 and ports **80/443 free**.
+2. DNS: create **A/AAAA records for BOTH hosts** pointing at the server IP:
+   `your-domain.com` and `api.your-domain.com` (values of `DOMAIN` / `API_DOMAIN`).
+   Propagation must complete before first boot, or Let's Encrypt will fail.
+3. Firewall: allow 22, 80, 443.
+
+**Configure secrets**
 ```bash
+git clone <repo> && cd discover-ai-source-repo
 cp .env.production.example .env.production
-# Fill: DB_PASSWORD, SECRET_KEY, DOMAIN, OPENAI_API_KEY
-# Replace placeholders: your-domain.com, api.your-domain.com, admin@your-domain.com
-docker compose --env-file .env.production -f docker-compose.prod.yml up -d
+chmod 600 .env.production
+# Generate strong values:
+#   SECRET_KEY=$(openssl rand -hex 32)
+#   DB_PASSWORD=$(openssl rand -hex 24)
+#   REDIS_PASSWORD=$(openssl rand -hex 24)
+# Then set DOMAIN, API_DOMAIN, ACME_EMAIL, OPENAI_API_KEY.
 ```
+
+**First deployment — start with the ACME STAGING environment**
+Let's Encrypt's production API rate-limits aggressively (5 duplicate
+certificates/week); validate DNS + TLS challenge against staging first:
+```bash
+# In .env.production uncomment:
+# ACME_CA_SERVER=https://acme-staging-v02.api.letsencrypt.org/directory
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+
+# Watch certificate issuance:
+docker compose --env-file .env.production -f docker-compose.prod.yml \
+  logs traefik | grep -i acme
+
+# Once staging works, comment ACME_CA_SERVER back out and re-create Traefik
+# to obtain real certificates:
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d --force-recreate traefik
+```
+Migrations apply automatically in the backend entrypoint **before** uvicorn
+accepts traffic; `/health` only reports healthy once they succeeded.
+
+**Verify**
+```bash
+curl -sI http://your-domain.com        # expect 301 -> https
+curl -sk https://api.your-domain.com/health
+docker compose --env-file .env.production -f docker-compose.prod.yml ps   # all (healthy)
+```
+
+**Updates**: `git pull` then `docker compose --env-file .env.production -f
+docker-compose.prod.yml up -d --build` — Alembic migrations run in the
+backend entrypoint on container start.
+
+**Database backup (pg_dump inside the running container)**
+```bash
+# One-off dump (adjust -U/-d if DB_USER/DB_NAME differ from defaults):
+docker compose --env-file .env.production -f docker-compose.prod.yml \
+  exec -T db pg_dump -U postgres -d discoverai > "backup_$(date +%F_%H%M).sql"
+
+# Nightly 03:00, 14-day retention (crontab -e):
+0 3 * * * cd /path/to/repo && docker compose --env-file .env.production \
+  -f docker-compose.prod.yml exec -T db pg_dump -U postgres -d discoverai \
+  > /var/backups/discoverai_$(date +\%F).sql && \
+  find /var/backups -name 'discoverai_*.sql' -mtime +14 -delete
+```
+**Restore** (stop the backend first so nothing writes during restore):
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml stop backend
+cat backup_2026-08-24.sql | docker compose --env-file .env.production \
+  -f docker-compose.prod.yml exec -T db psql -U postgres -d discoverai
+docker compose --env-file .env.production -f docker-compose.prod.yml start backend
+```
+
+**Hardening notes**
+- CORS is currently permissive (`allow_origins=["*"]` in `app/main.py`) —
+  restrict it to `https://your-domain.com` before public launch.
+- Rotating `SECRET_KEY` immediately invalidates all issued JWTs (users just
+  log in again).
+- The Traefik dashboard is intentionally not exposed; inspect routing via
+  `docker compose ... logs traefik` or a temporary SSH tunnel if ever needed.
 
 ### Production (Kubernetes)
 ```bash

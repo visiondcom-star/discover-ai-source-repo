@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/poi_provider.dart';
 import '../widgets/poi_card.dart';
+import 'poi_map_screen.dart';
 import 'trip_form_screen.dart';
 
 class POIListScreen extends StatefulWidget {
@@ -32,6 +33,14 @@ class _POIListScreenState extends State<POIListScreen> {
       appBar: AppBar(
         title: const Text('Discover AI'),
         actions: [
+          IconButton(
+            key: const Key('toggle_map_button'),
+            icon: const Icon(Icons.map_outlined),
+            tooltip: 'Show map',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const PoiMapScreen()),
+            ),
+          ),
           IconButton(
             key: const Key('logout_button'),
             icon: const Icon(Icons.logout),

@@ -20,13 +20,16 @@ contexte, portée et références de commits pour reprendre sans ré-archéologi
   d'origins strictes est déjà garantie en prod par le garde anti-wildcard
   (`31512ee`). Ne rien réactiver sans les deux.
 
-### [ ] Backend : migration `python-jose` → `PyJWT`
+### [x] Backend : migration `python-jose` → `PyJWT`
 - **Pourquoi** : `python-jose==3.5.0` (`f66ddf8`) corrige les CVE-2024 connues,
   mais le projet amont reste globalement non maintenu (warnings internes
   `jose/jwt.py` observés avant le bump).
 - **Portée** : usage confiné à `backend/app/core/security.py`
   (encode/decode HS256) ; API quasi identique. Mettre à jour
   `requirements.txt`, relancer la suite auth complète contre Postgres réel.
+- **Fait** : `PyJWT==2.13.0` (HS256 → extra `cryptography` non requis),
+  `except jwt.PyJWTError` remplace `except JWTError` ; validé par la suite
+  complète (83/83 contre Postgres réel) + login réel décodé (header HS256).
 
 ## Mobile Flutter
 

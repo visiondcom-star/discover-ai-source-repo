@@ -21,6 +21,11 @@ async def generate_trip(
     current_user: User = Depends(get_current_user),
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)
+    # Budget currency defaults to the tenant's configured currency — never a
+    # hardcoded literal. The schema must stay tenant-agnostic (it cannot know
+    # the current tenant), so the fallback is resolved here, at the endpoint.
+    if data.budget_currency is None:
+        data.budget_currency = tenant.default_currency
     planner = TripPlannerService(db, tenant)
     trip = await planner.generate_trip(str(current_user.id), data)
     return trip

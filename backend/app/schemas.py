@@ -134,7 +134,7 @@ class TripGenerateRequest(BaseModel):
     interests: List[str] = []
     budget_level: str = Field(default="medium", pattern="^(low|medium|high)$")
     num_days: int = Field(default=3, ge=1, le=14)
-    budget_currency: str = "DZD"
+    budget_currency: Optional[str] = None
     travel_style: str = Field(default="balanced", pattern="^(relaxed|balanced|intensive)$")
     accessibility_needs: List[str] = []
     dietary_restrictions: List[str] = []

@@ -39,6 +39,15 @@ abstract class TripsApi {
   Future<List<Map<String, dynamic>>> listTrips();
 }
 
+/// AI Chat seam — mirrors POST /chat/ (backend/app/schemas.py →
+/// ChatRequest{message, context} → ChatResponse{message, suggestions, context}).
+abstract class ChatApi {
+  Future<Map<String, dynamic>> sendMessage(
+    String message, {
+    Map<String, dynamic>? context,
+  });
+}
+
 /// HTTP failure carrying status code and body.
 class ApiException implements Exception {
   ApiException(this.statusCode, this.body);
@@ -56,7 +65,7 @@ class ApiException implements Exception {
 ///
 /// Host and tenant slug come exclusively from [AppConfig]
 /// (`--dart-define`) — never hardcoded in business code.
-class ApiService implements AuthApi, PoisApi, TripsApi {
+class ApiService implements AuthApi, PoisApi, TripsApi, ChatApi {
   ApiService._internal()
       : baseUrl = AppConfig.apiBaseUrl,
         tenantSlug = AppConfig.tenantSlug;
@@ -157,11 +166,22 @@ class ApiService implements AuthApi, PoisApi, TripsApi {
         'num_days': numDays,
       }) as Map);
 
-  @override
+    @override
   Future<List<Map<String, dynamic>>> listTrips() async {
     final data = await _get('/trips/');
     return (data as List)
         .map((e) => Map<String, dynamic>.from(e as Map))
         .toList();
+  }
+
+    @override
+  Future<Map<String, dynamic>> sendMessage(
+    String message, {
+    Map<String, dynamic>? context,
+  }) async {
+    final body = <String, dynamic>{'message': message};
+    if (context != null) body['context'] = context;
+    final result = await _post('/chat/', body);
+    return Map<String, dynamic>.from(result as Map);
   }
 }

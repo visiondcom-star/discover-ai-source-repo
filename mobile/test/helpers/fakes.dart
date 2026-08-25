@@ -193,10 +193,40 @@ class FakeTripsApi implements TripsApi {
     return sampleTripJson();
   }
 
-  @override
+    @override
   Future<List<Map<String, dynamic>>> listTrips() async {
     listCalls++;
     return [sampleTripJson()];
+  }
+}
+
+/// Deterministic ChatApi fake for tests.
+class FakeChatApi implements ChatApi {
+  FakeChatApi({this.response, this.failReply = false});
+
+  final Map<String, dynamic>? response;
+  final bool failReply;
+  int calls = 0;
+  String? lastMessage;
+  Map<String, dynamic>? lastContext;
+
+  @override
+  Future<Map<String, dynamic>> sendMessage(
+    String message, {
+    Map<String, dynamic>? context,
+  }) async {
+    calls++;
+    lastMessage = message;
+    lastContext = context;
+    if (failReply) {
+      throw ApiException(500, '{"detail":"chat service unavailable"}');
+    }
+    return Map<String, dynamic>.from(response ??
+        {
+          'message': 'Mocked assistant reply to: $message',
+          'suggestions': <String>['Suggestion 1', 'Suggestion 2'],
+          'context': <String, dynamic>{},
+        });
   }
 }
 

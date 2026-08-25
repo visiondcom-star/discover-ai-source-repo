@@ -6,6 +6,7 @@ import '../providers/poi_provider.dart';
 import '../widgets/poi_card.dart';
 import 'poi_map_screen.dart';
 import 'trip_form_screen.dart';
+import 'chat_screen.dart';
 
 class POIListScreen extends StatefulWidget {
   const POIListScreen({super.key});
@@ -33,12 +34,20 @@ class _POIListScreenState extends State<POIListScreen> {
       appBar: AppBar(
         title: const Text('Discover AI'),
         actions: [
-          IconButton(
+                    IconButton(
             key: const Key('toggle_map_button'),
             icon: const Icon(Icons.map_outlined),
             tooltip: 'Show map',
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const PoiMapScreen()),
+            ),
+          ),
+          IconButton(
+            key: const Key('open_chat_button'),
+            icon: const Icon(Icons.chat_bubble_outline),
+            tooltip: 'Chat assistant',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ChatScreen()),
             ),
           ),
           IconButton(

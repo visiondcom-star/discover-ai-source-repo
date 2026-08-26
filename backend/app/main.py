@@ -71,11 +71,16 @@ app = FastAPI(
 
 # CORS — origins come from CORS_ORIGINS (comma-separated). In production the
 # settings guard refuses to boot when it is unset or contains "*".
-# allow_credentials keeps its default (False): authentication is Bearer-token
-# based and the API sets no cookies anywhere, so credentialed CORS is unused.
+# allow_credentials=True re-enables cookie transmission with the HttpOnly auth
+# cookie issued by /auth/login (it had been removed in be33c35 faute de cookies).
+# The production guard still refuses the wildcard origin (31512ee), so credentials
+# are only sent to the explicit allow-list in prod. NOTE: with "*" + credentials
+# a browser refuses to read cross-origin credentialed responses, but the SPA talks
+# to the API through the same-origin Next.js proxy, so this does not affect it.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )

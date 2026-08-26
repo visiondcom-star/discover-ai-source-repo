@@ -170,25 +170,15 @@ function AssistantTab() {
     setLoading(true);
 
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch("/api/v1/chat/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Tenant-Slug": TENANT_SLUG,
-          "Authorization": `Bearer ${token}`,
-        },
-        body: JSON.stringify({ message: input }),
-      });
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Chat API error ${res.status}: ${errText}`);
-      }
-      const data = await res.json();
+      // Chat is cookie-authenticated (web): the api client sends the HttpOnly
+      // access_token cookie via withCredentials and attaches X-CSRF-Token from
+      // the csrf_token cookie, so no manual Authorization/localStorage is needed.
+      const res = await api.post("/chat/", { message: input });
+      const data = res.data;
       setMessages((prev) => [...prev, { role: "assistant", content: data.message }]);
     } catch (err: any) {
-      const errorMessage = err?.message || "Désolé, une erreur est survenue.";
-      setMessages((prev) => [...prev, { role: "assistant", content: errorMessage }]);
+      const message = err?.response?.data?.detail || err?.message || "Désolé, une erreur est survenue.";
+      setMessages((prev) => [...prev, { role: "assistant", content: message }]);
     } finally {
       setLoading(false);
     }

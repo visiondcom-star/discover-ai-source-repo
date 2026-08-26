@@ -2,14 +2,18 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { api } from "@/lib/api"; // Assuming a centralized API module
+import { api } from "@/lib/api";
 
-// It's a good practice to define the shape of your user object.
+// The web's auth state can no longer be inferred from a token in localStorage
+// (the token now lives in an HttpOnly cookie, invisible to JS). We derive it from
+// a real backend call: GET /auth/me succeeds only when the HttpOnly cookie is
+// valid and is served with it (withCredentials). This keeps the SPA truthful after
+// a cookie expires or the session is invalidated server-side.
 interface User {
-  // Add properties based on your user data structure, e.g.,
   id: string;
   email: string;
-  name: string;
+  full_name: string | null;
+  is_admin?: boolean;
 }
 
 export function useAuth() {
@@ -18,19 +22,12 @@ export function useAuth() {
   const router = useRouter();
 
   const fetchUser = useCallback(async () => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      setLoading(false);
-      return;
-    }
-
     try {
-      // Assuming api.get handles setting the auth header
+      // Cookie-authenticated: no Authorization header needed; axios sends cookies
+      // (withCredentials) and the backend falls back to the access_token cookie.
       const userData = await api.get<User>("/auth/me");
       setUser(userData.data);
-    } catch (error) {
-      console.error("Failed to fetch user:", error);
-      localStorage.removeItem("token");
+    } catch {
       setUser(null);
     } finally {
       setLoading(false);
@@ -43,32 +40,33 @@ export function useAuth() {
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      const loginResponse = await api.post<{ access_token: string }>("/auth/login", {
+      // Sets the HttpOnly access_token + csrf_token cookies. The token is still
+      // returned in the body for mobile, but the web no longer stores it.
+      await api.post<{ access_token: string }>("/auth/login", {
         email,
         password,
       });
 
-      localStorage.setItem("token", loginResponse.data.access_token);
-
-      // After setting the token, fetch the user data to ensure consistency.
-      // The api module should now use the new token for its requests.
       const userData = await api.get<User>("/auth/me");
       setUser(userData.data);
       return true;
-    } catch (error) {
-      console.error("Login failed:", error);
-      localStorage.removeItem("token");
+    } catch {
       setUser(null);
       return false;
     }
   };
 
-  const logout = useCallback(() => {
-    localStorage.removeItem("token");
-    setUser(null);
-    // Single-page app: "/" renders the landing page once unauthenticated.
-    // There is no "/login" route (the login form lives on the landing page).
-    router.push("/");
+  const logout = useCallback(async () => {
+    try {
+      // Cookie invalidation: the backend clears access_token/csrf_token with
+      // Max-Age=0. No localStorage cleanup needed anymore.
+      await api.post("/auth/logout");
+    } finally {
+      setUser(null);
+      // Single-page app: "/" renders the landing page once unauthenticated.
+      // There is no "/login" route (the login form lives on the landing page).
+      router.push("/");
+    }
   }, [router]);
 
   return {

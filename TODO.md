@@ -5,20 +5,26 @@ contexte, portée et références de commits pour reprendre sans ré-archéologi
 
 ## Sécurité
 
-### [ ] Web : migration token `localStorage` → cookie `HttpOnly`
+### [x] Web : migration token `localStorage` → cookie `HttpOnly`
 - **Pourquoi** : le frontend Next.js stocke le JWT dans `localStorage`
   (`frontend/src/lib/*`, hooks `useAuth`/client API) — lisible par tout XSS.
   C'est la principale dette sécurité identifiée en revue CORS (le garde CORS
   était « cosmétique » tant que cette migration n'est pas faite).
 - **Portée** : endpoint FastAPI de session/refresh avec `Set-Cookie`
   (`HttpOnly; Secure; SameSite=Strict`), suppression du stockage local côté
-  SPA, stratégie CSRF (SameSite couvre l'essentiel, token double-submit sinon),
-  **mobile non concerné** (token déjà en Keychain/Keystore via
+  SPA, stratégie CSRF (SameSite couvre l'essentiel, token double-submit non
+  moins), **mobile non concerné** (token déjà en Keychain/Keystore via
   `flutter_secure_storage`).
 - **Attention** : réactiver `allow_credentials=True` dans `app/main.py`
   délibérément — il a été retiré (`be33c35`) faute de cookies ; la liste
   d'origins strictes est déjà garantie en prod par le garde anti-wildcard
   (`31512ee`). Ne rien réactiver sans les deux.
+- **⚠️ À vérifier lors du déploiement prod réel** : que `${DOMAIN}` et
+  `${API_DOMAIN}` restent same-site (même domaine racine). Le cookie d'auth
+  `SameSite=Lax` ne survivra **pas** à deux domaines racine distincts
+  (ex. `app.discovery.com` vs `api.discovery.com` → cookie rejeté côté web,
+  401 silencieux). À valider en pré-prod avec deux sous-domaines *différents*
+  ou prévoir un `Domain=.exemple.com` explicite au `Set-Cookie`.
 
 ### [x] Backend : migration `python-jose` → `PyJWT`
 - **Pourquoi** : `python-jose==3.5.0` (`f66ddf8`) corrige les CVE-2024 connues,

@@ -51,3 +51,12 @@ contexte, portée et références de commits pour reprendre sans ré-archéologi
 - **À revalider en conditions réelles** : `flutter_secure_storage` (chiffrement
   natif Keychain/Keystore, comportement différent du stub web), permissions
   localisation, hot-reload USB.
+
+## Backend
+
+### [x] Résidus DZD en dur
+- `mobile/lib/models/tenant.dart:28` ; `backend/app/models.py` — colonnes
+  Trip/Booking/Tenant.
+- **Impact** : limité — ce sont des valeurs par défaut au niveau DB, plus
+  jamais atteintes en pratique côté trip generation depuis `8a95afd`.
+- **Pourquoi nettoyer** : cohérence si un tenant additionnel est ajouté.

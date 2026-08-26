@@ -25,7 +25,7 @@ class Tenant {
     name: json['name'] ?? '',
     defaultLanguage: json['default_language'] ?? 'fr',
     supportedLanguages: List<String>.from(json['supported_languages'] ?? []),
-    defaultCurrency: json['default_currency'] ?? 'DZD',
+    defaultCurrency: json['default_currency'] ?? '',
     primaryColor: json['primary_color'] ?? '#006233',
     secondaryColor: json['secondary_color'] ?? '#FFFFFF',
   );

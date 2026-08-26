@@ -11,7 +11,7 @@ class TenantBase(BaseModel):
     name: str = Field(..., min_length=2, max_length=100)
     default_language: str = "fr"
     supported_languages: List[str] = ["fr", "ar", "en"]
-    default_currency: str = "DZD"
+    default_currency: str  # required — each tenant must declare its currency
     primary_color: str = "#006233"
     secondary_color: str = "#FFFFFF"
     is_active: bool = True

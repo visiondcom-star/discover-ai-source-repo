@@ -1,4 +1,4 @@
-"""Booking tests — 5 tests."""
+"""Booking tests — 6 tests."""
 import pytest
 
 
@@ -29,6 +29,67 @@ async def test_create_booking(client, auth_headers, db_session, test_tenant, tes
 
 
 @pytest.mark.asyncio
+async def test_create_booking_currency_defaults_to_tenant(client, db_session):
+    """Booking currency must derive from the tenant, not a hardcoded literal.
+    A MAD tenant must yield MAD bookings even though the payload never mentions
+    a currency."""
+    from app.models import Tenant, User, POI
+    from app.core.security import get_password_hash
+
+    tenant = Tenant(
+        slug="morocco",
+        name="Discover Morocco",
+        default_language="fr",
+        default_currency="MAD",
+    )
+    db_session.add(tenant)
+    await db_session.commit()
+    await db_session.refresh(tenant)
+
+    user = User(
+        tenant_id=tenant.id,
+        email="demo@morocco.travel",
+        hashed_password=get_password_hash("demo1234"),
+        full_name="Demo Morocco",
+        is_active=True,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+
+    poi = POI(
+        tenant_id=tenant.id,
+        slug="morocco-booking-poi",
+        name="Marrakech Booking POI",
+        city="Marrakech",
+        category="historical",
+        is_active=True,
+    )
+    db_session.add(poi)
+    await db_session.commit()
+    await db_session.refresh(poi)
+
+    login = await client.post(
+        "/api/v1/auth/login",
+        headers={"X-Tenant-Slug": "morocco"},
+        json={"email": "demo@morocco.travel", "password": "demo1234"},
+    )
+    assert login.status_code == 200
+    headers = {
+        "Authorization": f"Bearer {login.json()['access_token']}",
+        "X-Tenant-Slug": "morocco",
+    }
+
+    response = await client.post(
+        "/api/v1/bookings/",
+        headers=headers,
+        json={"poi_id": str(poi.id), "adapter_type": "tour"},
+    )
+    assert response.status_code == 201
+    assert response.json()["currency"] == "MAD"
+
+
+@pytest.mark.asyncio
 async def test_list_bookings(client, auth_headers):
     response = await client.get("/api/v1/bookings/", headers=auth_headers)
     assert response.status_code == 200
@@ -56,6 +117,7 @@ async def test_give_consent(client, auth_headers, db_session, test_tenant, test_
         adapter_type="hotel",
         status="pending",
         consent_given=False,
+        currency="DZD",
     )
     db_session.add(booking)
     await db_session.commit()
@@ -92,6 +154,7 @@ async def test_cancel_booking(client, auth_headers, db_session, test_tenant, tes
         poi_id=poi.id,
         adapter_type="restaurant",
         status="pending",
+        currency="DZD",
     )
     db_session.add(booking)
     await db_session.commit()

@@ -42,7 +42,7 @@ class Tenant(Base):
     name = Column(String(100), nullable=False)
     default_language = Column(String(10), default="fr")
     supported_languages = Column(ARRAY(String), default=list)
-    default_currency = Column(String(10), default="DZD")
+    default_currency = Column(String(10))  # required per-tenant; never a hardcoded literal
     primary_color = Column(String(7), default="#006233")
     secondary_color = Column(String(7), default="#FFFFFF")
     is_active = Column(Boolean, default=True)
@@ -126,7 +126,7 @@ class Trip(Base):
     description = Column(Text, nullable=True)
     num_days = Column(Integer, default=1)
     budget_level = Column(String(20), default="medium")  # low, medium, high
-    budget_currency = Column(String(10), default="DZD")
+    budget_currency = Column(String(10))  # set from tenant by trip generation; never hardcoded
     travel_style = Column(String(50), default="balanced")  # relaxed, balanced, intensive
     interests = Column(ARRAY(String), default=list)
     accessibility_needs = Column(ARRAY(String), default=list)
@@ -175,7 +175,7 @@ class Booking(Base):
     consent_given = Column(Boolean, default=False)
     consent_timestamp = Column(DateTime, nullable=True)
     price = Column(Float, nullable=True)
-    currency = Column(String(10), default="DZD")
+    currency = Column(String(10))  # set from tenant by the booking endpoint; never hardcoded
     booking_data = Column(JSON, default=dict)
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)

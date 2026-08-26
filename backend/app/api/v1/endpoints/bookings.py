@@ -47,6 +47,7 @@ async def create_booking(
         adapter_type=data.adapter_type,
         status="pending",
         consent_given=False,
+        currency=tenant.default_currency,  # derive from tenant, never a hardcoded literal
         booking_data=data.booking_data,
     )
     db.add(booking)

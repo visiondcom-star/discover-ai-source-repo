@@ -63,6 +63,7 @@ async def test_get_trip_details(client, auth_headers, db_session, test_tenant, t
         user_id=test_user.id,
         title="Test Trip",
         num_days=1,
+        budget_currency="DZD",
         status="planned",
     )
     db_session.add(trip)

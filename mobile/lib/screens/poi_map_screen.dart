@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../models/poi.dart';
 import '../providers/poi_provider.dart';
+import 'poi_detail_screen.dart';
 
 /// Full-screen map of the current tenant's POIs — the mobile counterpart of
 /// the web `Map.tsx`. Tiles come from OpenStreetMap; markers come from the
@@ -66,6 +67,20 @@ class _PoiMapView extends StatelessWidget {
                   Text(poi.category,
                       style: Theme.of(sheetContext).textTheme.bodySmall),
                 ],
+              ),
+              const SizedBox(height: 12),
+              TextButton.icon(
+                key: Key('poi_sheet_details_${poi.id}'),
+                icon: const Icon(Icons.info_outline),
+                label: const Text('View details'),
+                onPressed: () {
+                  Navigator.of(sheetContext).pop();
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => PoiDetailScreen(poi: poi),
+                    ),
+                  );
+                },
               ),
             ],
           ),

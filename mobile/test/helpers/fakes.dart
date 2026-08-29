@@ -230,6 +230,113 @@ class FakeChatApi implements ChatApi {
   }
 }
 
+Map<String, dynamic> sampleBookingJson({
+  String id = 'b-1',
+  String poiId = 'p-1',
+  String adapterType = 'hotel',
+  String status = 'pending',
+  bool consentGiven = false,
+  String? externalId,
+}) =>
+    {
+      'id': id,
+      'tenant_id': 't-1',
+      'user_id': 'u-1',
+      'poi_id': poiId,
+      'adapter_type': adapterType,
+      'external_id': externalId,
+      'status': status,
+      'consent_given': consentGiven,
+      'price': null,
+      'currency': 'DZD',
+      'created_at': '2026-08-28T10:00:00Z',
+    };
+
+/// Deterministic BookingsApi fake reproducing the backend consent flow:
+/// create → pending, consent true → confirmed + EXT-…, false → cancelled,
+/// cancel → cancelled.
+class FakeBookingsApi implements BookingsApi {
+  FakeBookingsApi({List<Map<String, dynamic>>? bookings, this.failCreate = false})
+      : bookings = List<Map<String, dynamic>>.from(
+            bookings ?? [sampleBookingJson()]);
+
+  final bool failCreate;
+  final List<Map<String, dynamic>> bookings;
+  int createCalls = 0;
+  int consentCalls = 0;
+  int cancelCalls = 0;
+  String? lastCreatedPoiId;
+  String? lastCreatedAdapter;
+  String? lastConsentBookingId;
+  bool? lastConsentValue;
+
+  static const Map<String, Map<String, dynamic>> _adapters = {
+    'hotel': {'name': 'HotelBookingAdapter', 'status': 'active'},
+    'restaurant': {'name': 'RestaurantAdapter', 'status': 'active'},
+    'tour': {'name': 'TourGuideAdapter', 'status': 'beta'},
+    'transport': {'name': 'TransportAdapter', 'status': 'active'},
+  };
+
+  Map<String, dynamic> _byId(String bookingId) => bookings.firstWhere(
+        (b) => b['id'] == bookingId,
+        orElse: () => throw ApiException(404, '{"detail":"Booking not found"}'),
+      );
+
+  @override
+  Future<Map<String, dynamic>> createBooking({
+    required String poiId,
+    required String adapterType,
+    Map<String, dynamic> bookingData = const {},
+  }) async {
+    createCalls++;
+    lastCreatedPoiId = poiId;
+    lastCreatedAdapter = adapterType;
+    if (failCreate) {
+      throw ApiException(400, '{"detail":"Invalid adapter type"}');
+    }
+    final json = sampleBookingJson(
+      id: 'b-$createCalls',
+      poiId: poiId,
+      adapterType: adapterType,
+    );
+    bookings.add(json);
+    return Map<String, dynamic>.from(json);
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> listBookings() async =>
+      [for (final b in bookings.reversed) Map<String, dynamic>.from(b)];
+
+  @override
+  Future<Map<String, dynamic>> giveConsent(String bookingId,
+      {required bool consent}) async {
+    consentCalls++;
+    lastConsentBookingId = bookingId;
+    lastConsentValue = consent;
+    final b = _byId(bookingId);
+    if (consent) {
+      b['consent_given'] = true;
+      b['status'] = 'confirmed';
+      b['external_id'] = 'EXT-$bookingId';
+    } else {
+      b['status'] = 'cancelled';
+    }
+    return Map<String, dynamic>.from(b);
+  }
+
+  @override
+  Future<Map<String, dynamic>> cancelBooking(String bookingId) async {
+    cancelCalls++;
+    final b = _byId(bookingId);
+    b['status'] = 'cancelled';
+    return Map<String, dynamic>.from(b);
+  }
+
+  @override
+  Future<Map<String, dynamic>> listAdapters() async =>
+      {'adapters': Map<String, Map<String, dynamic>>.from(_adapters)};
+}
+
 /// In-memory TokenStore for tests (no platform channels involved).
 class InMemoryTokenStore implements TokenStore {
   String? token;

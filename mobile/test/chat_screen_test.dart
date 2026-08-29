@@ -74,5 +74,44 @@ void main() {
     expect(find.textContaining('chat service unavailable'), findsOneWidget);
     // No assistant bubble carrying a hardcoded apology — only the banner.
     expect(find.text('Désolé, une erreur est survenue.'), findsNothing);
+    // No suggestion chips either: the envelope never arrived, so the
+    // provider exposes none (last turn is still the user's).
+    expect(find.byKey(const Key('chat_suggestions')), findsNothing);
+  });
+
+  testWidgets(
+      'assistant reply renders the API follow-up suggestions as chips '
+      'and tapping one sends it as a new turn', (tester) async {
+    final fake = FakeChatApi();
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => ChatProvider(chatApi: fake)),
+        ],
+        child: const MaterialApp(home: ChatScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(const Key('chat_input')), 'Sites ?');
+    await tester.pump(); // flush controller listener -> canSend=true
+    await tester.tap(find.byKey(const Key('chat_send')));
+    await tester.pumpAndSettle();
+
+    // Chips come verbatim from the API envelope (FakeChatApi defaults).
+    expect(find.byKey(const Key('chat_suggestions')), findsOneWidget);
+    expect(find.text('Suggestion 1'), findsOneWidget);
+    expect(find.text('Suggestion 2'), findsOneWidget);
+
+    // Tapping a chip sends its text as a new user turn — no typing needed.
+    await tester.tap(find.byKey(const Key('chat_suggestion_0')));
+    await tester.pumpAndSettle();
+    expect(fake.calls, 2);
+    expect(fake.lastMessage, 'Suggestion 1');
+    expect(find.text('Suggestion 1'), findsNWidgets(2),
+        reason: 'the user bubble text plus the refreshed chip');
+    expect(find.text('Mocked assistant reply to: Suggestion 1'),
+        findsOneWidget);
   });
 }

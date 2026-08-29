@@ -39,6 +39,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     final chat = context.watch<ChatProvider>();
     final hasMessages = chat.messages.isNotEmpty;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -79,35 +80,46 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
           ),
                     if (chat.isSending && hasMessages)
-            Container(
-              alignment: Alignment.centerLeft,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                          shape: BoxShape.circle, color: Colors.grey)),
-                  const SizedBox(width: 6),
-                  Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                          shape: BoxShape.circle, color: Colors.grey)),
-                  const SizedBox(width: 6),
-                  Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                          shape: BoxShape.circle, color: Colors.grey)),
-                  const SizedBox(width: 8),
-                  const Text('En train de réfléchir…',
-                      style: TextStyle(fontSize: 12)),
-                ],
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surface,
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(6),
+                          topRight: Radius.circular(20),
+                          bottomLeft: Radius.circular(20),
+                          bottomRight: Radius.circular(20),
+                        ),
+                        border: Border.all(
+                            color: colorScheme.outlineVariant, width: 1),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _ThinkingDot(colorScheme.outline),
+                          const SizedBox(width: 6),
+                          _ThinkingDot(colorScheme.outline),
+                          const SizedBox(width: 6),
+                          _ThinkingDot(colorScheme.outline),
+                          const SizedBox(width: 8),
+                          Text('En train de réfléchir…',
+                              style: Theme.of(context).textTheme.labelSmall),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
+          if (!chat.isSending && chat.suggestions.isNotEmpty)
+            _SuggestionStrip(
+              suggestions: chat.suggestions,
+              onSelected: (text) =>
+                  context.read<ChatProvider>().sendMessage(text),
             ),
           if (chat.error != null)
             Container(
@@ -197,9 +209,10 @@ class _InputBarState extends State<_InputBar> {
               child: TextField(
                 key: const Key('chat_input'),
                 controller: widget.controller,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   hintText: 'Poser une question…',
-                  border: OutlineInputBorder(),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14)),
                 ),
                 maxLines: 4,
                 minLines: 1,
@@ -221,6 +234,56 @@ class _InputBarState extends State<_InputBar> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Static (non-animated) thinking dot — deliberately pumpAndSettle-safe.
+class _ThinkingDot extends StatelessWidget {
+  const _ThinkingDot(this.color);
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: 8,
+        height: 8,
+        decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+      );
+}
+
+/// Follow-up suggestions rendered verbatim from the latest assistant turn
+/// (backend envelope `suggestions`). Hidden while a reply is pending and
+/// when the backend returns none — never filled with hardcoded content.
+class _SuggestionStrip extends StatelessWidget {
+  const _SuggestionStrip({
+    required this.suggestions,
+    required this.onSelected,
+  });
+
+  final List<String> suggestions;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      key: const Key('chat_suggestions'),
+      height: 44,
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        scrollDirection: Axis.horizontal,
+        itemCount: suggestions.length,
+        itemBuilder: (context, index) => ActionChip(
+          key: Key('chat_suggestion_$index'),
+          label: Text(
+            suggestions[index],
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          onPressed: () => onSelected(suggestions[index]),
+        ),
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
       ),
     );
   }

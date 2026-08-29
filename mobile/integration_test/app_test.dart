@@ -18,6 +18,8 @@ import 'package:provider/provider.dart';
 import 'package:discover_ai/app.dart';
 import 'package:discover_ai/models/poi.dart';
 import 'package:discover_ai/providers/auth_provider.dart';
+import 'package:discover_ai/providers/booking_provider.dart';
+import 'package:discover_ai/providers/chat_provider.dart';
 import 'package:discover_ai/providers/poi_provider.dart';
 import 'package:discover_ai/providers/trip_provider.dart';
 import 'package:discover_ai/widgets/poi_card.dart';
@@ -40,9 +42,27 @@ void main() {
           ChangeNotifierProvider(create: (_) => AuthProvider()),
           ChangeNotifierProvider(create: (_) => POIProvider()),
           ChangeNotifierProvider(create: (_) => TripProvider()),
+          // IndexedStack builds every tab eagerly → ChatProvider must be
+          // present above HomeShell (ChatScreen mounts at shell boot).
+          ChangeNotifierProvider(create: (_) => ChatProvider()),
+          // Same requirement for the Réservations tab (real Booking-Agent
+          // API — the tab stays empty until a booking is created).
+          ChangeNotifierProvider(create: (_) => BookingProvider()),
         ],
         child: const DiscoverAIApp(),
       );
+
+  /// The iOS Keychain is shared across every test of a suite run: a
+  /// successful login in an earlier test leaves a valid JWT behind and the
+  /// AuthGate would restore straight into HomeShell, skipping LoginScreen.
+  /// Clear any persisted session before pumping a fresh tree.
+  Future<void> clearPersistedSession() async {
+    final prep = AuthProvider();
+    await prep.initialized;
+    if (prep.isAuthenticated) {
+      await prep.logout();
+    }
+  }
 
   /// Polls until [finder] matches, pumping real frames meanwhile.
   /// pumpAndSettle would never settle while a progress indicator spins.
@@ -74,6 +94,8 @@ void main() {
 
   testWidgets('V1 — LoginScreen renders with email/password fields',
       (tester) async {
+    // A previous test/run may have left a valid JWT in the Keychain.
+    await clearPersistedSession();
     await tester.pumpWidget(boot());
     await waitFor(tester, find.byKey(const Key('login_email')));
     await tester.pump(const Duration(milliseconds: 400));
@@ -91,6 +113,7 @@ void main() {
 
   testWidgets('V4 — wrong password shows a visible on-screen error',
       (tester) async {
+    await clearPersistedSession();
     await tester.pumpWidget(boot());
     await waitFor(tester, find.byKey(const Key('login_email')));
 
@@ -104,23 +127,30 @@ void main() {
 
   testWidgets('V2+V3 — real demo login lands on POI list with 8 POIs',
       (tester) async {
+    await clearPersistedSession();
     await tester.pumpWidget(boot());
     await waitFor(tester, find.byKey(const Key('login_email')));
 
     await typeCredentials(tester, demoPassword);
 
-    // Navigation happened once the login form is gone.
-    await waitFor(
-      tester,
-      find.byKey(const Key('login_email')),
-      timeout: const Duration(seconds: 20),
-    );
-    final loginGone = find
-        .byKey(const Key('login_email'))
-        .evaluate()
-        .isEmpty;
+    // Navigation happened once the login form is gone — poll for ABSENCE
+    // (waitFor() returns on PRESENCE, which is true before login resolves).
+    final goneDeadline = DateTime.now().add(const Duration(seconds: 20));
+    var loginGone = false;
+    while (DateTime.now().isBefore(goneDeadline)) {
+      await tester.pump(const Duration(milliseconds: 250));
+      if (find.byKey(const Key('login_email')).evaluate().isEmpty) {
+        loginGone = true;
+        break;
+      }
+    }
     expect(loginGone, isTrue,
         reason: 'successful login must navigate away from LoginScreen');
+
+    // The shell boots on the Accueil tab — the POI list lives on Explorer.
+    await waitFor(tester, find.byKey(const Key('tab_explore')),
+        timeout: const Duration(seconds: 20));
+    await tester.tap(find.byKey(const Key('tab_explore')));
 
     // At least one real POI card is painted...
     await waitFor(tester, find.byType(POICard),
@@ -133,7 +163,7 @@ void main() {
     final names = pois.items.map((p) => p.name).toList();
 
     debugPrint('V2_PASS: successful login navigated from LoginScreen '
-        'to POIListScreen');
+        'to the main shell (Explorer tab shows the POI list)');
     debugPrint('V3_PASS: POI_COUNT_PROVIDER=${pois.items.length} '
         'POI_CARDS_VISIBLE=$visibleCards NAMES=$names');
     for (final POI p in pois.items) {
@@ -150,10 +180,17 @@ void main() {
 
   testWidgets('V5 — trip form submit navigates to a real day-by-day timeline',
       (tester) async {
+    // V2+V3 just logged in successfully → its JWT is still in the Keychain.
+    await clearPersistedSession();
     await tester.pumpWidget(boot());
     await waitFor(tester, find.byKey(const Key('login_email')));
 
     await typeCredentials(tester, demoPassword);
+
+    // The FAB lives on the Explorer tab — switch there first.
+    await waitFor(tester, find.byKey(const Key('tab_explore')),
+        timeout: const Duration(seconds: 20));
+    await tester.tap(find.byKey(const Key('tab_explore')));
     await waitFor(tester, find.byKey(const Key('plan_trip_fab')),
         timeout: const Duration(seconds: 20));
 
@@ -208,5 +245,81 @@ void main() {
         reason: 'at least one itinerary stop (POI row) must be rendered');
     expect(find.text(trip.title), findsWidgets,
         reason: 'trip title must be visible in the timeline');
+  });
+
+  testWidgets('V7 — booking consent flow creates and confirms a real booking',
+      (tester) async {
+    await clearPersistedSession();
+    await tester.pumpWidget(boot());
+    await waitFor(tester, find.byKey(const Key('login_email')));
+
+    await typeCredentials(tester, demoPassword);
+
+    // Explorer: open the first POI detail (tap its card).
+    await waitFor(tester, find.byKey(const Key('tab_explore')),
+        timeout: const Duration(seconds: 20));
+    await tester.tap(find.byKey(const Key('tab_explore')));
+    final poiCardFinder = find.byWidgetPredicate((w) =>
+        w.key is ValueKey<String> &&
+        (w.key as ValueKey<String>).value.startsWith('poi_card_'));
+    await waitFor(tester, poiCardFinder, timeout: const Duration(seconds: 20));
+    await tester.tap(poiCardFinder.first);
+    await waitFor(tester, find.byKey(const Key('poi_detail_book_button')),
+        timeout: const Duration(seconds: 20));
+
+    // Booking sheet: real GET /bookings/adapters/available (JWT required).
+    await tester.tap(find.byKey(const Key('poi_detail_book_button')));
+    await waitFor(tester, find.byKey(const Key('booking_sheet')),
+        timeout: const Duration(seconds: 20));
+    await waitFor(tester, find.byKey(const Key('booking_adapter_hotel')),
+        timeout: const Duration(seconds: 20));
+    debugPrint('V7_SHEET_PASS: backend-advertised adapters rendered as chips');
+
+    // Create the PENDING booking — real POST /bookings/ (201).
+    await tester.tap(find.byKey(const Key('booking_adapter_hotel')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('booking_create_button')));
+    await waitFor(tester, find.byKey(const Key('booking_consent_dialog')),
+        timeout: const Duration(seconds: 20));
+
+    // Explicit consent — real POST /bookings/{id}/consent (true → confirmed).
+    // Never an auto-confirmation: the user taps Confirmer (principle 5).
+    await tester.tap(find.byKey(const Key('booking_consent_confirm')));
+    // The consent dialog and the sheet both close once consent is resolved.
+    await waitFor(tester, find.byKey(const Key('poi_detail_book_button')),
+        timeout: const Duration(seconds: 20));
+
+    // The POI detail is a full-screen route: the shell (and its tabs) stay
+    // offstage until we pop — same proven pattern as V6 in login_flow_test.
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await waitFor(tester, find.byKey(const Key('tab_bookings')),
+        timeout: const Duration(seconds: 20));
+
+    final shellContext = tester.element(find.byKey(const Key('tab_bookings')));
+    final bookings = shellContext.read<BookingProvider>();
+    expect(bookings.items, isNotEmpty,
+        reason: 'the created booking must live in the provider');
+    final created = bookings.items.first;
+    debugPrint('V7_CREATED: id=${created.id} status=${created.status} '
+        'adapter=${created.adapterType}');
+
+    // Réservations tab renders the booking with its EXT-… external reference.
+    await tester.tap(find.byKey(const Key('tab_bookings')));
+    final bookingCardFinder = find.byWidgetPredicate((w) =>
+        w.key is ValueKey<String> &&
+        (w.key as ValueKey<String>).value.startsWith('booking_card_'));
+    await waitFor(tester, bookingCardFinder,
+        timeout: const Duration(seconds: 20));
+    final extRefFinder = find.byWidgetPredicate(
+        (w) => w is Text && (w.data ?? '').contains('EXT-'));
+    expect(extRefFinder, findsWidgets,
+        reason: 'the confirmed booking must expose its EXT-… reference');
+
+    expect(created.status, 'confirmed',
+        reason: 'consent:true must confirm the booking — never auto-confirm');
+
+    debugPrint('V7_PASS: real consent flow — pending → confirmed, EXT '
+        'reference visible on the Réservations tab');
   });
 }

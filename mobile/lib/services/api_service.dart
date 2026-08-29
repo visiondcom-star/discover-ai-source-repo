@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../config.dart';
@@ -48,6 +49,33 @@ abstract class ChatApi {
   });
 }
 
+/// Booking-Agent seam — mirrors POST /bookings/ (201), GET /bookings/,
+/// POST /bookings/{id}/consent, POST /bookings/{id}/cancel and
+/// GET /bookings/adapters/available
+/// (backend/app/api/v1/endpoints/bookings.py).
+abstract class BookingsApi {
+  /// Creates a PENDING booking; mirrors POST /bookings/ (201).
+  Future<Map<String, dynamic>> createBooking({
+    required String poiId,
+    required String adapterType,
+    Map<String, dynamic> bookingData,
+  });
+
+  /// Lists the current user's bookings; mirrors GET /bookings/.
+  Future<List<Map<String, dynamic>>> listBookings();
+
+  /// Explicit consent step; mirrors POST /bookings/{id}/consent.
+  /// consent=true → confirmed + EXT-… reference, false → cancelled.
+  Future<Map<String, dynamic>> giveConsent(String bookingId,
+      {required bool consent});
+
+  /// Mirrors POST /bookings/{id}/cancel.
+  Future<Map<String, dynamic>> cancelBooking(String bookingId);
+
+  /// Adapter catalogue advertised by the backend.
+  Future<Map<String, dynamic>> listAdapters();
+}
+
 /// HTTP failure carrying status code and body.
 class ApiException implements Exception {
   ApiException(this.statusCode, this.body);
@@ -65,7 +93,7 @@ class ApiException implements Exception {
 ///
 /// Host and tenant slug come exclusively from [AppConfig]
 /// (`--dart-define`) — never hardcoded in business code.
-class ApiService implements AuthApi, PoisApi, TripsApi, ChatApi {
+class ApiService implements AuthApi, PoisApi, TripsApi, ChatApi, BookingsApi {
   ApiService._internal()
       : baseUrl = AppConfig.apiBaseUrl,
         tenantSlug = AppConfig.tenantSlug;
@@ -92,17 +120,23 @@ class ApiService implements AuthApi, PoisApi, TripsApi, ChatApi {
         if (_token.isNotEmpty) 'Authorization': 'Bearer $_token',
       };
 
-  Future<dynamic> _get(String path) async {
-    final res = await http.get(Uri.parse('$baseUrl$path'), headers: _headers);
+    Future<dynamic> _get(String path) async {
+    final url = '$baseUrl$path';
+    debugPrint('[API] GET $url');
+    final res = await http.get(Uri.parse(url), headers: _headers);
+    debugPrint('[API] GET $path → ${res.statusCode}');
     return _decode(res);
   }
 
   Future<dynamic> _post(String path, Map<String, dynamic> body) async {
+    final url = '$baseUrl$path';
+    debugPrint('[API] POST $url body=$body');
     final res = await http.post(
-      Uri.parse('$baseUrl$path'),
+      Uri.parse(url),
       headers: _headers,
       body: jsonEncode(body),
     );
+    debugPrint('[API] POST $path → ${res.statusCode}');
     return _decode(res);
   }
 
@@ -184,4 +218,40 @@ class ApiService implements AuthApi, PoisApi, TripsApi, ChatApi {
     final result = await _post('/chat/', body);
     return Map<String, dynamic>.from(result as Map);
   }
+
+  @override
+  Future<Map<String, dynamic>> createBooking({
+    required String poiId,
+    required String adapterType,
+    Map<String, dynamic> bookingData = const {},
+  }) async =>
+      Map<String, dynamic>.from(await _post('/bookings/', {
+        'poi_id': poiId,
+        'adapter_type': adapterType,
+        'booking_data': bookingData,
+      }) as Map);
+
+  @override
+  Future<List<Map<String, dynamic>>> listBookings() async {
+    final data = await _get('/bookings/');
+    return (data as List)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+
+  @override
+  Future<Map<String, dynamic>> giveConsent(String bookingId,
+          {required bool consent}) async =>
+      Map<String, dynamic>.from(await _post('/bookings/$bookingId/consent', {
+        'consent': consent,
+      }) as Map);
+
+  @override
+  Future<Map<String, dynamic>> cancelBooking(String bookingId) async =>
+      Map<String, dynamic>.from(
+          await _post('/bookings/$bookingId/cancel', {}) as Map);
+
+  @override
+  Future<Map<String, dynamic>> listAdapters() async =>
+      Map<String, dynamic>.from(await _get('/bookings/adapters/available') as Map);
 }

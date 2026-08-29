@@ -21,6 +21,7 @@ import 'package:provider/provider.dart';
 import 'package:discover_ai/app.dart';
 import 'package:discover_ai/models/chat_message.dart';
 import 'package:discover_ai/providers/auth_provider.dart';
+import 'package:discover_ai/providers/booking_provider.dart';
 import 'package:discover_ai/providers/chat_provider.dart';
 import 'package:discover_ai/providers/poi_provider.dart';
 import 'package:discover_ai/providers/trip_provider.dart';
@@ -40,12 +41,18 @@ void main() {
   );
 
   // Real stack: real ApiService HTTP calls, real JWT, real POI data.
-  Widget boot() => MultiProvider(
+  /// [auth] lets a test inject its PREP-purged provider so the app and the
+  /// test share the exact same auth state (pattern of login_flow_test.dart).
+  Widget boot({AuthProvider? auth}) => MultiProvider(
         providers: [
-          ChangeNotifierProvider(create: (_) => AuthProvider()),
+          ChangeNotifierProvider<AuthProvider>.value(
+              value: auth ?? AuthProvider()),
           ChangeNotifierProvider(create: (_) => POIProvider()),
           ChangeNotifierProvider(create: (_) => TripProvider()),
           ChangeNotifierProvider(create: (_) => ChatProvider()),
+          // IndexedStack mounts every tab eagerly → Réservations needs a
+          // BookingProvider (real Booking-Agent API).
+          ChangeNotifierProvider(create: (_) => BookingProvider()),
         ],
         child: const DiscoverAIApp(),
       );
@@ -80,16 +87,29 @@ void main() {
 
   testWidgets('V6 — chat assistant renders the real /chat/ reply on screen',
       (tester) async {
-    await tester.pumpWidget(boot());
+    // --- PREP: fresh auth state -------------------------------------------
+    // A previous run on this simulator (login/logout/app tests) may have left
+    // a valid JWT in the iOS Keychain. AuthGate would then restore the
+    // session and NEVER show the LoginScreen → timeout waiting for
+    // login_email. Purge it exactly like login_flow_test.dart.
+    final auth = AuthProvider();
+    await auth.initialized;
+    if (auth.isAuthenticated) {
+      debugPrint(
+          '=== PREP: stored session found → logout() to force LoginScreen ===');
+      await auth.logout();
+    }
+
+    await tester.pumpWidget(boot(auth: auth));
     await waitFor(tester, find.byKey(const Key('login_email')));
 
-    // Sign in with the seeded demo account, then land on the POI list.
+    // Sign in with the seeded demo account, then land on the HomeShell.
     await typeCredentials(tester, demoPassword);
-    await waitFor(tester, find.byKey(const Key('open_chat_button')),
+    await waitFor(tester, find.byKey(const Key('tab_assistant')),
         timeout: const Duration(seconds: 20));
 
-    // Open the chat assistant from the POI list AppBar.
-    await tester.tap(find.byKey(const Key('open_chat_button')));
+    // Open the chat assistant via its dedicated tab.
+    await tester.tap(find.byKey(const Key('tab_assistant')));
     await tester.pump(const Duration(milliseconds: 600));
     expect(find.byType(ChatBubble), findsNothing); // empty state first
     expect(find.byKey(const Key('chat_input')), findsOneWidget);

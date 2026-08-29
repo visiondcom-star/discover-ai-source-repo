@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../providers/auth_provider.dart';
 import '../providers/poi_provider.dart';
 import '../widgets/poi_card.dart';
+import 'poi_detail_screen.dart';
 import 'poi_map_screen.dart';
 import 'trip_form_screen.dart';
-import 'chat_screen.dart';
 
+/// Explorer tab of the HomeShell — the current tenant's POI list.
+///
+/// Chat and logout moved to their dedicated tabs (Assistant / Profil) with
+/// the five-tab shell; the map stays one tap away via `toggle_map_button`.
 class POIListScreen extends StatefulWidget {
   const POIListScreen({super.key});
 
@@ -16,6 +19,8 @@ class POIListScreen extends StatefulWidget {
 }
 
 class _POIListScreenState extends State<POIListScreen> {
+  final TextEditingController _searchController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -24,7 +29,19 @@ class _POIListScreenState extends State<POIListScreen> {
     });
   }
 
-  Future<void> _refresh() => context.read<POIProvider>().loadPOIs();
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  /// Pull-to-refresh re-applies the active search so the field and the list
+  /// never diverge.
+  Future<void> _refresh() {
+    final pois = context.read<POIProvider>();
+    final q = pois.searchQuery;
+    return pois.loadPOIs(search: q.isEmpty ? null : q);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -34,27 +51,13 @@ class _POIListScreenState extends State<POIListScreen> {
       appBar: AppBar(
         title: const Text('Discover AI'),
         actions: [
-                    IconButton(
+          IconButton(
             key: const Key('toggle_map_button'),
             icon: const Icon(Icons.map_outlined),
             tooltip: 'Show map',
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const PoiMapScreen()),
             ),
-          ),
-          IconButton(
-            key: const Key('open_chat_button'),
-            icon: const Icon(Icons.chat_bubble_outline),
-            tooltip: 'Chat assistant',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const ChatScreen()),
-            ),
-          ),
-          IconButton(
-            key: const Key('logout_button'),
-            icon: const Icon(Icons.logout),
-            tooltip: 'Log out',
-            onPressed: () => context.read<AuthProvider>().logout(),
           ),
         ],
       ),
@@ -66,9 +69,56 @@ class _POIListScreenState extends State<POIListScreen> {
           MaterialPageRoute(builder: (_) => const TripFormScreen()),
         ),
       ),
-      body: RefreshIndicator(
-        onRefresh: _refresh,
-        child: _buildBody(pois),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: TextField(
+              key: const Key('poi_search_field'),
+              controller: _searchController,
+              textInputAction: TextInputAction.search,
+              onChanged: (value) =>
+                  context.read<POIProvider>().updateSearch(value),
+              onSubmitted: (value) {
+                final q = value.trim();
+                context
+                    .read<POIProvider>()
+                    .loadPOIs(search: q.isEmpty ? null : q);
+              },
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.search),
+                hintText: 'Search places, cities…',
+                isDense: true,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                suffixIcon: ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: _searchController,
+                  builder: (_, value, __) => value.text.isEmpty
+                      ? const SizedBox.shrink()
+                      : IconButton(
+                          key: const Key('poi_search_clear'),
+                          icon: const Icon(Icons.clear),
+                          tooltip: 'Clear search',
+                          onPressed: () {
+                            _searchController.clear();
+                            context.read<POIProvider>().updateSearch('');
+                          },
+                        ),
+                ),
+              ),
+            ),
+          ),
+          // Keep the previous list visible while a search round-trip is in
+          // flight — a thin progress bar beats a flashing empty state.
+          if (pois.isLoading) const LinearProgressIndicator(minHeight: 2),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _refresh,
+              child: _buildBody(pois),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -84,6 +134,28 @@ class _POIListScreenState extends State<POIListScreen> {
           Padding(
             padding: const EdgeInsets.all(24),
             child: Center(child: Text('Error: ${pois.error}')),
+          ),
+        ],
+      );
+    }
+    // Distinguish "the tenant has no places at all" from "nothing matches
+    // this search" — different empty states, different guidance.
+    if (pois.items.isEmpty && pois.searchQuery.isNotEmpty) {
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          const SizedBox(height: 160),
+          Center(
+            child: Column(
+              children: [
+                const Icon(Icons.search_off, size: 48, color: Colors.grey),
+                const SizedBox(height: 12),
+                Text(
+                  'No results for “${pois.searchQuery}”.',
+                  key: const Key('poi_search_empty'),
+                ),
+              ],
+            ),
           ),
         ],
       );
@@ -108,7 +180,16 @@ class _POIListScreenState extends State<POIListScreen> {
     return ListView.builder(
       physics: const AlwaysScrollableScrollPhysics(),
       itemCount: pois.items.length,
-      itemBuilder: (context, index) => POICard(poi: pois.items[index]),
+      itemBuilder: (context, index) {
+        final poi = pois.items[index];
+        return POICard(
+          key: Key('poi_card_${poi.id}'),
+          poi: poi,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => PoiDetailScreen(poi: poi)),
+          ),
+        );
+      },
     );
   }
 }

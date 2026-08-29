@@ -23,9 +23,25 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.1
+  # Deterministic clock for debounce/timer tests — no wall-clock sleeps.
+  fake_async: ^1.3.1
   # Web E2E verification harness (flutter drive -d chrome).
   integration_test:
     sdk: flutter
 
 flutter:
   uses-material-design: true
+  # Poppins — brand typeface from the "Discover AI" UX blueprint
+  # (weights used by the design system: Medium 500, SemiBold 600, Bold 700).
+  # Bundled as assets (no runtime fetch, deterministic tests). License: OFL,
+  # see assets/fonts/OFL-LICENSE.txt.
+  fonts:
+    - family: Poppins
+      fonts:
+        - asset: assets/fonts/Poppins-Regular.ttf
+        - asset: assets/fonts/Poppins-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Poppins-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Poppins-Bold.ttf
+          weight: 700

@@ -2,15 +2,19 @@ import 'package:flutter/material.dart';
 
 import '../models/chat_message.dart';
 
-/// Chat bubble — mobile equivalent of the web `ChatBubble.tsx` component.
+/// Chat bubble — mobile equivalent of the web `ChatBubble.tsx` component,
+/// restyled on the P0 design system (Material 3 + Poppins via the app theme).
 ///
 /// Visual mapping (frontend/src/components/ChatBubble.tsx):
-///   - leading circular avatar: User icon (gray) for the user, Bot icon
-///     (primary) for the assistant.
-///   - user turn   → right-aligned, primary background, white text,
-///                    rounded top-right cut (rounded-tr-sm).
-///   - assistant turn → left-aligned, white background, border,
-///                       rounded top-left cut (rounded-tl-sm).
+///   - circular avatar beside the tail: person (neutral) on the user side,
+///     guide bot (brand) on the assistant side.
+///   - user turn      → right-aligned, primary (brand) background, white text,
+///                      top-right corner cut (rounded-tr-sm on web).
+///   - assistant turn → left-aligned, surface background, hairline border,
+///                      top-left corner cut (rounded-tl-sm on web).
+///
+/// Content contract unchanged: [message] is rendered verbatim from the API
+/// envelope — nothing is hardcoded or appended here.
 class ChatBubble extends StatelessWidget {
   const ChatBubble({
     super.key,
@@ -23,64 +27,64 @@ class ChatBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final isUser = _isUser;
 
-    final bgColor = isUser
-        ? colorScheme.primary
-        : colorScheme.surface;
+    final bgColor = isUser ? colorScheme.primary : colorScheme.surface;
     final fgColor = isUser ? colorScheme.onPrimary : colorScheme.onSurface;
-    final borderColor =
-        isUser ? Colors.transparent : colorScheme.outlineVariant;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: Row(
         mainAxisAlignment:
             isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          CircleAvatar(
-            radius: 16,
-            backgroundColor: isUser
-                ? colorScheme.surfaceContainerHighest
-                : colorScheme.primary,
-            foregroundColor: isUser
-                ? colorScheme.onSurfaceVariant
-                : colorScheme.onPrimary,
-            child: Icon(
-              isUser ? Icons.person : Icons.smart_toy_outlined,
-              size: 18,
+          if (!isUser) ...[
+            CircleAvatar(
+              radius: 16,
+              backgroundColor: colorScheme.primary,
+              foregroundColor: colorScheme.onPrimary,
+              child: const Icon(Icons.smart_toy_outlined, size: 18),
             ),
-          ),
-          const SizedBox(width: 8),
+            const SizedBox(width: 8),
+          ],
           Flexible(
             child: Container(
               padding:
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                              decoration: BoxDecoration(
+              decoration: BoxDecoration(
                 color: bgColor,
                 borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(20),
-                  topRight: const Radius.circular(20),
-                  bottomLeft: isUser ? const Radius.circular(20) : Radius.zero,
-                  bottomRight:
-                      isUser ? Radius.zero : const Radius.circular(20),
+                  topLeft: Radius.circular(isUser ? 20 : 6),
+                  topRight: Radius.circular(isUser ? 6 : 20),
+                  bottomLeft: const Radius.circular(20),
+                  bottomRight: const Radius.circular(20),
                 ),
                 border: isUser
                     ? null
-                    : Border.all(color: borderColor, width: 1),
+                    : Border.all(color: colorScheme.outlineVariant, width: 1),
               ),
               child: SelectableText(
                 message.message,
-                style: TextStyle(
+                style: theme.textTheme.bodyMedium?.copyWith(
                   color: fgColor,
-                  fontSize: 15,
                   height: 1.4,
+                  fontWeight: isUser ? FontWeight.w500 : FontWeight.w400,
                 ),
-                textAlign: isUser ? TextAlign.right : TextAlign.left,
               ),
             ),
           ),
+          if (isUser) ...[
+            const SizedBox(width: 8),
+            CircleAvatar(
+              radius: 16,
+              backgroundColor: colorScheme.surfaceContainerHighest,
+              foregroundColor: colorScheme.onSurfaceVariant,
+              child: const Icon(Icons.person, size: 18),
+            ),
+          ],
         ],
       ),
     );

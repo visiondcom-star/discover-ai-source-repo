@@ -11,14 +11,21 @@ import 'trip_timeline_screen.dart';
 /// The interest catalog comes from [AppConfig] (`--dart-define`), never
 /// hardcoded market content (CLAUDE.md principle 1).
 class TripFormScreen extends StatefulWidget {
-  const TripFormScreen({super.key});
+  const TripFormScreen({super.key, this.initialInterests = const <String>{}});
+
+  /// Interests pre-selected on open (home travel-type grid shortcut).
+  /// Values outside [AppConfig.tripInterestOptions] are ignored — the
+  /// catalog remains the single source of truth.
+  final Set<String> initialInterests;
 
   @override
   State<TripFormScreen> createState() => _TripFormScreenState();
 }
 
 class _TripFormScreenState extends State<TripFormScreen> {
-  final Set<String> _selectedInterests = <String>{};
+  late final Set<String> _selectedInterests = widget.initialInterests
+      .where(AppConfig.tripInterestOptions.contains)
+      .toSet();
   int _numDays = 3;
   String _budgetLevel = AppConfig.budgetLevels.first;
 

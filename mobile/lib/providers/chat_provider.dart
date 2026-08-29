@@ -24,6 +24,15 @@ class ChatProvider extends ChangeNotifier {
   String? get error => _error;
   bool get isEmpty => _messages.isEmpty;
 
+  /// Follow-up suggestions of the latest assistant turn. Empty until an
+  /// assistant reply arrives — and while a reply is pending, since the last
+  /// turn is then the user's. The UI never invents suggestions: content
+  /// comes exclusively from the backend envelope.
+  List<String> get suggestions =>
+      _messages.isNotEmpty && _messages.last.role == ChatRole.assistant
+          ? _messages.last.suggestions
+          : const [];
+
   void clearError() {
     _error = null;
     notifyListeners();

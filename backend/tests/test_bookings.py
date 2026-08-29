@@ -97,6 +97,52 @@ async def test_list_bookings(client, auth_headers):
 
 
 @pytest.mark.asyncio
+async def test_give_consent_requires_explicit_field(
+    client, auth_headers, db_session, test_tenant, test_user
+):
+    """A request that omits `consent` entirely must be rejected (422), not
+    silently treated as consent given. Guards against ConsentRequest
+    regaining a `= True` default — the booking must stay pending/unconsented
+    when the body doesn't say so explicitly."""
+    from app.models import POI, Booking
+
+    poi = POI(
+        tenant_id=test_tenant.id,
+        slug="consent-missing-field-poi",
+        name="Consent Missing Field POI",
+        city="Alger",
+        category="culture",
+        is_active=True,
+    )
+    db_session.add(poi)
+    await db_session.flush()
+
+    booking = Booking(
+        tenant_id=test_tenant.id,
+        user_id=test_user.id,
+        poi_id=poi.id,
+        adapter_type="hotel",
+        status="pending",
+        consent_given=False,
+        currency="DZD",
+    )
+    db_session.add(booking)
+    await db_session.commit()
+    await db_session.refresh(booking)
+
+    response = await client.post(
+        f"/api/v1/bookings/{booking.id}/consent",
+        headers=auth_headers,
+        json={},
+    )
+    assert response.status_code == 422
+
+    await db_session.refresh(booking)
+    assert booking.status == "pending"
+    assert booking.consent_given is False
+
+
+@pytest.mark.asyncio
 async def test_give_consent(client, auth_headers, db_session, test_tenant, test_user):
     from app.models import POI, Booking
     poi = POI(

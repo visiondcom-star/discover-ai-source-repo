@@ -278,7 +278,11 @@ class BookingResponse(BaseModel):
 
 
 class ConsentRequest(BaseModel):
-    consent: bool = True
+    # No default: a request that omits `consent` must be rejected by Pydantic
+    # validation (422) rather than silently treated as consent given. The
+    # client always sends this explicitly (see mobile BookingProvider.
+    # giveConsent) — this only closes the gap for any other caller.
+    consent: bool
 
 
 # ============= Review Schemas =============

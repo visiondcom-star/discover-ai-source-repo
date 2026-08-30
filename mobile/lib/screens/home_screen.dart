@@ -4,21 +4,39 @@ import 'package:provider/provider.dart';
 import '../config.dart';
 import '../models/user.dart';
 import '../providers/auth_provider.dart';
+import '../providers/promotion_provider.dart';
+import '../widgets/promo_banner.dart';
 import 'trip_form_screen.dart';
 
 /// Accueil tab — P2 of the UX blueprint ("Discover AI" home mockup):
-/// personalized greeting, travel-type grid feeding the trip wizard, then
-/// shortcuts to the Planner and the Explorer tab.
+/// personalized greeting, travel-type grid feeding the trip wizard, promo
+/// banner, then shortcuts to the Planner and the Explorer tab.
 ///
 /// The travel-type catalog comes from [AppConfig.tripInterestOptions]
 /// (`--dart-define`) — never hardcoded market content (principle n°1).
 /// The icon map degrades gracefully (generic activity icon) for config
 /// values it doesn't know, so any tenant catalog renders.
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, this.onExplore});
 
   /// Switches the shell to the Explorer tab.
   final VoidCallback? onExplore;
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Decorative content: fetched after first frame like every other list
+    // on this screen, and its own provider already swallows errors so a
+    // failed fetch just means no banner — never a broken Accueil tab.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<PromotionProvider>().loadPromotions();
+    });
+  }
 
   /// Icon per known catalog value; anything else falls back to a generic
   /// activity icon instead of crashing on an unknown tenant entry.
@@ -53,6 +71,7 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = context.watch<AuthProvider>().user;
+    final promotions = context.watch<PromotionProvider>().items;
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
     return Scaffold(
@@ -98,6 +117,10 @@ class HomeScreen extends StatelessWidget {
                 ),
             ],
           ),
+          if (promotions.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            PromoBanner(promotion: promotions.first),
+          ],
           const SizedBox(height: 8),
           Card(
             margin: EdgeInsets.zero,
@@ -121,7 +144,7 @@ class HomeScreen extends StatelessWidget {
               title: const Text('Explorer les lieux'),
               subtitle: const Text('Les incontournables de votre destination'),
               trailing: const Icon(Icons.chevron_right),
-              onTap: onExplore,
+              onTap: widget.onExplore,
             ),
           ),
         ],

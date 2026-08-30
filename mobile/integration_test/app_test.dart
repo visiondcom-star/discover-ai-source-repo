@@ -21,6 +21,7 @@ import 'package:discover_ai/providers/auth_provider.dart';
 import 'package:discover_ai/providers/booking_provider.dart';
 import 'package:discover_ai/providers/chat_provider.dart';
 import 'package:discover_ai/providers/poi_provider.dart';
+import 'package:discover_ai/providers/promotion_provider.dart';
 import 'package:discover_ai/providers/trip_provider.dart';
 import 'package:discover_ai/widgets/poi_card.dart';
 
@@ -48,6 +49,9 @@ void main() {
           // Same requirement for the Réservations tab (real Booking-Agent
           // API — the tab stays empty until a booking is created).
           ChangeNotifierProvider(create: (_) => BookingProvider()),
+          // Same requirement for Accueil's promo banner (real /promotions
+          // API — HomeScreen reads this provider at initState).
+          ChangeNotifierProvider(create: (_) => PromotionProvider()),
         ],
         child: const DiscoverAIApp(),
       );

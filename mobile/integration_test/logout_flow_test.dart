@@ -25,6 +25,7 @@ import 'package:discover_ai/providers/auth_provider.dart';
 import 'package:discover_ai/providers/booking_provider.dart';
 import 'package:discover_ai/providers/chat_provider.dart';
 import 'package:discover_ai/providers/poi_provider.dart';
+import 'package:discover_ai/providers/promotion_provider.dart';
 import 'package:discover_ai/providers/trip_provider.dart';
 import 'package:discover_ai/screens/login_screen.dart';
 import 'package:discover_ai/screens/poi_list_screen.dart';
@@ -84,6 +85,8 @@ void main() {
         // IndexedStack mounts every tab eagerly → Réservations needs a
         // BookingProvider (real Booking-Agent API).
         ChangeNotifierProvider(create: (_) => BookingProvider()),
+        // Same requirement for Accueil's promo banner.
+        ChangeNotifierProvider(create: (_) => PromotionProvider()),
       ],
       child: const DiscoverAIApp(),
     ));

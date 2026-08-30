@@ -337,6 +337,47 @@ class FakeBookingsApi implements BookingsApi {
       {'adapters': Map<String, Map<String, dynamic>>.from(_adapters)};
 }
 
+/// Deterministic PromotionsApi fake for tests. Empty by default so tests
+/// that don't care about the banner (most of them) stay unaffected; pass
+/// [promotions] to exercise the banner rendering path explicitly.
+class FakePromotionsApi implements PromotionsApi {
+  FakePromotionsApi({List<Map<String, dynamic>>? promotions, this.fail = false})
+      : promotions = List<Map<String, dynamic>>.from(promotions ?? []);
+
+  final bool fail;
+  final List<Map<String, dynamic>> promotions;
+
+  @override
+  Future<Map<String, dynamic>> getPromotions() async {
+    if (fail) {
+      throw ApiException(500, '{"detail":"Internal server error"}');
+    }
+    return {
+      'items': [for (final p in promotions) Map<String, dynamic>.from(p)],
+      'total': promotions.length,
+    };
+  }
+}
+
+/// A single sample promotion JSON, matching backend `PromotionResponse`.
+Map<String, dynamic> samplePromotionJson({
+  String id = 'promo-1',
+  String title = "L'Algérie vous attend",
+}) =>
+    {
+      'id': id,
+      'tenant_id': 'tenant-1',
+      'title': title,
+      'subtitle':
+          'Des paysages grandioses, une histoire millénaire, une hospitalité unique.',
+      'image_url': 'https://example.com/algeria.jpg',
+      'cta_label': 'Découvrir',
+      'link_type': 'none',
+      'link_target': null,
+      'priority': 10,
+      'is_active': true,
+    };
+
 /// In-memory TokenStore for tests (no platform channels involved).
 class InMemoryTokenStore implements TokenStore {
   String? token;

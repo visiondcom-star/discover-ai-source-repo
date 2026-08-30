@@ -129,6 +129,51 @@ class POIListResponse(BaseModel):
     page_size: int
 
 
+# ============= Promotion Schemas =============
+class PromotionBase(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200)
+    subtitle: Optional[str] = None
+    image_url: str = Field(..., min_length=1, max_length=500)
+    cta_label: Optional[str] = Field(None, max_length=50)
+    link_type: Optional[str] = Field(None, pattern="^(poi|trip|external|none)$")
+    link_target: Optional[str] = Field(None, max_length=500)
+    priority: int = 0
+    starts_at: Optional[datetime] = None
+    ends_at: Optional[datetime] = None
+    is_active: bool = True
+
+
+class PromotionCreate(PromotionBase):
+    pass
+
+
+class PromotionUpdate(BaseModel):
+    title: Optional[str] = None
+    subtitle: Optional[str] = None
+    image_url: Optional[str] = None
+    cta_label: Optional[str] = None
+    link_type: Optional[str] = Field(None, pattern="^(poi|trip|external|none)$")
+    link_target: Optional[str] = None
+    priority: Optional[int] = None
+    starts_at: Optional[datetime] = None
+    ends_at: Optional[datetime] = None
+    is_active: Optional[bool] = None
+
+
+class PromotionResponse(PromotionBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    tenant_id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+
+class PromotionListResponse(BaseModel):
+    items: List[PromotionResponse]
+    total: int
+
+
 # ============= Trip Schemas =============
 class TripGenerateRequest(BaseModel):
     interests: List[str] = []

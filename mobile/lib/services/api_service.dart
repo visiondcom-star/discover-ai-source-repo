@@ -76,6 +76,14 @@ abstract class BookingsApi {
   Future<Map<String, dynamic>> listAdapters();
 }
 
+abstract class PromotionsApi {
+  /// Active promotions for the home banner; mirrors GET /promotions/.
+  /// The backend already filters by is_active + the starts_at/ends_at
+  /// scheduling window and orders by priority — the client just renders
+  /// what comes back, in order.
+  Future<Map<String, dynamic>> getPromotions();
+}
+
 /// HTTP failure carrying status code and body.
 class ApiException implements Exception {
   ApiException(this.statusCode, this.body);
@@ -93,7 +101,14 @@ class ApiException implements Exception {
 ///
 /// Host and tenant slug come exclusively from [AppConfig]
 /// (`--dart-define`) — never hardcoded in business code.
-class ApiService implements AuthApi, PoisApi, TripsApi, ChatApi, BookingsApi {
+class ApiService
+    implements
+        AuthApi,
+        PoisApi,
+        TripsApi,
+        ChatApi,
+        BookingsApi,
+        PromotionsApi {
   ApiService._internal()
       : baseUrl = AppConfig.apiBaseUrl,
         tenantSlug = AppConfig.tenantSlug;
@@ -254,4 +269,8 @@ class ApiService implements AuthApi, PoisApi, TripsApi, ChatApi, BookingsApi {
   @override
   Future<Map<String, dynamic>> listAdapters() async =>
       Map<String, dynamic>.from(await _get('/bookings/adapters/available') as Map);
+
+  @override
+  Future<Map<String, dynamic>> getPromotions() async =>
+      Map<String, dynamic>.from(await _get('/promotions/') as Map);
 }

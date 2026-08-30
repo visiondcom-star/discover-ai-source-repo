@@ -1,6 +1,6 @@
 """Main API router assembly."""
 from fastapi import APIRouter, Depends
-from app.api.v1.endpoints import auth, tenants, pois, trips, chat, rag, content, context, analytics, bookings, cv, reviews
+from app.api.v1.endpoints import auth, tenants, pois, trips, chat, rag, content, context, analytics, bookings, cv, reviews, promotions
 from app.dependencies import require_csrf
 
 # The double-submit CSRF guard is a single reusable dependency applied to every
@@ -25,3 +25,4 @@ api_router.include_router(analytics.router, prefix="/analytics", tags=["Analytic
 api_router.include_router(bookings.router, prefix="/bookings", tags=["Bookings"], dependencies=[Depends(require_csrf)])
 api_router.include_router(reviews.router, prefix="/pois", tags=["Reviews"], dependencies=[Depends(require_csrf)])
 api_router.include_router(cv.router, prefix="/cv", tags=["Computer Vision & AR"], dependencies=[Depends(require_csrf)])
+api_router.include_router(promotions.router, prefix="/promotions", tags=["Promotions"], dependencies=[Depends(require_csrf)])

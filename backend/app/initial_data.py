@@ -2,7 +2,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.database import AsyncSessionLocal
-from app.models import Tenant, User, POI
+from app.models import Tenant, User, POI, Promotion
 from app.core.security import get_password_hash
 
 
@@ -11,6 +11,7 @@ async def init_db():
         await _create_demo_tenants(session)
         await _create_demo_users(session)
         await _create_demo_pois(session)
+        await _create_demo_promotions(session)
         await session.commit()
 
 
@@ -197,3 +198,30 @@ async def _create_demo_pois(session: AsyncSession):
     for poi_data in demo_pois:
         poi = POI(tenant_id=tenant.id, **poi_data)
         session.add(poi)
+
+
+async def _create_demo_promotions(session: AsyncSession):
+    result = await session.execute(select(Tenant).where(Tenant.slug == "algeria"))
+    tenant = result.scalar_one_or_none()
+    if not tenant:
+        return
+
+    existing = await session.execute(
+        select(Promotion).where(Promotion.tenant_id == tenant.id)
+    )
+    if existing.scalar_one_or_none():
+        return
+
+    promotion = Promotion(
+        tenant_id=tenant.id,
+        title="L'Algérie vous attend",
+        subtitle="Des paysages grandioses, une histoire millénaire, une hospitalité unique.",
+        # Placeholder path — swap for a real hosted asset (CDN/S3) before
+        # this seed runs against anything but local dev.
+        image_url="https://placehold.co/1200x600/017A68/FFFFFF?text=Algerie",
+        cta_label="Découvrir",
+        link_type="none",
+        priority=10,
+        is_active=True,
+    )
+    session.add(promotion)

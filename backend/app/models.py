@@ -56,6 +56,7 @@ class Tenant(Base):
     reviews = relationship("Review", back_populates="tenant")
     analytics_events = relationship("AnalyticsEvent", back_populates="tenant")
     chat_messages = relationship("ChatMessage", back_populates="tenant")
+    promotions = relationship("Promotion", back_populates="tenant")
 
 
 class User(Base):
@@ -114,6 +115,37 @@ class POI(Base):
     trip_items = relationship("TripItem", back_populates="poi")
     bookings = relationship("Booking", back_populates="poi")
     reviews = relationship("Review", back_populates="poi")
+
+
+class Promotion(Base):
+    """Home-screen promo banner content (e.g. "L'Algérie vous attend").
+
+    Deliberately decoupled from POI: a promotion is marketing content, not
+    a place — it may point at a POI, a Trip template, or nowhere (pure
+    branding banner), and it has its own scheduling/priority concerns that
+    don't belong on POI.
+    """
+    __tablename__ = "promotions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    title = Column(String(200), nullable=False)
+    subtitle = Column(Text, nullable=True)
+    image_url = Column(String(500), nullable=False)
+    cta_label = Column(String(50), nullable=True)
+    # Deep-link target: kept as a loose (type, id) pair rather than a hard FK
+    # so a promotion can point at a POI, a Trip template, an external URL,
+    # or nothing at all (pure branding banner) without schema changes.
+    link_type = Column(String(20), nullable=True)  # poi, trip, external, none
+    link_target = Column(String(500), nullable=True)  # POI/Trip UUID as string, or URL
+    priority = Column(Integer, default=0, index=True)  # higher shows first
+    starts_at = Column(DateTime, nullable=True)
+    ends_at = Column(DateTime, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+    tenant = relationship("Tenant", back_populates="promotions")
 
 
 class Trip(Base):

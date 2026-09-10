@@ -216,9 +216,11 @@ async def _create_demo_promotions(session: AsyncSession):
         tenant_id=tenant.id,
         title="L'Algérie vous attend",
         subtitle="Des paysages grandioses, une histoire millénaire, une hospitalité unique.",
-        # Placeholder path — swap for a real hosted asset (CDN/S3) before
-        # this seed runs against anything but local dev.
-        image_url="https://placehold.co/1200x600/017A68/FFFFFF?text=Algerie",
+                # Aerial view of the Roman ruins at Tipaza, Algeria — photo by Rab
+        # Rabah (@rabrabi) on Unsplash, used under the Unsplash License
+        # (free for commercial use, no attribution required).
+        # https://unsplash.com/fr/photos/qI94ozTxOFc
+        image_url="https://images.unsplash.com/photo-1629989714683-9861709b7856?fm=jpg&q=80&w=1200&h=600&fit=crop&auto=format",
         cta_label="Découvrir",
         link_type="none",
         priority=10,

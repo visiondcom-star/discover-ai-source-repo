@@ -42,13 +42,33 @@ class _HomeScreenState extends State<HomeScreen> {
   /// activity icon instead of crashing on an unknown tenant entry.
   static const Map<String, IconData> _typeIcons = {
     'culture': Icons.museum_outlined,
-    'food': Icons.restaurant_outlined,
     'history': Icons.history_edu,
     'nature': Icons.forest_outlined,
-    'beaches': Icons.beach_access_outlined,
+    'desert': Icons.wb_sunny_outlined,
     'adventure': Icons.hiking_outlined,
+    'food': Icons.restaurant_outlined,
+    'beaches': Icons.beach_access_outlined,
+    'monuments': Icons.explore_outlined,
+    'crafts': Icons.shopping_bag_outlined,
+    'thermal': Icons.hot_tub_outlined,
+    'wellness': Icons.spa_outlined,
     'shopping': Icons.shopping_bag_outlined,
     'nightlife': Icons.nightlife_outlined,
+  };
+
+  /// Labels for tourist categories.
+  static const Map<String, String> _typeLabels = {
+    'culture': 'Culture & Médinas',
+    'history': 'Histoire & Antiquité',
+    'nature': 'Nature & Parcs',
+    'desert': 'Sahara & Oasis',
+    'adventure': 'Aventure & Trek',
+    'food': 'Gastronomie',
+    'beaches': 'Plages & Mer',
+    'monuments': 'Monuments & Sites',
+    'crafts': 'Artisanat & Souks',
+    'thermal': 'Thermalisme',
+    'wellness': 'Détente & Hammam',
   };
 
   /// First name for the greeting: full name if present, else the email
@@ -62,11 +82,13 @@ class _HomeScreenState extends State<HomeScreen> {
     return local.isEmpty ? 'voyageur' : local;
   }
 
-  /// Catalog values are lowercase slugs ('food'); display them capitalized
-  /// without altering the value sent to the API.
-  static String _typeLabel(String interest) => interest.isEmpty
-      ? interest
-      : interest[0].toUpperCase() + interest.substring(1);
+  /// Catalog values are lowercase slugs ('food'); display them with their
+  /// tourist label without altering the value sent to the API.
+  static String _typeLabel(String interest) =>
+      _typeLabels[interest] ??
+      (interest.isEmpty
+          ? interest
+          : interest[0].toUpperCase() + interest.substring(1));
 
   @override
   Widget build(BuildContext context) {

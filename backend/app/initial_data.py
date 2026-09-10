@@ -112,7 +112,7 @@ async def _create_demo_pois(session: AsyncSession):
             "price_range": "low",
             "latitude": 36.7489,
             "longitude": 3.0750,
-            "tags": ["jardin", "botanique", "nature", "famille"],
+            "tags": ["jardin", "botanique", "nature", "detente"],
             "is_verified": True,
         },
         {

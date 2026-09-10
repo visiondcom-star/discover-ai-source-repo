@@ -34,7 +34,8 @@ class AppConfig {
   static final List<String> tripInterestOptions =
       const String.fromEnvironment(
         'TRIP_INTERESTS',
-        defaultValue: 'culture,food,history,nature,beaches,adventure,shopping,nightlife',
+        defaultValue:
+            'culture,history,nature,desert,adventure,food,beaches,monuments,crafts,thermal,wellness',
       )
           .split(',')
           .map((s) => s.trim())

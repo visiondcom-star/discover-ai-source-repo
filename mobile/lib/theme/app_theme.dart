@@ -14,19 +14,19 @@ class AppColors {
   static const Color brand = Color(0xFF006233);
 
   /// Vivid green for selected states and small highlights.
-  static const Color brandBright = Color(0xFF00915A);
+  static const Color brandBright = Color(0xFF1E8B52);
 
   /// Pale green tint — selected chips, soft surfaces.
   static const Color brandTint = Color(0xFFE6F2EC);
 
   /// Warm accent — weather badges, promos, contextual highlights.
-  static const Color accent = Color(0xFFE8A33D);
+  static const Color accent = Color(0xFFF2A948);
 
   /// Light app background (light mode scaffold).
-  static const Color background = Color(0xFFF8F9FA);
+  static const Color background = Color(0xFFF7F6F3);
 
   /// Primary text — dark ink.
-  static const Color ink = Color(0xFF1A1A2E);
+  static const Color ink = Color(0xFF222222);
 
   /// Secondary text — muted grey.
   static const Color inkSoft = Color(0xFF6C757D);

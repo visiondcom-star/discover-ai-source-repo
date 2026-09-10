@@ -67,9 +67,12 @@ class AppTheme {
       scaffoldBackgroundColor: brightness == Brightness.light
           ? AppColors.background
           : null,
-      appBarTheme: const AppBarTheme(
-        backgroundColor: seedColor,
-        foregroundColor: Colors.white,
+      appBarTheme: AppBarTheme(
+        backgroundColor: brightness == Brightness.light
+            ? AppColors.background
+            : null,
+        foregroundColor:
+            brightness == Brightness.light ? AppColors.ink : Colors.white,
         elevation: 0,
       ),
       cardTheme: const CardThemeData(

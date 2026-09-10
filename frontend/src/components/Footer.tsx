@@ -1,6 +1,8 @@
 "use client";
 
-export function Footer({ tenant }: { tenant: any }) {
+import type { Tenant } from "@/types";
+
+export function Footer({ tenant }: { tenant: Tenant | null }) {
   return (
     <footer className="bg-gray-900 text-white py-12">
       <div className="max-w-6xl mx-auto px-4">

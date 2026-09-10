@@ -5,15 +5,22 @@
 :root {
   --primary-color: #006233;
   --secondary-color: #FFFFFF;
+  --brand-bright: #1E8B52;
+  --accent-gold: #F2A948;
+  --canvas-bg: #F7F6F3;
+  --ink: #222222;
 }
 
 body {
-  color: #1a1a1a;
-  background: #f8fafc;
+  font-family: 'Poppins', system-ui, -apple-system, sans-serif;
+  color: #222222;
+  background-color: #F7F6F3;
+  -webkit-font-smoothing: antialiased;
 }
 
 .leaflet-container {
   height: 100%;
   width: 100%;
-  border-radius: 0.5rem;
+  border-radius: 1rem;
 }
+

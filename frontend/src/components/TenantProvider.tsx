@@ -2,14 +2,15 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import type { Tenant } from "@/types";
 
-const TenantContext = createContext<any>(null);
+const TenantContext = createContext<Tenant | null>(null);
 
 export function TenantProvider({ children }: { children: React.ReactNode }) {
-  const [tenant, setTenant] = useState<any>(null);
+  const [tenant, setTenant] = useState<Tenant | null>(null);
 
   useEffect(() => {
-    api.get("/tenants/current").then((res) => {
+    api.get<Tenant>("/tenants/current").then((res) => {
       setTenant(res.data);
       document.documentElement.style.setProperty("--primary-color", res.data.primary_color);
       document.documentElement.style.setProperty("--secondary-color", res.data.secondary_color);

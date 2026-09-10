@@ -23,6 +23,8 @@ export interface POI {
   tags: string[];
   images: string[];
   is_verified: boolean;
+  average_rating?: number;
+  review_count?: number;
 }
 
 export interface Trip {
@@ -41,6 +43,7 @@ export interface TripItem {
   poi_id: string;
   day_number: number;
   order_index: number;
+  start_time?: string | null;
   poi?: POI;
   notes: string;
 }
@@ -53,5 +56,6 @@ export interface ChatMessage {
 export interface User {
   id: string;
   email: string;
-  full_name: string;
+  full_name: string | null;
+  is_admin?: boolean;
 }

@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { MapPin, Menu, X, Globe } from "lucide-react";
 import { useState } from "react";
+import type { Tenant } from "@/types";
 
-export function Header({ tenant }: { tenant: any }) {
+export function Header({ tenant }: { tenant: Tenant | null }) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (

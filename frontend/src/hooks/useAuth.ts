@@ -9,12 +9,7 @@ import { api } from "@/lib/api";
 // a real backend call: GET /auth/me succeeds only when the HttpOnly cookie is
 // valid and is served with it (withCredentials). This keeps the SPA truthful after
 // a cookie expires or the session is invalidated server-side.
-interface User {
-  id: string;
-  email: string;
-  full_name: string | null;
-  is_admin?: boolean;
-}
+import type { User } from "@/types";
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
@@ -35,6 +30,16 @@ export function useAuth() {
   }, []);
 
   useEffect(() => {
+    // The CSRF cookie is a non-sensitive session marker set alongside the
+    // HttpOnly access cookie. Avoiding /auth/me for anonymous visitors prevents
+    // expected 401 responses from polluting the browser console.
+    if (typeof document !== "undefined" && !document.cookie.includes("csrf_token=")) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLoading(false);
+      return;
+    }
+
+    // The initial request synchronizes React state with the server session.
     fetchUser();
   }, [fetchUser]);
 

@@ -50,7 +50,7 @@ api.interceptors.response.use(
       // displays the error banner. There is also no "/login" route in this SPA.
       if (!url.includes("/auth/login") && !url.includes("/auth/me")) {
         if (typeof window !== "undefined" && window.location.pathname !== "/") {
-          window.location.href = "/";
+          window.location.replace("/");
         }
       }
     }

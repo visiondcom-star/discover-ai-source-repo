@@ -1,9 +1,10 @@
 "use client";
 
 import { Clock, MapPin } from "lucide-react";
+import type { TripItem } from "@/types";
 
-export function TripTimeline({ items }: { items: any[] }) {
-  const grouped = items.reduce((acc: any, item: any) => {
+export function TripTimeline({ items }: { items: TripItem[] }) {
+  const grouped = items.reduce<Record<number, TripItem[]>>((acc, item) => {
     const day = item.day_number;
     if (!acc[day]) acc[day] = [];
     acc[day].push(item);
@@ -12,7 +13,7 @@ export function TripTimeline({ items }: { items: any[] }) {
 
   return (
     <div className="space-y-8">
-      {Object.entries(grouped).map(([day, dayItems]: [string, any]) => (
+      {Object.entries(grouped).map(([day, dayItems]) => (
         <div key={day} className="bg-white rounded-xl border p-6">
           <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
             <span className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-sm">
@@ -21,7 +22,7 @@ export function TripTimeline({ items }: { items: any[] }) {
             Jour {day}
           </h3>
           <div className="space-y-4">
-            {dayItems.map((item: any, idx: number) => (
+            {dayItems.map((item, idx) => (
               <div key={idx} className="flex gap-4">
                 <div className="w-16 text-sm text-gray-500 font-medium">
                   {item.start_time ? new Date(item.start_time).toLocaleTimeString("fr-FR", {hour: "2-digit", minute: "2-digit"}) : "--:--"}

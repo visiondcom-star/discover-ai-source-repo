@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
+import type { POI } from "@/types";
 
 // Fix default icon
 const icon = L.icon({
@@ -13,13 +14,13 @@ const icon = L.icon({
 });
 
 export function Map({ pois, center = [36.7, 3.0], zoom = 6 }: { 
-  pois: any[]; 
+  pois: POI[];
   center?: [number, number]; 
   zoom?: number;
 }) {
   useEffect(() => {
     // Fix Leaflet default marker icon in Next.js
-    delete (L.Icon.Default.prototype as any)._getIconUrl;
+    delete (L.Icon.Default.prototype as { _getIconUrl?: unknown })._getIconUrl;
     L.Icon.Default.mergeOptions({
       iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
       iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",

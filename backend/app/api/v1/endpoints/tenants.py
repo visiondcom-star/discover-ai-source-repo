@@ -4,8 +4,14 @@ from fastapi import APIRouter, Depends, HTTPException, Header, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.database import get_db
-from app.models import Tenant
-from app.schemas import TenantCreate, TenantUpdate, TenantResponse
+from app.models import Tenant, TenantCategory
+from app.schemas import (
+    TenantCreate,
+    TenantUpdate,
+    TenantResponse,
+    TenantCategoryCreate,
+    TenantCategoryResponse,
+)
 from app.dependencies import get_current_admin
 
 router = APIRouter()
@@ -21,6 +27,53 @@ async def get_current_tenant_config(
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
     return tenant
+
+
+@router.get("/categories", response_model=List[TenantCategoryResponse])
+async def list_tenant_categories(
+    x_tenant_slug: str = Header(default="algeria"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Retourne l'arborescence des catégories touristiques dynamiques pour le tenant actif."""
+    result = await db.execute(select(Tenant).where(Tenant.slug == x_tenant_slug))
+    tenant = result.scalar_one_or_none()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    cat_result = await db.execute(
+        select(TenantCategory)
+        .where(TenantCategory.tenant_id == tenant.id)
+        .order_by(TenantCategory.display_order.asc(), TenantCategory.label.asc())
+    )
+    return cat_result.scalars().all()
+
+
+@router.post("/categories", response_model=TenantCategoryResponse, status_code=status.HTTP_201_CREATED)
+async def create_tenant_category(
+    data: TenantCategoryCreate,
+    x_tenant_slug: str = Header(default="algeria"),
+    db: AsyncSession = Depends(get_db),
+    current_admin = Depends(get_current_admin),
+):
+    """Permet au pipeline IA ou aux administrateurs de créer une catégorie locale."""
+    result = await db.execute(select(Tenant).where(Tenant.slug == x_tenant_slug))
+    tenant = result.scalar_one_or_none()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
+    existing = await db.execute(
+        select(TenantCategory).where(
+            TenantCategory.tenant_id == tenant.id,
+            TenantCategory.slug == data.slug,
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Category slug already exists for this destination")
+
+    cat = TenantCategory(tenant_id=tenant.id, **data.model_dump())
+    db.add(cat)
+    await db.commit()
+    await db.refresh(cat)
+    return cat
 
 
 @router.get("/", response_model=List[TenantResponse])

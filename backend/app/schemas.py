@@ -70,12 +70,35 @@ class UserResponse(BaseModel):
     created_at: datetime
 
 
+# ============= Tenant Category Schemas =============
+class TenantCategoryBase(BaseModel):
+    slug: str = Field(..., min_length=2, max_length=50)
+    label: str = Field(..., min_length=2, max_length=100)
+    parent_family: Optional[str] = Field(None, max_length=50)  # Niveau 1 (macro-famille)
+    icon_suggestion: Optional[str] = None
+    description: Optional[str] = None
+    display_order: int = 0
+    ai_generated: bool = True
+
+
+class TenantCategoryCreate(TenantCategoryBase):
+    pass
+
+
+class TenantCategoryResponse(TenantCategoryBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    tenant_id: UUID
+
+
 # ============= POI Schemas =============
 class POIBase(BaseModel):
     name: str = Field(..., min_length=2, max_length=200)
     description: Optional[str] = None
     city: str = Field(..., min_length=2, max_length=100)
-    category: str = Field(..., pattern="^(historical|nature|culture|adventure|food|shopping)$")
+    category: str = Field(..., min_length=2, max_length=50)  # Niveau 2 (slug local)
+    experiences: List[str] = Field(default_factory=list)      # Niveau 3 (verbes d'action)
     duration_minutes: int = Field(default=60, ge=15, le=1440)
     price_range: str = Field(default="free", pattern="^(free|low|medium|high)$")
     latitude: Optional[float] = None
@@ -95,7 +118,8 @@ class POIUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     city: Optional[str] = None
-    category: Optional[str] = None
+    category: Optional[str] = Field(None, min_length=2, max_length=50)
+    experiences: Optional[List[str]] = None
     duration_minutes: Optional[int] = None
     price_range: Optional[str] = None
     latitude: Optional[float] = None

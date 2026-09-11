@@ -57,6 +57,31 @@ class Tenant(Base):
     analytics_events = relationship("AnalyticsEvent", back_populates="tenant")
     chat_messages = relationship("ChatMessage", back_populates="tenant")
     promotions = relationship("Promotion", back_populates="tenant")
+    tenant_categories = relationship("TenantCategory", back_populates="tenant", cascade="all, delete-orphan")
+
+
+class TenantCategory(Base):
+    """Catalogue des catégories disponibles pour un tenant/pays.
+    Chaque tenant déclare ses propres slugs/labels/icônes — plus de liste blanche codée en dur.
+    Niveau 1: parent_family (culture, nature, histoire, etc.)
+    Niveau 2: slug & label (sahara_oasis, casbah_medinas, etc.) déduits par l'IA"""
+    __tablename__ = "tenant_categories"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    parent_family = Column(String(50), nullable=True, index=True)  # Niveau 1 (macro-famille globale)
+    slug = Column(String(50), nullable=False)                     # Niveau 2 (slug local)
+    label = Column(String(100), nullable=False)                   # Niveau 2 (libellé local)
+    icon_suggestion = Column(String(50))                          # nom d'icône (ex: "sun", "castle")
+    description = Column(Text, nullable=True)                     # Synthèse culturelle de l'IA
+    display_order = Column(Integer, default=0)
+    ai_generated = Column(Boolean, default=True)
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "slug", name="uq_tenant_category_slug"),
+    )
+
+    tenant = relationship("Tenant", back_populates="tenant_categories")
 
 
 class User(Base):
@@ -93,7 +118,8 @@ class POI(Base):
     name = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)
     city = Column(String(100), nullable=False, index=True)
-    category = Column(String(50), nullable=False, index=True)  # historical, nature, culture, adventure
+    category = Column(String(50), nullable=False, index=True)  # Niveau 2: slug local (ex: sahara_oasis, culture)
+    experiences = Column(ARRAY(String), default=list)          # Niveau 3: verbes d'action (visiter, randonner, etc.)
     duration_minutes = Column(Integer, default=60)
     price_range = Column(String(20), default="free")  # free, low, medium, high
     latitude = Column(Float, nullable=True)

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/lib/api";
 import { TENANT_SLUG } from "@/lib/tenant";
@@ -36,13 +36,28 @@ import {
   Settings,
   Bell,
   Globe,
+  type LucideIcon,
 } from "lucide-react";
-import type { ChatMessage, POI, User as AppUser } from "@/types";
+import type { ChatMessage, POI, TenantCategory, User as AppUser } from "@/types";
 
 export function AppShell({ onLogout }: { onLogout?: () => void }) {
   const [activeTab, setActiveTab] = useState("home");
   const [exploreFilter, setExploreFilter] = useState("");
+  const [categories, setCategories] = useState<TenantCategory[]>([]);
   const { user, logout } = useAuth();
+
+  useEffect(() => {
+    fetch("/api/v1/tenants/categories", {
+      headers: { "X-Tenant-Slug": TENANT_SLUG },
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: TenantCategory[]) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setCategories(data);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const tabs = [
     { id: "home", label: "Accueil", icon: Home },
@@ -86,13 +101,17 @@ export function AppShell({ onLogout }: { onLogout?: () => void }) {
         {activeTab === "home" && (
           <HomeTab
             user={user}
+            categories={categories}
             onSelectType={handleSelectTravelType}
             onGoToExplore={() => setActiveTab("explore")}
             onGoToChat={() => setActiveTab("assistant")}
           />
         )}
         {activeTab === "explore" && (
-          <ExploreTab initialCategory={exploreFilter} />
+          <ExploreTab
+            initialCategory={exploreFilter}
+            categories={categories}
+          />
         )}
         {activeTab === "bookings" && <BookingsTab />}
         {activeTab === "assistant" && <AssistantTab user={user} />}
@@ -153,18 +172,82 @@ const TRAVEL_TYPES = [
   { id: "more", label: "Toutes les activités", icon: PlusCircle, bg: "bg-gray-50 text-gray-900 border-gray-200/70" },
 ];
 
+const ICON_SUGGESTION_MAP: Record<string, LucideIcon> = {
+  landmark: Landmark,
+  castle: Castle,
+  trees: Trees,
+  sun: Sun,
+  mountain: Mountain,
+  utensils: Utensils,
+  palmtree: Palmtree,
+  compass: Compass,
+  "shopping-bag": ShoppingBag,
+  waves: Waves,
+  sparkles: Sparkles,
+  "plus-circle": PlusCircle,
+};
+
+const FAMILY_BG_MAP: Record<string, string> = {
+  culture: "bg-amber-50 text-amber-900 border-amber-200/70",
+  history: "bg-yellow-50 text-yellow-900 border-yellow-200/70",
+  nature: "bg-emerald-50 text-emerald-900 border-emerald-200/70",
+  desert: "bg-orange-50 text-orange-900 border-orange-200/70",
+  adventure: "bg-stone-50 text-stone-900 border-stone-200/70",
+  food: "bg-rose-50 text-rose-900 border-rose-200/70",
+  beaches: "bg-sky-50 text-sky-900 border-sky-200/70",
+  monuments: "bg-indigo-50 text-indigo-900 border-indigo-200/70",
+  crafts: "bg-purple-50 text-purple-900 border-purple-200/70",
+  thermal: "bg-teal-50 text-teal-900 border-teal-200/70",
+  wellness: "bg-pink-50 text-pink-900 border-pink-200/70",
+};
+
+function formatExperience(exp: string): string {
+  const map: Record<string, string> = {
+    visiter: "🏛️ Visiter",
+    marcher: "🚶 Marcher",
+    randonner: "🥾 Randonner & Trek",
+    deguster: "🍽️ Déguster le terroir",
+    bivouaquer: "⛺ Bivouaquer sous les étoiles",
+    photographier: "📸 Photographier",
+    admirer: "🌅 Admirer le panorama",
+    decouvrir: "✨ Découvrir le site",
+    explorer: "🧭 Explorer en profondeur",
+    se_promener: "🌿 Se promener",
+    se_detendre: "🌸 Se détendre",
+    se_baigner: "🌊 Se baigner",
+    rencontrer: "🤝 Rencontrer les artisans",
+  };
+  return map[exp] || `✨ ${exp.charAt(0).toUpperCase() + exp.slice(1).replace(/_/g, " ")}`;
+}
+
 function HomeTab({
   user,
+  categories = [],
   onSelectType,
   onGoToExplore,
   onGoToChat,
 }: {
   user: AppUser | null;
+  categories?: TenantCategory[];
   onSelectType: (id: string) => void;
   onGoToExplore: () => void;
   onGoToChat: () => void;
 }) {
   const firstName = user?.full_name?.split(" ")[0] || "Samir";
+
+  const displayTypes =
+    categories.length > 0
+      ? categories.map((cat) => ({
+          id: cat.slug,
+          label: cat.label,
+          icon:
+            (cat.icon_suggestion && ICON_SUGGESTION_MAP[cat.icon_suggestion]) ||
+            Compass,
+          bg:
+            (cat.parent_family && FAMILY_BG_MAP[cat.parent_family]) ||
+            "bg-emerald-50 text-emerald-900 border-emerald-200/70",
+        }))
+      : TRAVEL_TYPES;
 
   return (
     <div className="space-y-6">
@@ -193,11 +276,11 @@ function HomeTab({
           <h3 className="text-base font-bold text-ink">
             Sélectionnez votre type de séjour
           </h3>
-          <span className="text-xs text-ink-soft">12 catégories</span>
+          <span className="text-xs text-ink-soft">{displayTypes.length} catégories</span>
         </div>
 
         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
-          {TRAVEL_TYPES.map((type) => {
+          {displayTypes.map((type) => {
             const Icon = type.icon;
             return (
               <button
@@ -284,12 +367,28 @@ const EXPLORE_CATEGORIES = [
   { id: "beaches", label: "Plages & Mer" },
 ];
 
-function ExploreTab({ initialCategory = "" }: { initialCategory?: string }) {
+function ExploreTab({
+  initialCategory = "",
+  categories = [],
+}: {
+  initialCategory?: string;
+  categories?: TenantCategory[];
+}) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState(initialCategory);
   const [pois, setPois] = useState<POI[]>([]);
   const [selectedPoi, setSelectedPoi] = useState<POI | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const displayChips =
+    categories.length > 0
+      ? [
+          { id: "", label: "Toutes" },
+          ...categories
+            .filter((c) => c.slug !== "more")
+            .map((c) => ({ id: c.slug, label: c.label })),
+        ]
+      : EXPLORE_CATEGORIES;
 
   const search = async (forcedQuery?: string, forcedCategory?: string) => {
     setLoading(true);
@@ -305,7 +404,16 @@ function ExploreTab({ initialCategory = "" }: { initialCategory?: string }) {
         headers: { "X-Tenant-Slug": TENANT_SLUG },
       });
       const data: { items?: POI[] } = await res.json();
-      setPois(data.items ?? []);
+      const items = data.items ?? [];
+      // Filtrage par chevauchement (garantie même avec données en mémoire ou cache)
+      const filtered = cat
+        ? items.filter((p) =>
+            p.categories && p.categories.length > 0
+              ? p.categories.includes(cat)
+              : p.category === cat
+          )
+        : items;
+      setPois(filtered);
     } catch {
       setPois([]);
     }
@@ -343,7 +451,7 @@ function ExploreTab({ initialCategory = "" }: { initialCategory?: string }) {
 
       {/* Filter Chips */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-        {EXPLORE_CATEGORIES.map((cat) => {
+        {displayChips.map((cat) => {
           const isSelected = category === cat.id;
           return (
             <button
@@ -428,8 +536,20 @@ function ExploreTab({ initialCategory = "" }: { initialCategory?: string }) {
                 alt={selectedPoi.name}
                 className="w-full h-full object-cover"
               />
-              <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-md text-brand text-xs font-bold px-3 py-1 rounded-full">
-                {selectedPoi.category}
+              <div className="absolute top-4 left-4 flex flex-wrap gap-1.5 max-w-[80%]">
+                {(selectedPoi.categories && selectedPoi.categories.length > 0
+                  ? selectedPoi.categories
+                  : selectedPoi.category
+                  ? [selectedPoi.category]
+                  : []
+                ).map((cat) => (
+                  <span
+                    key={cat}
+                    className="bg-white/90 backdrop-blur-md text-brand text-xs font-bold px-3 py-1 rounded-full shadow-xs"
+                  >
+                    {cat}
+                  </span>
+                ))}
               </div>
             </div>
 
@@ -461,6 +581,25 @@ function ExploreTab({ initialCategory = "" }: { initialCategory?: string }) {
               <p className="text-sm text-ink-soft leading-relaxed mb-6">
                 {selectedPoi.description}
               </p>
+
+              {/* Level 3 Experiences (Verbes d'action) */}
+              {selectedPoi.experiences && selectedPoi.experiences.length > 0 && (
+                <div className="mb-6 bg-brand-tint/30 p-4 rounded-2xl border border-brand/15">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-brand block mb-2.5">
+                    Expériences & Activités sur place (Niveau 3)
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedPoi.experiences.map((exp) => (
+                      <span
+                        key={exp}
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-white text-brand border border-brand/20 shadow-2xs"
+                      >
+                        {formatExperience(exp)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-2.5 py-4 border-t border-b border-gray-100 text-xs text-ink-soft mb-6">
                 <div className="flex justify-between">

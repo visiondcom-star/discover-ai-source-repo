@@ -9,13 +9,27 @@ export interface Tenant {
   secondary_color: string;
 }
 
+export interface TenantCategory {
+  id: string;
+  tenant_id: string;
+  slug: string;
+  label: string;
+  parent_family?: string;
+  icon_suggestion?: string;
+  description?: string;
+  display_order?: number;
+  ai_generated?: boolean;
+}
+
 export interface POI {
   id: string;
   slug: string;
   name: string;
   description: string;
   city: string;
-  category: string;
+  category?: string;
+  categories: string[];
+  experiences?: string[];
   duration_minutes: number;
   price_range: string;
   latitude: number;

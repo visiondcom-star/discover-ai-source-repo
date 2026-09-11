@@ -16,12 +16,18 @@ const FALLBACK_IMAGES: Record<string, string> = {
 };
 
 const CATEGORY_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  historical: { bg: "bg-amber-100/80", text: "text-amber-900", label: "Histoire" },
-  nature: { bg: "bg-emerald-100/80", text: "text-emerald-900", label: "Nature" },
-  culture: { bg: "bg-purple-100/80", text: "text-purple-900", label: "Culture" },
-  adventure: { bg: "bg-orange-100/80", text: "text-orange-900", label: "Aventure" },
-  food: { bg: "bg-rose-100/80", text: "text-rose-900", label: "Gastronomie" },
-  shopping: { bg: "bg-sky-100/80", text: "text-sky-900", label: "Shopping" },
+  historical: { bg: "bg-amber-100/90", text: "text-amber-900", label: "Histoire" },
+  nature: { bg: "bg-emerald-100/90", text: "text-emerald-900", label: "Nature" },
+  culture: { bg: "bg-purple-100/90", text: "text-purple-900", label: "Culture" },
+  adventure: { bg: "bg-orange-100/90", text: "text-orange-900", label: "Aventure" },
+  desert: { bg: "bg-amber-200/90", text: "text-amber-950", label: "Désert & Sahara" },
+  food: { bg: "bg-rose-100/90", text: "text-rose-900", label: "Gastronomie" },
+  beaches: { bg: "bg-sky-100/90", text: "text-sky-900", label: "Plages & Mer" },
+  monuments: { bg: "bg-indigo-100/90", text: "text-indigo-900", label: "Monuments" },
+  crafts: { bg: "bg-violet-100/90", text: "text-violet-900", label: "Artisanat" },
+  thermal: { bg: "bg-teal-100/90", text: "text-teal-900", label: "Thermalisme" },
+  wellness: { bg: "bg-pink-100/90", text: "text-pink-900", label: "Détente" },
+  shopping: { bg: "bg-sky-100/90", text: "text-sky-900", label: "Shopping" },
 };
 
 export function POICard({
@@ -40,11 +46,12 @@ export function POICard({
       : FALLBACK_IMAGES[poi.slug] ||
         "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=800&auto=format&fit=crop";
 
-  const catStyle = CATEGORY_STYLES[poi.category] || {
-    bg: "bg-gray-100",
-    text: "text-gray-700",
-    label: poi.category,
-  };
+  const categoriesList =
+    poi.categories && poi.categories.length > 0
+      ? poi.categories
+      : poi.category
+      ? [poi.category]
+      : [];
 
   const rating = poi.average_rating ? poi.average_rating.toFixed(1) : "4.8";
   const reviews = poi.review_count ? `${poi.review_count} avis` : "120 avis";
@@ -65,13 +72,28 @@ export function POICard({
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-60" />
 
-        {/* Category Pill */}
-        <div className="absolute top-3 left-3">
-          <span
-            className={`text-xs font-semibold px-2.5 py-1 rounded-full backdrop-blur-md shadow-sm ${catStyle.bg} ${catStyle.text}`}
-          >
-            {catStyle.label}
-          </span>
+        {/* Category Pills (Multi-catégories) */}
+        <div className="absolute top-3 left-3 flex flex-wrap gap-1 max-w-[70%] z-10">
+          {categoriesList.slice(0, 2).map((cat) => {
+            const style = CATEGORY_STYLES[cat] || {
+              bg: "bg-white/90",
+              text: "text-gray-800",
+              label: cat,
+            };
+            return (
+              <span
+                key={cat}
+                className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full backdrop-blur-md shadow-xs ${style.bg} ${style.text}`}
+              >
+                {style.label}
+              </span>
+            );
+          })}
+          {categoriesList.length > 2 && (
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-black/40 text-white backdrop-blur-md">
+              +{categoriesList.length - 2}
+            </span>
+          )}
         </div>
 
         {/* Favorite Button */}
@@ -122,17 +144,28 @@ export function POICard({
           </p>
         </div>
 
-        {/* Tags */}
+        {/* Experiences (Niveau 3) or Tags */}
         <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
           <div className="flex flex-wrap gap-1">
-            {poi.tags?.slice(0, 2).map((tag: string) => (
-              <span
-                key={tag}
-                className="text-[11px] bg-canvas text-ink-soft px-2 py-0.5 rounded-md font-medium"
-              >
-                #{tag}
-              </span>
-            ))}
+            {poi.experiences && poi.experiences.length > 0 ? (
+              poi.experiences.slice(0, 2).map((exp: string) => (
+                <span
+                  key={exp}
+                  className="text-[10px] bg-brand-tint/70 text-brand px-2 py-0.5 rounded-md font-semibold"
+                >
+                  ✨ {exp.charAt(0).toUpperCase() + exp.slice(1).replace(/_/g, ' ')}
+                </span>
+              ))
+            ) : (
+              poi.tags?.slice(0, 2).map((tag: string) => (
+                <span
+                  key={tag}
+                  className="text-[11px] bg-canvas text-ink-soft px-2 py-0.5 rounded-md font-medium"
+                >
+                  #{tag}
+                </span>
+              ))
+            )}
           </div>
           <span className="text-xs font-semibold text-brand hover:underline">
             Voir détails →

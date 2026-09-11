@@ -35,9 +35,10 @@ class TripPlannerService:
             query = query.where(POI.city.ilike(f"%{request.city}%"))
 
         if request.interests:
-            # Filter by category matching interests
+            # Overlap filter: a POI matches when it shares at least one category
+            # with the requested interests (Postgres ARRAY && operator).
             categories = [i.lower() for i in request.interests]
-            query = query.where(POI.category.in_(categories))
+            query = query.where(POI.categories.op("&&")(categories))
 
         result = await self.db.execute(query)
         pois = result.scalars().all()

@@ -39,8 +39,8 @@ async def list_pois(
         count_query = count_query.where(POI.city.ilike(f"%{city}%"))
 
     if category:
-        query = query.where(POI.category == category)
-        count_query = count_query.where(POI.category == category)
+        query = query.where(POI.categories.op("&&")([category]))
+        count_query = count_query.where(POI.categories.op("&&")([category]))
 
     if tag:
         query = query.where(POI.tags.any(tag))

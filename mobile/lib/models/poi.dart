@@ -8,7 +8,9 @@ class POI {
     required this.name,
     this.description,
     required this.city,
-    required this.category,
+    List<String>? categories,
+    String? category,
+    this.experiences = const [],
     this.durationMinutes = 60,
     this.priceRange = 'free',
     this.latitude,
@@ -24,7 +26,7 @@ class POI {
     this.reviewCount = 0,
     this.createdAt,
     this.updatedAt,
-  });
+  }) : categories = categories ?? (category != null ? [category] : const []);
 
   final String id;
   final String slug;
@@ -32,7 +34,11 @@ class POI {
   final String name;
   final String? description;
   final String city;
-  final String category;
+  final List<String> categories;
+  final List<String> experiences;
+
+  /// First category convenience getter for legacy usages.
+  String get category => categories.isNotEmpty ? categories.first : '';
   final int durationMinutes;
   final String priceRange;
   final double? latitude;
@@ -58,7 +64,10 @@ class POI {
         name: json['name'] as String? ?? '',
         description: json['description'] as String?,
         city: json['city'] as String? ?? '',
-        category: json['category'] as String? ?? '',
+        categories: json['categories'] != null
+            ? List<String>.from(json['categories'] as List)
+            : (json['category'] != null ? [json['category'] as String] : const []),
+        experiences: List<String>.from(json['experiences'] as List? ?? []),
         durationMinutes: json['duration_minutes'] as int? ?? 60,
         priceRange: json['price_range'] as String? ?? 'free',
         latitude: (json['latitude'] as num?)?.toDouble(),
@@ -88,7 +97,8 @@ class POI {
         'name': name,
         'description': description,
         'city': city,
-        'category': category,
+        'categories': categories,
+        'experiences': experiences,
         'duration_minutes': durationMinutes,
         'price_range': priceRange,
         'latitude': latitude,

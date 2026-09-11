@@ -10,12 +10,18 @@ class POICard extends StatelessWidget {
   final VoidCallback? onTap;
 
   static const Map<String, IconData> _categoryIcons = {
-    'historical': Icons.account_balance,
-    'nature': Icons.forest,
-    'culture': Icons.museum,
-    'adventure': Icons.hiking,
-    'food': Icons.restaurant,
-    'shopping': Icons.shopping_bag,
+    'historical': Icons.castle_outlined,
+    'nature': Icons.forest_outlined,
+    'culture': Icons.museum_outlined,
+    'adventure': Icons.hiking_outlined,
+    'desert': Icons.wb_sunny_outlined,
+    'food': Icons.restaurant_outlined,
+    'beaches': Icons.beach_access_outlined,
+    'monuments': Icons.explore_outlined,
+    'crafts': Icons.shopping_bag_outlined,
+    'thermal': Icons.hot_tub_outlined,
+    'wellness': Icons.spa_outlined,
+    'shopping': Icons.shopping_bag_outlined,
   };
 
   @override
@@ -32,8 +38,73 @@ class POICard extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
-        subtitle:
-            Text('${poi.city} • ${poi.category} • ${poi.durationMinutes} min'),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('${poi.city} • ${poi.durationMinutes} min'),
+            if (poi.categories.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 4,
+                runSpacing: 2,
+                children: [
+                  for (final cat in poi.categories)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 1.5),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .secondaryContainer
+                            .withOpacity(0.6),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        cat,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w500,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSecondaryContainer,
+                            ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+            if (poi.experiences.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 4,
+                runSpacing: 2,
+                children: [
+                  for (final exp in poi.experiences.take(2))
+                    Container(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .primaryContainer
+                            .withOpacity(0.5),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        '✨ ${exp.replaceAll('_', ' ')}',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              fontSize: 10,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onPrimaryContainer,
+                            ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ],
+        ),
         trailing: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.end,

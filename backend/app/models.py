@@ -118,7 +118,7 @@ class POI(Base):
     name = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)
     city = Column(String(100), nullable=False, index=True)
-    category = Column(String(50), nullable=False, index=True)  # Niveau 2: slug local (ex: sahara_oasis, culture)
+    categories = Column(ARRAY(String), nullable=False, default=list)
     experiences = Column(ARRAY(String), default=list)          # Niveau 3: verbes d'action (visiter, randonner, etc.)
     duration_minutes = Column(Integer, default=60)
     price_range = Column(String(20), default="free")  # free, low, medium, high

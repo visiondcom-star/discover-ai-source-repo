@@ -59,13 +59,37 @@ class _PoiMapView extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Icon(Icons.place, size: 16),
                   const SizedBox(width: 4),
                   Text(poi.city),
                   const SizedBox(width: 12),
-                  Text(poi.category,
-                      style: Theme.of(sheetContext).textTheme.bodySmall),
+                  Expanded(
+                    child: Wrap(
+                      spacing: 4,
+                      runSpacing: 4,
+                      children: [
+                        for (final category in poi.categories)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Theme.of(sheetContext)
+                                  .colorScheme
+                                  .secondaryContainer,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              category,
+                              style: Theme.of(sheetContext)
+                                  .textTheme
+                                  .labelSmall,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 12),

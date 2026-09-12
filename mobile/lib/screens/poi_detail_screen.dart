@@ -88,10 +88,14 @@ class PoiDetailScreen extends StatelessWidget {
                         avatar: const Icon(Icons.place, size: 16),
                         label: Text(poi.city),
                       ),
-                      Chip(
-                        avatar: Icon(icon, size: 16),
-                        label: Text(poi.category),
-                      ),
+                      for (final category in poi.categories)
+                        Chip(
+                          avatar: Icon(
+                            _categoryIcons[category] ?? Icons.place,
+                            size: 16,
+                          ),
+                          label: Text(category),
+                        ),
                       if (poi.isVerified)
                         const Chip(
                           avatar: Icon(Icons.verified, size: 16),

@@ -10,7 +10,7 @@ async def test_create_booking(client, auth_headers, db_session, test_tenant, tes
         slug="booking-poi",
         name="Booking POI",
         city="Alger",
-        category="historical",
+        categories=["historical"],
         is_active=True,
     )
     db_session.add(poi)
@@ -62,7 +62,7 @@ async def test_create_booking_currency_defaults_to_tenant(client, db_session):
         slug="morocco-booking-poi",
         name="Marrakech Booking POI",
         city="Marrakech",
-        category="historical",
+        categories=["historical"],
         is_active=True,
     )
     db_session.add(poi)
@@ -111,7 +111,7 @@ async def test_give_consent_requires_explicit_field(
         slug="consent-missing-field-poi",
         name="Consent Missing Field POI",
         city="Alger",
-        category="culture",
+        categories=["culture"],
         is_active=True,
     )
     db_session.add(poi)
@@ -150,7 +150,7 @@ async def test_give_consent(client, auth_headers, db_session, test_tenant, test_
         slug="consent-poi",
         name="Consent POI",
         city="Alger",
-        category="culture",
+        categories=["culture"],
         is_active=True,
     )
     db_session.add(poi)
@@ -188,7 +188,7 @@ async def test_cancel_booking(client, auth_headers, db_session, test_tenant, tes
         slug="cancel-poi",
         name="Cancel POI",
         city="Alger",
-        category="nature",
+        categories=["nature"],
         is_active=True,
     )
     db_session.add(poi)

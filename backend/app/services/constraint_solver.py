@@ -14,7 +14,7 @@ class POIProxy:
     id: str
     name: str
     city: str
-    category: str
+    categories: List[str]
     duration_minutes: int
     price_range: str
     latitude: float
@@ -48,7 +48,7 @@ class ConstraintSolver:
                 id=str(p.id),
                 name=p.name,
                 city=p.city,
-                category=p.category,
+                categories=p.categories or [],
                 duration_minutes=p.duration_minutes,
                 price_range=p.price_range,
                 latitude=p.latitude or 0.0,
@@ -112,7 +112,7 @@ class ConstraintSolver:
         # Interest match
         if interests:
             for interest in interests:
-                if interest.lower() in poi.category.lower():
+                if any(interest.lower() in c.lower() for c in poi.categories):
                     score += 10
                 if any(interest.lower() in tag.lower() for tag in poi.tags):
                     score += 5

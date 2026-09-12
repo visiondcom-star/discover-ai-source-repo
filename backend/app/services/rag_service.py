@@ -27,7 +27,7 @@ class RAGService:
         """Canonical text representation used both at index and (implicitly) query time."""
         return (
             f"{poi.name}. {poi.description or ''}. "
-            f"Catégorie: {poi.category}. Ville: {poi.city}. "
+            f"Catégories: {', '.join(poi.categories or [])}. Ville: {poi.city}. "
             f"Tags: {', '.join(poi.tags or [])}"
         )
 
@@ -111,7 +111,7 @@ class RAGService:
                     "score": float(1 - distance) if distance is not None else None,
                     "description": poi.description,
                     "city": poi.city,
-                    "category": poi.category,
+                    "categories": poi.categories,
                 })
 
             return results
@@ -136,7 +136,7 @@ class RAGService:
         scored = []
         for poi in pois:
             score = 0
-            text_content = f"{poi.name} {poi.description or ''} {poi.city} {poi.category}"
+            text_content = f"{poi.name} {poi.description or ''} {poi.city} {' '.join(poi.categories or [])}"
             text_lower = text_content.lower()
 
             # Simple word matching
@@ -158,7 +158,7 @@ class RAGService:
                 "score": float(score),
                 "description": poi.description,
                 "city": poi.city,
-                "category": poi.category,
+                "categories": poi.categories,
             })
 
         return results

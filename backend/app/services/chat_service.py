@@ -36,7 +36,7 @@ Sois concis mais complet."""
 
             # `<->` est l'opérateur pgvector pour la distance cosinus.
             query = text("""
-                SELECT name, description, city, category, tags
+                SELECT name, description, city, categories, tags
                 FROM pois
                 WHERE tenant_id = :tenant_id
                 ORDER BY embedding <-> :embedding
@@ -45,7 +45,7 @@ Sois concis mais complet."""
             result = await self.db.execute(query, {"tenant_id": self.tenant.id, "embedding": str(embedding), "limit": limit})
             pois = result.mappings().all()
 
-            return "\n\n".join([f"POI: {p['name']} ({p['city']}, {p['category']})\nDescription: {p['description']}\nTags: {', '.join(p['tags'])}" for p in pois])
+            return "\n\n".join([f"POI: {p['name']} ({p['city']}, {', '.join(p['categories'])})\nDescription: {p['description']}\nTags: {', '.join(p['tags'])}" for p in pois])
         except Exception as e:
             # En cas d'erreur d'embedding ou de pgvector, on retombe sur une réponse sans RAG.
             print(f"RAG context retrieval failed: {e}")

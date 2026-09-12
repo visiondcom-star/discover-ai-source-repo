@@ -108,12 +108,15 @@ async def content_analytics(
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)
 
+    # categories is an ARRAY column: explode per-POI lists and count in Python
     result = await db.execute(
-        select(POI.category, func.count(POI.id))
+        select(POI.categories)
         .where(and_(POI.tenant_id == tenant.id, POI.is_active == True))
-        .group_by(POI.category)
     )
-    categories = {cat: count for cat, count in result.all()}
+    categories: Dict[str, int] = {}
+    for (poi_categories,) in result.all():
+        for cat in poi_categories or []:
+            categories[cat] = categories.get(cat, 0) + 1
 
     return {
         "categories": categories,
@@ -170,9 +173,9 @@ async def export_data(
         from io import StringIO
         output = StringIO()
         writer = csv.writer(output)
-        writer.writerow(["id", "name", "city", "category", "duration_minutes", "price_range"])
+        writer.writerow(["id", "name", "city", "categories", "duration_minutes", "price_range"])
         for p in pois:
-            writer.writerow([str(p.id), p.name, p.city, p.category, p.duration_minutes, p.price_range])
+            writer.writerow([str(p.id), p.name, p.city, ",".join(p.categories or []), p.duration_minutes, p.price_range])
 
         return {
             "type": "csv",

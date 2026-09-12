@@ -11,12 +11,12 @@ def solver():
 @pytest.fixture
 def sample_pois():
     return [
-        POIProxy("1", "POI A", "Alger", "historical", 60, "free", 36.7, 3.0, ["unesco"], ["wheelchair"]),
-        POIProxy("2", "POI B", "Alger", "nature", 120, "low", 36.75, 3.05, ["parc"], []),
-        POIProxy("3", "POI C", "Constantine", "culture", 90, "medium", 36.36, 6.6, ["pont"], ["wheelchair"]),
-        POIProxy("4", "POI D", "Tipaza", "historical", 180, "free", 36.59, 2.44, ["romain"], []),
-        POIProxy("5", "POI E", "Alger", "adventure", 240, "high", 36.8, 3.1, ["trek"], []),
-        POIProxy("6", "POI F", "Alger", "historical", 45, "free", 36.72, 3.02, ["musée"], ["wheelchair"]),
+        POIProxy("1", "POI A", "Alger", ["historical"], 60, "free", 36.7, 3.0, ["unesco"], ["wheelchair"]),
+        POIProxy("2", "POI B", "Alger", ["nature"], 120, "low", 36.75, 3.05, ["parc"], []),
+        POIProxy("3", "POI C", "Constantine", ["culture"], 90, "medium", 36.36, 6.6, ["pont"], ["wheelchair"]),
+        POIProxy("4", "POI D", "Tipaza", ["historical"], 180, "free", 36.59, 2.44, ["romain"], []),
+        POIProxy("5", "POI E", "Alger", ["adventure"], 240, "high", 36.8, 3.1, ["trek"], []),
+        POIProxy("6", "POI F", "Alger", ["historical"], 45, "free", 36.72, 3.02, ["musée"], ["wheelchair"]),
     ]
 
 
@@ -137,7 +137,7 @@ def test_solver_interest_matching(solver, sample_pois):
         interests=["historical"],
     )
     if result:
-        hist_count = sum(1 for p in result[0] if p.category == "historical")
+        hist_count = sum(1 for p in result[0] if "historical" in (p.categories or []))
         assert hist_count >= 1
 
 

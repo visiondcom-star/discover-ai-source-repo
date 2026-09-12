@@ -34,7 +34,7 @@ async def test_import_csv_wrong_format(client, auth_headers, test_tenant):
 
 @pytest.mark.asyncio
 async def test_import_json_success(client, auth_headers, test_tenant):
-    json_content = b'{"pois": [{"name": "JSON POI", "city": "Alger", "category": "nature", "duration_minutes": 120}]}'
+    json_content = b'{"pois": [{"name": "JSON POI", "city": "Alger", "categories": ["nature"], "duration_minutes": 120}]}'
     response = await client.post(
         "/api/v1/content/import/json",
         headers=auth_headers,
@@ -63,7 +63,7 @@ async def test_get_pending_pois(client, auth_headers, db_session, test_tenant):
         slug="pending-poi",
         name="Pending POI",
         city="Alger",
-        category="historical",
+        categories=["historical"],
         is_verified=False,
         is_active=True,
     )
@@ -84,7 +84,7 @@ async def test_validate_pois(client, auth_headers, db_session, test_tenant):
         slug="validate-poi",
         name="Validate POI",
         city="Alger",
-        category="culture",
+        categories=["culture"],
         is_verified=False,
         is_active=True,
     )

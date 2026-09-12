@@ -105,7 +105,7 @@ async def get_nearby_ar(
                     "name": poi.name,
                     "distance_meters": int(dist),
                     "ar_available": True,
-                    "category": poi.category,
+                    "categories": poi.categories,
                 })
 
     nearby.sort(key=lambda x: x["distance_meters"])

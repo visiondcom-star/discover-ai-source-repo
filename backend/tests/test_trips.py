@@ -11,7 +11,7 @@ async def test_generate_trip(client, auth_headers, db_session, test_tenant):
         slug="trip-poi",
         name="Trip POI",
         city="Alger",
-        category="historical",
+        categories=["historical"],
         duration_minutes=60,
         is_active=True,
     )
@@ -51,7 +51,7 @@ async def test_get_trip_details(client, auth_headers, db_session, test_tenant, t
         slug="detail-poi",
         name="Detail POI",
         city="Alger",
-        category="culture",
+        categories=["culture"],
         duration_minutes=90,
         is_active=True,
     )
@@ -104,7 +104,7 @@ async def test_generate_trip_currency_defaults_to_tenant(
         slug="currency-poi",
         name="Currency POI",
         city="Alger",
-        category="historical",
+        categories=["historical"],
         duration_minutes=60,
         is_active=True,
     )
@@ -165,7 +165,7 @@ async def test_generate_trip_currency_defaults_to_other_tenant_currency(
         slug="morocco-poi",
         name="Marrakech POI",
         city="Marrakech",
-        category="historical",
+        categories=["historical"],
         duration_minutes=60,
         is_active=True,
     )

@@ -10,7 +10,7 @@ async def _create_poi(client, db_session, test_tenant, slug="review-poi"):
         slug=slug,
         name="Review POI",
         city="Alger",
-        category="historical",
+        categories=["historical"],
         is_active=True,
     )
     db_session.add(poi)

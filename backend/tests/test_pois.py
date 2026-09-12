@@ -22,7 +22,7 @@ async def test_list_pois_with_filters(client, test_tenant, auth_headers, db_sess
         slug="test-poi",
         name="Test POI",
         city="Alger",
-        category="historical",
+        categories=["historical"],
         duration_minutes=60,
         is_active=True,
     )
@@ -46,7 +46,7 @@ async def test_search_pois(client, test_tenant, auth_headers, db_session):
         slug="search-poi",
         name="Searchable POI",
         city="Oran",
-        category="culture",
+        categories=["culture"],
         duration_minutes=90,
         is_active=True,
     )
@@ -70,7 +70,7 @@ async def test_create_poi(client, auth_headers, test_tenant):
         json={
             "name": "New POI",
             "city": "Constantine",
-            "category": "culture",
+            "categories": ["culture"],
             "duration_minutes": 120,
         },
     )
@@ -85,7 +85,7 @@ async def test_create_poi_requires_auth(client, test_tenant):
     response = await client.post(
         "/api/v1/pois/",
         headers={"X-Tenant-Slug": "test-tenant"},
-        json={"name": "Unauthorized POI", "city": "Alger", "category": "nature"},
+        json={"name": "Unauthorized POI", "city": "Alger", "categories": ["nature"]},
     )
     assert response.status_code == 401
 
@@ -99,7 +99,7 @@ async def test_poi_tenant_isolation(client, auth_headers, db_session, test_tenan
         slug="isolated-poi",
         name="Isolated POI",
         city="Alger",
-        category="historical",
+        categories=["historical"],
         is_active=True,
     )
     db_session.add(poi)
@@ -125,7 +125,7 @@ async def test_delete_poi(client, auth_headers, db_session, test_tenant):
         slug="delete-me",
         name="Delete Me",
         city="Alger",
-        category="nature",
+        categories=["nature"],
         is_active=True,
     )
     db_session.add(poi)

@@ -57,3 +57,4 @@ backend/coverage.xml
 certs/
 
 frontend/tsconfig.tsbuildinfo
+.last_git_pull

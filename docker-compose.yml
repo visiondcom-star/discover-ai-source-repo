@@ -56,6 +56,14 @@ services:
       BACKEND_URL: http://backend:8000
     ports:
       - "3000:3000"
+    volumes:
+      # Hot-mount sources so edits appear on :3000 without a container rebuild
+      # (the old no-mount setup served a stale image — e.g. the multi-category
+      # POI badges existed in src but never reached the running container).
+      - ./frontend:/app
+      # Keep the dependencies baked into the image (the bind-mount shadows /app,
+      # the anonymous volume restores the image's node_modules).
+      - /app/node_modules
     depends_on:
       - backend
 

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'package:discover_ai/models/poi.dart';
 import 'package:discover_ai/providers/auth_provider.dart';
+import 'package:discover_ai/providers/tenant_provider.dart';
 import 'package:discover_ai/providers/trip_provider.dart';
 import 'package:discover_ai/screens/poi_detail_screen.dart';
 import 'package:discover_ai/screens/trip_form_screen.dart';
@@ -41,7 +42,7 @@ void main() {
         reviewCount: rating == null ? 0 : 12,
       );
 
-  Widget wrap(POI poi) => MultiProvider(
+    Widget wrap(POI poi) => MultiProvider(
         providers: [
           ChangeNotifierProvider<AuthProvider>(
             create: (_) => AuthProvider(
@@ -50,6 +51,9 @@ void main() {
             ),
           ),
           ChangeNotifierProvider<TripProvider>(create: (_) => TripProvider()),
+          ChangeNotifierProvider<TenantProvider>(
+            create: (_) => TenantProvider(tenantsApi: FakeTenantsApi()),
+          ),
         ],
         child: MaterialApp(home: PoiDetailScreen(poi: poi)),
       );

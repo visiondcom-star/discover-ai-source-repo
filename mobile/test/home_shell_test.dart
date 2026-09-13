@@ -8,6 +8,7 @@ import 'package:discover_ai/providers/chat_provider.dart';
 import 'package:discover_ai/providers/poi_provider.dart';
 import 'package:discover_ai/providers/promotion_provider.dart';
 import 'package:discover_ai/providers/trip_provider.dart';
+import 'package:discover_ai/providers/tenant_provider.dart';
 import 'package:discover_ai/screens/home_shell.dart';
 
 import 'helpers/fakes.dart';
@@ -39,9 +40,12 @@ void main() {
           // Accueil's promo banner — empty fake so these navigation tests
           // stay unaffected by banner content (covered separately in
           // home_screen tests).
-          ChangeNotifierProvider<PromotionProvider>(
+                    ChangeNotifierProvider<PromotionProvider>(
             create: (_) =>
                 PromotionProvider(promotionsApi: FakePromotionsApi()),
+          ),
+          ChangeNotifierProvider<TenantProvider>(
+            create: (_) => TenantProvider(tenantsApi: FakeTenantsApi()),
           ),
         ],
         child: const MaterialApp(home: HomeShell()),

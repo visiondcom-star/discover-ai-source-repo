@@ -5,6 +5,7 @@ import '../config.dart';
 import '../models/user.dart';
 import '../providers/auth_provider.dart';
 import '../providers/promotion_provider.dart';
+import '../providers/tenant_provider.dart';
 import '../widgets/promo_banner.dart';
 import 'trip_form_screen.dart';
 
@@ -12,8 +13,10 @@ import 'trip_form_screen.dart';
 /// personalized greeting, travel-type grid feeding the trip wizard, promo
 /// banner, then shortcuts to the Planner and the Explorer tab.
 ///
-/// The travel-type catalog comes from [AppConfig.tripInterestOptions]
-/// (`--dart-define`) — never hardcoded market content (principle n°1).
+/// The travel-type catalog comes from [TenantProvider.categories]
+/// (fetched from GET /tenants/categories/), falling back to
+/// [AppConfig.tripInterestOptions] when the provider is unavailable or
+/// has not yet loaded — never hardcoded market content (principle n°1).
 /// The icon map degrades gracefully (generic activity icon) for config
 /// values it doesn't know, so any tenant catalog renders.
 class HomeScreen extends StatefulWidget {
@@ -96,6 +99,15 @@ class _HomeScreenState extends State<HomeScreen> {
     final promotions = context.watch<PromotionProvider>().items;
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
+
+    /// Catalog comes from the tenant provider (GET /tenants/categories/),
+    /// falling back to [AppConfig.tripInterestOptions] when the provider
+    /// is absent, still loading, or returned nothing. Nullable watch so a
+    /// missing TenantProvider can never crash the Accueil tab.
+    final categories = context.watch<TenantProvider?>()?.categories ?? const [];
+    final interests = categories.isNotEmpty
+        ? categories.map((c) => c.slug).toList(growable: false)
+        : AppConfig.tripInterestOptions;
     return Scaffold(
       appBar: AppBar(title: const Text('Discover AI')),
       body: ListView(
@@ -125,7 +137,7 @@ class _HomeScreenState extends State<HomeScreen> {
             crossAxisSpacing: 10,
             childAspectRatio: 1.05,
             children: [
-              for (final interest in AppConfig.tripInterestOptions)
+              for (final interest in interests)
                 _TravelTypeCard(
                   key: Key('home_type_$interest'),
                   icon: _typeIcons[interest] ?? Icons.local_activity_outlined,
@@ -192,7 +204,7 @@ class _TravelTypeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final text = Theme.of(context).textTheme;
+
     return Card(
       margin: EdgeInsets.zero,
       child: InkWell(
@@ -209,7 +221,10 @@ class _TravelTypeCard extends StatelessWidget {
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: text.bodySmall?.copyWith(fontWeight: FontWeight.w500),
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(fontWeight: FontWeight.w500),
               ),
             ],
           ),

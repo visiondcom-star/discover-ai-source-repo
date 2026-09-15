@@ -2,14 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../config.dart';
+import '../providers/tenant_provider.dart';
 import '../providers/trip_provider.dart';
 import 'trip_timeline_screen.dart';
 
 /// Trip generation form — the mobile counterpart of the web trip form:
 /// interests (multi-select), number of days, budget level.
 ///
-/// The interest catalog comes from [AppConfig] (`--dart-define`), never
-/// hardcoded market content (CLAUDE.md principle 1).
+/// The interest catalog comes from [TenantProvider.categories]
+/// (fetched from GET /tenants/categories/), falling back to
+/// [AppConfig.tripInterestOptions] when the provider hasn't loaded yet —
+/// never hardcoded market content (CLAUDE.md principle 1).
 class TripFormScreen extends StatefulWidget {
   const TripFormScreen({super.key, this.initialInterests = const <String>{}});
 
@@ -23,6 +26,9 @@ class TripFormScreen extends StatefulWidget {
 }
 
 class _TripFormScreenState extends State<TripFormScreen> {
+  /// Anti-invalid-value filter on the pre-selected interests, validated
+  /// against the compile-time AppConfig catalog only. The visible chips
+  /// come from the dynamic tenant catalog (see build()).
   late final Set<String> _selectedInterests = widget.initialInterests
       .where(AppConfig.tripInterestOptions.contains)
       .toSet();
@@ -46,8 +52,8 @@ class _TripFormScreenState extends State<TripFormScreen> {
     if (!mounted) return;
     if (trip == null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content:
-            Text('Trip generation failed: ${trips.error}', key: const Key('trip_error')),
+        content: Text('Trip generation failed: ${trips.error}',
+            key: const Key('trip_error')),
       ));
       trips.clearError();
       return;
@@ -61,6 +67,10 @@ class _TripFormScreenState extends State<TripFormScreen> {
   @override
   Widget build(BuildContext context) {
     final trips = context.watch<TripProvider>();
+    final categories = context.watch<TenantProvider?>()?.categories ?? const [];
+    final tripInterestOptions = categories.isNotEmpty
+        ? categories.map((c) => c.slug).toList(growable: false)
+        : AppConfig.tripInterestOptions;
     return Scaffold(
       appBar: AppBar(title: const Text('Plan a trip')),
       body: SingleChildScrollView(
@@ -74,7 +84,7 @@ class _TripFormScreenState extends State<TripFormScreen> {
               spacing: 8,
               runSpacing: 4,
               children: [
-                for (final interest in AppConfig.tripInterestOptions)
+                for (final interest in tripInterestOptions)
                   FilterChip(
                     key: Key('interest_chip_$interest'),
                     label: Text(interest),
@@ -97,7 +107,8 @@ class _TripFormScreenState extends State<TripFormScreen> {
               value: _numDays.toDouble(),
               onChanged: (v) => setState(() => _numDays = v.round()),
             ),
-            Center(child: Text('$_numDays day(s)', key: const Key('days_value'))),
+            Center(
+                child: Text('$_numDays day(s)', key: const Key('days_value'))),
             const SizedBox(height: 24),
             Text('Budget level',
                 style: Theme.of(context).textTheme.titleMedium),

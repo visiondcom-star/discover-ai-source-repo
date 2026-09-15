@@ -84,6 +84,16 @@ abstract class PromotionsApi {
   Future<Map<String, dynamic>> getPromotions();
 }
 
+/// Tenant-configuration seam — mirrors GET /tenants/current
+/// (primary_color/secondary_currency drive the app theme at startup).
+abstract class TenantsApi {
+  Future<Map<String, dynamic>> getCurrentTenant();
+
+  /// Returns tenant-specific category catalog for POI filtering.
+  /// Mirrors GET /tenants/categories/ endpoint.
+  Future<List<Map<String, dynamic>>> getTenantCategories();
+}
+
 /// HTTP failure carrying status code and body.
 class ApiException implements Exception {
   ApiException(this.statusCode, this.body);
@@ -108,7 +118,8 @@ class ApiService
         TripsApi,
         ChatApi,
         BookingsApi,
-        PromotionsApi {
+        PromotionsApi,
+        TenantsApi {
   ApiService._internal()
       : baseUrl = AppConfig.apiBaseUrl,
         tenantSlug = AppConfig.tenantSlug;
@@ -135,7 +146,7 @@ class ApiService
         if (_token.isNotEmpty) 'Authorization': 'Bearer $_token',
       };
 
-    Future<dynamic> _get(String path) async {
+  Future<dynamic> _get(String path) async {
     final url = '$baseUrl$path';
     debugPrint('[API] GET $url');
     final res = await http.get(Uri.parse(url), headers: _headers);
@@ -215,7 +226,7 @@ class ApiService
         'num_days': numDays,
       }) as Map);
 
-    @override
+  @override
   Future<List<Map<String, dynamic>>> listTrips() async {
     final data = await _get('/trips/');
     return (data as List)
@@ -223,7 +234,7 @@ class ApiService
         .toList();
   }
 
-    @override
+  @override
   Future<Map<String, dynamic>> sendMessage(
     String message, {
     Map<String, dynamic>? context,
@@ -268,9 +279,21 @@ class ApiService
 
   @override
   Future<Map<String, dynamic>> listAdapters() async =>
-      Map<String, dynamic>.from(await _get('/bookings/adapters/available') as Map);
+      Map<String, dynamic>.from(
+          await _get('/bookings/adapters/available') as Map);
 
   @override
   Future<Map<String, dynamic>> getPromotions() async =>
       Map<String, dynamic>.from(await _get('/promotions/') as Map);
+
+  @override
+  Future<Map<String, dynamic>> getCurrentTenant() async =>
+      Map<String, dynamic>.from(await _get('/tenants/current') as Map);
+
+  /// Tenant-specific POI categories. Falls back to empty list on error.
+  @override
+  Future<List<Map<String, dynamic>>> getTenantCategories() async {
+    final data = await _get('/tenants/categories/');
+    return (data as List).map((e) => Map<String, dynamic>.from(e)).toList();
+  }
 }

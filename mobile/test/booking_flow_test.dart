@@ -107,14 +107,12 @@ void main() {
           ChangeNotifierProvider<BookingProvider>.value(value: provider),
           ChangeNotifierProvider<POIProvider>.value(value: await loadedPois()),
         ],
-        child: MaterialApp(
-            home: PoiDetailScreen(poi: _poi(samplePoisJson[0]))),
+        child: MaterialApp(home: PoiDetailScreen(poi: _poi(samplePoisJson[0]))),
       ),
     );
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(
-        find.byKey(const Key('poi_detail_book_button')));
+    await tester.ensureVisible(find.byKey(const Key('poi_detail_book_button')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('poi_detail_book_button')));
     await tester.pumpAndSettle();

@@ -79,7 +79,8 @@ void main() {
       final provider = POIProvider(poisApi: api);
 
       final first = provider.loadPOIs(); // seq 1 — resolves last
-      final second = provider.loadPOIs(search: 'djemila'); // seq 2 — resolves first
+      final second =
+          provider.loadPOIs(search: 'djemila'); // seq 2 — resolves first
       expect(api.gates.length, 2);
 
       api.respond(1, ['Tiddis']);

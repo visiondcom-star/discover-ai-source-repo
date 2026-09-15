@@ -19,6 +19,7 @@ import 'package:discover_ai/providers/booking_provider.dart';
 import 'package:discover_ai/providers/chat_provider.dart';
 import 'package:discover_ai/providers/poi_provider.dart';
 import 'package:discover_ai/providers/promotion_provider.dart';
+import 'package:discover_ai/providers/tenant_provider.dart';
 import 'package:discover_ai/providers/trip_provider.dart';
 import 'package:discover_ai/widgets/poi_card.dart';
 
@@ -28,21 +29,6 @@ void main() {
   // Match the AppConfig defaults — no need for extra dart-defines.
   const demoEmail = AppConfig.demoEmail; // demo@algeria.travel
   const demoPassword = 'demo1234';
-
-  Widget boot() => MultiProvider(
-        providers: [
-          ChangeNotifierProvider(create: (_) => AuthProvider()),
-          ChangeNotifierProvider(create: (_) => POIProvider()),
-          ChangeNotifierProvider(create: (_) => TripProvider()),
-          ChangeNotifierProvider(create: (_) => ChatProvider()),
-          // IndexedStack mounts every tab eagerly → Réservations needs a
-          // BookingProvider (real Booking-Agent API).
-          ChangeNotifierProvider(create: (_) => BookingProvider()),
-          // Same requirement for Accueil's promo banner.
-          ChangeNotifierProvider(create: (_) => PromotionProvider()),
-        ],
-        child: const DiscoverAIApp(),
-      );
 
   /// Pumps until [finder] is found or [timeout] elapses.
   /// Unlike the original waitFor in app_test.dart, this returns when the
@@ -95,6 +81,7 @@ void main() {
         ChangeNotifierProvider(create: (_) => ChatProvider()),
         ChangeNotifierProvider(create: (_) => BookingProvider()),
         ChangeNotifierProvider(create: (_) => PromotionProvider()),
+        ChangeNotifierProvider(create: (_) => TenantProvider()),
       ],
       child: const DiscoverAIApp(),
     ));
@@ -110,8 +97,7 @@ void main() {
     debugPrint('password field: $demoPassword');
 
     // Enter credentials and tap Sign in.
-    await tester.enterText(
-        find.byKey(const Key('login_email')), demoEmail);
+    await tester.enterText(find.byKey(const Key('login_email')), demoEmail);
     await tester.enterText(
         find.byKey(const Key('login_password')), demoPassword);
     await tester.tap(find.text('Sign in'));
@@ -125,7 +111,8 @@ void main() {
       waitForAbsence: true,
     );
 
-    debugPrint('=== STEP 3: LoginScreen gone — HomeShell mounted (Accueil) ===');
+    debugPrint(
+        '=== STEP 3: LoginScreen gone — HomeShell mounted (Accueil) ===');
 
     // The shell boots on the Accueil tab; the POI list lives on Explorer.
     await waitForWidget(tester, find.byKey(const Key('tab_explore')));

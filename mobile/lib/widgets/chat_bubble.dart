@@ -52,8 +52,7 @@ class ChatBubble extends StatelessWidget {
           ],
           Flexible(
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 color: bgColor,
                 borderRadius: BorderRadius.only(
@@ -90,4 +89,3 @@ class ChatBubble extends StatelessWidget {
     );
   }
 }
-

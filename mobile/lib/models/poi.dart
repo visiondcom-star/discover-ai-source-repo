@@ -66,7 +66,9 @@ class POI {
         city: json['city'] as String? ?? '',
         categories: json['categories'] != null
             ? List<String>.from(json['categories'] as List)
-            : (json['category'] != null ? [json['category'] as String] : const []),
+            : (json['category'] != null
+                ? [json['category'] as String]
+                : const []),
         experiences: List<String>.from(json['experiences'] as List? ?? []),
         durationMinutes: json['duration_minutes'] as int? ?? 60,
         priceRange: json['price_range'] as String? ?? 'free',

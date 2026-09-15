@@ -28,8 +28,7 @@ class PoiMapScreen extends StatelessWidget {
       appBar: AppBar(title: const Text('Map')),
       body: geolocated.isEmpty
           ? const Center(
-              child: Text('No geolocated places yet.',
-                  key: Key('map_empty')),
+              child: Text('No geolocated places yet.', key: Key('map_empty')),
             )
           : _PoiMapView(pois: geolocated),
     );
@@ -82,9 +81,8 @@ class _PoiMapView extends StatelessWidget {
                             ),
                             child: Text(
                               category,
-                              style: Theme.of(sheetContext)
-                                  .textTheme
-                                  .labelSmall,
+                              style:
+                                  Theme.of(sheetContext).textTheme.labelSmall,
                             ),
                           ),
                       ],

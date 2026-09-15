@@ -22,8 +22,8 @@ void main() {
     testWidgets('blocks submission without interests and never calls the API',
         (tester) async {
       final api = FakeTripsApi();
-      await tester.pumpWidget(_wrap(const TripFormScreen(),
-          TripProvider(tripsApi: api)));
+      await tester.pumpWidget(
+          _wrap(const TripFormScreen(), TripProvider(tripsApi: api)));
 
       await tester.tap(find.byKey(const Key('generate_trip_button')));
       await tester.pump();
@@ -38,8 +38,7 @@ void main() {
         (tester) async {
       final api = FakeTripsApi();
       final trips = TripProvider(tripsApi: api);
-      await tester
-          .pumpWidget(_wrap(const TripFormScreen(), trips));
+      await tester.pumpWidget(_wrap(const TripFormScreen(), trips));
 
       // Multi-select two interests.
       await tester.tap(find.byKey(const Key('interest_chip_history')));
@@ -88,7 +87,8 @@ void main() {
   group('TripTimelineScreen (widget)', () {
     Future<TripProvider> loadedProvider(FakeTripsApi api) async {
       final trips = TripProvider(tripsApi: api);
-      await trips.loadTrips(); // seeds `currentTrip` via generate? no — load only fills list
+      await trips
+          .loadTrips(); // seeds `currentTrip` via generate? no — load only fills list
       await trips.generate(
         interests: const ['history'],
         budgetLevel: 'medium',
@@ -103,7 +103,8 @@ void main() {
       await tester.pumpAndSettle();
 
       // Header card mirrors trip metadata.
-      expect(find.text('Algiers highlights'), findsNWidgets(2)); // appbar + card
+      expect(
+          find.text('Algiers highlights'), findsNWidgets(2)); // appbar + card
       expect(find.text('2 day(s)'), findsOneWidget);
 
       // Both days present, ordered.

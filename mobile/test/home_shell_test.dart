@@ -40,7 +40,7 @@ void main() {
           // Accueil's promo banner — empty fake so these navigation tests
           // stay unaffected by banner content (covered separately in
           // home_screen tests).
-                    ChangeNotifierProvider<PromotionProvider>(
+          ChangeNotifierProvider<PromotionProvider>(
             create: (_) =>
                 PromotionProvider(promotionsApi: FakePromotionsApi()),
           ),
@@ -104,13 +104,22 @@ void main() {
     await tester.tap(find.byKey(const Key('home_type_history')));
     await tester.pumpAndSettle();
 
-    expect(tester.widget<FilterChip>(
-      find.byKey(const Key('interest_chip_history')),
-    ).selected, isTrue, reason: 'grid shortcut must preselect the interest');
+    expect(
+        tester
+            .widget<FilterChip>(
+              find.byKey(const Key('interest_chip_history')),
+            )
+            .selected,
+        isTrue,
+        reason: 'grid shortcut must preselect the interest');
 
     // Untouched catalog entries stay unselected.
-    expect(tester.widget<FilterChip>(
-      find.byKey(const Key('interest_chip_culture')),
-    ).selected, isFalse);
+    expect(
+        tester
+            .widget<FilterChip>(
+              find.byKey(const Key('interest_chip_culture')),
+            )
+            .selected,
+        isFalse);
   });
 }

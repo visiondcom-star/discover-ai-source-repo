@@ -32,8 +32,7 @@ class ProfileScreen extends StatelessWidget {
                 radius: 36,
                 backgroundColor: scheme.primary,
                 child: Text(initial,
-                    style:
-                        const TextStyle(color: Colors.white, fontSize: 28)),
+                    style: const TextStyle(color: Colors.white, fontSize: 28)),
               ),
               const SizedBox(height: 12),
               Text(display,
@@ -43,7 +42,9 @@ class ProfileScreen extends StatelessWidget {
                       ?.copyWith(fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),
               Text(user?.email ?? '',
-                  style: Theme.of(context).textTheme.bodySmall
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
                       ?.copyWith(color: scheme.onSurfaceVariant)),
             ],
           ),
@@ -62,8 +63,7 @@ class ProfileScreen extends StatelessWidget {
             margin: EdgeInsets.zero,
             child: ListTile(
               enabled: false,
-              leading:
-                  Icon(Icons.tune, color: scheme.onSurfaceVariant),
+              leading: Icon(Icons.tune, color: scheme.onSurfaceVariant),
               title: const Text('Préférences'),
               subtitle: const Text('À venir — prochain incrément'),
             ),
@@ -75,8 +75,8 @@ class ProfileScreen extends StatelessWidget {
               key: const Key('logout_button'),
               leading: Icon(Icons.logout, color: scheme.error),
               iconColor: scheme.error,
-              title: Text('Se déconnecter',
-                  style: TextStyle(color: scheme.error)),
+              title:
+                  Text('Se déconnecter', style: TextStyle(color: scheme.error)),
               onTap: () => context.read<AuthProvider>().logout(),
             ),
           ),

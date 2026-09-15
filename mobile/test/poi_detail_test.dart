@@ -42,7 +42,7 @@ void main() {
         reviewCount: rating == null ? 0 : 12,
       );
 
-    Widget wrap(POI poi) => MultiProvider(
+  Widget wrap(POI poi) => MultiProvider(
         providers: [
           ChangeNotifierProvider<AuthProvider>(
             create: (_) => AuthProvider(

@@ -25,6 +25,7 @@ import 'package:discover_ai/providers/booking_provider.dart';
 import 'package:discover_ai/providers/chat_provider.dart';
 import 'package:discover_ai/providers/poi_provider.dart';
 import 'package:discover_ai/providers/promotion_provider.dart';
+import 'package:discover_ai/providers/tenant_provider.dart';
 import 'package:discover_ai/providers/trip_provider.dart';
 import 'package:discover_ai/widgets/chat_bubble.dart';
 
@@ -56,6 +57,7 @@ void main() {
           ChangeNotifierProvider(create: (_) => BookingProvider()),
           // Same requirement for Accueil's promo banner.
           ChangeNotifierProvider(create: (_) => PromotionProvider()),
+          ChangeNotifierProvider(create: (_) => TenantProvider()),
         ],
         child: const DiscoverAIApp(),
       );

@@ -31,16 +31,15 @@ class AppConfig {
   /// Interest choices offered on the trip-generation form. Generic category
   /// labels by default; overridable per deployment without code change:
   /// --dart-define=TRIP_INTERESTS=culture,food,history
-  static final List<String> tripInterestOptions =
-      const String.fromEnvironment(
-        'TRIP_INTERESTS',
-        defaultValue:
-            'culture,history,nature,desert,adventure,food,beaches,monuments,crafts,thermal,wellness',
-      )
-          .split(',')
-          .map((s) => s.trim())
-          .where((s) => s.isNotEmpty)
-          .toList(growable: false);
+  static final List<String> tripInterestOptions = const String.fromEnvironment(
+    'TRIP_INTERESTS',
+    defaultValue:
+        'culture,history,nature,desert,adventure,food,beaches,monuments,crafts,thermal,wellness',
+  )
+      .split(',')
+      .map((s) => s.trim())
+      .where((s) => s.isNotEmpty)
+      .toList(growable: false);
 
   /// Budget levels accepted by POST /trips/generate — mirrors the backend
   /// schema constraint `budget_level: ^(low|medium|high)$` (API contract,

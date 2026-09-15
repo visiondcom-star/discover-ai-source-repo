@@ -30,12 +30,10 @@ class ChatMessage {
 
   /// Builds an assistant turn from the raw `POST /chat/` response envelope.
   /// Reads `message` and `suggestions` directly — nothing else assumed.
-  factory ChatMessage.fromApiResponse(Map<String, dynamic> json) =>
-      ChatMessage(
+  factory ChatMessage.fromApiResponse(Map<String, dynamic> json) => ChatMessage(
         role: ChatRole.assistant,
         message: json['message'] as String? ?? '',
-        suggestions:
-            List<String>.from(json['suggestions'] as List? ?? []),
+        suggestions: List<String>.from(json['suggestions'] as List? ?? []),
       );
 
   Map<String, dynamic> toJson() => {

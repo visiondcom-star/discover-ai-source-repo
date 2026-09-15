@@ -7,6 +7,7 @@ import 'providers/booking_provider.dart';
 import 'providers/chat_provider.dart';
 import 'providers/poi_provider.dart';
 import 'providers/promotion_provider.dart';
+import 'providers/tenant_provider.dart';
 import 'providers/trip_provider.dart';
 
 void main() {
@@ -15,6 +16,11 @@ void main() {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(
+          create: (_) => TenantProvider()
+            ..loadTenant()
+            ..loadCategories(),
+        ),
         ChangeNotifierProvider(create: (_) => POIProvider()),
         ChangeNotifierProvider(create: (_) => TripProvider()),
         ChangeNotifierProvider(create: (_) => ChatProvider()),

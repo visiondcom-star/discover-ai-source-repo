@@ -59,8 +59,7 @@ class Trip {
         budgetLevel: json['budget_level'] as String? ?? 'medium',
         budgetCurrency: json['budget_currency'] as String? ?? '',
         travelStyle: json['travel_style'] as String? ?? 'balanced',
-        interests:
-            List<String>.from(json['interests'] as List? ?? const []),
+        interests: List<String>.from(json['interests'] as List? ?? const []),
         groupType: json['group_type'] as String? ?? 'solo',
         children: json['children'] as bool? ?? false,
         status: json['status'] as String? ?? 'draft',

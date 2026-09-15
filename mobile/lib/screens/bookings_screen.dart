@@ -85,7 +85,9 @@ class _BookingsScreenState extends State<BookingsScreen> {
                 'd’un lieu — chaque étape demandera votre confirmation '
                 'explicite.',
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
                     ?.copyWith(color: scheme.onSurfaceVariant),
               ),
             ),
@@ -95,23 +97,23 @@ class _BookingsScreenState extends State<BookingsScreen> {
     }
 
     return RefreshIndicator(
-        onRefresh: bookings.loadBookings,
-        child: ListView.builder(
-          padding: const EdgeInsets.only(top: 8, bottom: 24),
-          itemCount: bookings.items.length,
-          itemBuilder: (context, index) {
-            final booking = bookings.items[index];
-            var poiName = booking.poiId;
-            for (final p in pois) {
-              if (p.id == booking.poiId) {
-                poiName = p.name;
-                break;
-              }
+      onRefresh: bookings.loadBookings,
+      child: ListView.builder(
+        padding: const EdgeInsets.only(top: 8, bottom: 24),
+        itemCount: bookings.items.length,
+        itemBuilder: (context, index) {
+          final booking = bookings.items[index];
+          var poiName = booking.poiId;
+          for (final p in pois) {
+            if (p.id == booking.poiId) {
+              poiName = p.name;
+              break;
             }
-            return _BookingCard(booking: booking, poiName: poiName);
-          },
-        ),
-      );
+          }
+          return _BookingCard(booking: booking, poiName: poiName);
+        },
+      ),
+    );
   }
 }
 
@@ -231,8 +233,7 @@ Future<void> showConsentDialog(BuildContext context, Booking booking) {
           if (booking.price != null)
             Text('${booking.price} ${booking.currency}'),
           const SizedBox(height: 12),
-          const Text(
-              'En confirmant, le Booking-Agent générera une référence '
+          const Text('En confirmant, le Booking-Agent générera une référence '
               'externe (EXT-…). Sans confirmation, la réservation reste '
               'sans effet et sera annulée.'),
         ],
@@ -375,8 +376,8 @@ class _BookingSheetState extends State<_BookingSheet> {
             key: const Key('booking_create_button'),
             onPressed:
                 (_selected == null || provider.isActing) ? null : _create,
-            child: Text(
-                provider.isActing ? 'Création…' : 'Créer la réservation'),
+            child:
+                Text(provider.isActing ? 'Création…' : 'Créer la réservation'),
           ),
           if (provider.actionError != null) ...[
             const SizedBox(height: 8),

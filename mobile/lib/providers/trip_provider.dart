@@ -56,8 +56,7 @@ class TripProvider extends ChangeNotifier {
     notifyListeners();
     try {
       final data = await _api.listTrips();
-      _trips =
-          data.map(Trip.fromJson).toList();
+      _trips = data.map(Trip.fromJson).toList();
     } catch (e) {
       _error = e.toString();
     }

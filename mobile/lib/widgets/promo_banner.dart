@@ -38,7 +38,8 @@ class PromoBanner extends StatelessWidget {
                 loadingBuilder: (context, child, progress) {
                   if (progress == null) return child;
                   return Container(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    color:
+                        Theme.of(context).colorScheme.surfaceContainerHighest,
                   );
                 },
               ),
@@ -84,14 +85,13 @@ class PromoBanner extends StatelessWidget {
                   ],
                 ),
               ),
-              if (promotion.ctaLabel != null &&
-                  promotion.ctaLabel!.isNotEmpty)
+              if (promotion.ctaLabel != null && promotion.ctaLabel!.isNotEmpty)
                 Positioned(
                   top: 12,
                   right: 12,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.9),
                       borderRadius: BorderRadius.circular(999),

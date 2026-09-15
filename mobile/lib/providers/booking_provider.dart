@@ -102,7 +102,10 @@ class BookingProvider extends ChangeNotifier {
     _isActing = false;
     final u = updated;
     if (u != null) {
-      _items = [for (final b in _items) if (b.id == u.id) u else b];
+      _items = [
+        for (final b in _items)
+          if (b.id == u.id) u else b
+      ];
     }
     notifyListeners();
     return updated;
@@ -123,7 +126,10 @@ class BookingProvider extends ChangeNotifier {
     _isActing = false;
     final u = updated;
     if (u != null) {
-      _items = [for (final b in _items) if (b.id == u.id) u else b];
+      _items = [
+        for (final b in _items)
+          if (b.id == u.id) u else b
+      ];
     }
     notifyListeners();
     return updated;

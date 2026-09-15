@@ -32,7 +32,8 @@ void main() {
     });
 
     test('keeps the M3 font family', () {
-      expect(AppTheme.fromTenant(primaryColor: '#1E90FF').fontFamily, 'Poppins');
+      expect(
+          AppTheme.fromTenant(primaryColor: '#1E90FF').fontFamily, 'Poppins');
     });
   });
 

@@ -57,8 +57,7 @@ POIProvider _providerWith(List<Map<String, dynamic>> items) {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('renders exactly one marker per geolocated POI',
-      (tester) async {
+  testWidgets('renders exactly one marker per geolocated POI', (tester) async {
     await tester.pumpWidget(_wrap(_providerWith(mapPoisJson)));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));

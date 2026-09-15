@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 import 'package:discover_ai/app.dart';
 import 'package:discover_ai/providers/auth_provider.dart';
 import 'package:discover_ai/providers/poi_provider.dart';
-import 'package:discover_ai/providers/tenant_provider.dart';
 
 import 'helpers/fakes.dart';
 

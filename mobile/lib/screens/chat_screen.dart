@@ -69,8 +69,8 @@ class _ChatScreenState extends State<ChatScreen> {
                 ? const _EmptyState()
                 : ListView.builder(
                     reverse: true,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 4, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                     itemCount: chat.messages.length,
                     itemBuilder: (context, index) {
                       final msg =
@@ -79,42 +79,42 @@ class _ChatScreenState extends State<ChatScreen> {
                     },
                   ),
           ),
-                    if (chat.isSending && hasMessages)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: colorScheme.surface,
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(6),
-                          topRight: Radius.circular(20),
-                          bottomLeft: Radius.circular(20),
-                          bottomRight: Radius.circular(20),
-                        ),
-                        border: Border.all(
-                            color: colorScheme.outlineVariant, width: 1),
+          if (chat.isSending && hasMessages)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: colorScheme.surface,
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(6),
+                        topRight: Radius.circular(20),
+                        bottomLeft: Radius.circular(20),
+                        bottomRight: Radius.circular(20),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _ThinkingDot(colorScheme.outline),
-                          const SizedBox(width: 6),
-                          _ThinkingDot(colorScheme.outline),
-                          const SizedBox(width: 6),
-                          _ThinkingDot(colorScheme.outline),
-                          const SizedBox(width: 8),
-                          Text('En train de réfléchir…',
-                              style: Theme.of(context).textTheme.labelSmall),
-                        ],
-                      ),
+                      border: Border.all(
+                          color: colorScheme.outlineVariant, width: 1),
                     ),
-                  ],
-                ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _ThinkingDot(colorScheme.outline),
+                        const SizedBox(width: 6),
+                        _ThinkingDot(colorScheme.outline),
+                        const SizedBox(width: 6),
+                        _ThinkingDot(colorScheme.outline),
+                        const SizedBox(width: 8),
+                        Text('En train de réfléchir…',
+                            style: Theme.of(context).textTheme.labelSmall),
+                      ],
+                    ),
+                  ),
+                ],
               ),
+            ),
           if (!chat.isSending && chat.suggestions.isNotEmpty)
             _SuggestionStrip(
               suggestions: chat.suggestions,
@@ -134,8 +134,7 @@ class _ChatScreenState extends State<ChatScreen> {
               child: Text(
                 chat.error!,
                 style: TextStyle(
-                    color:
-                        Theme.of(context).colorScheme.onErrorContainer),
+                    color: Theme.of(context).colorScheme.onErrorContainer),
               ),
             ),
           _InputBar(
@@ -149,6 +148,7 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 }
+
 class _EmptyState extends StatelessWidget {
   const _EmptyState();
 
@@ -198,8 +198,7 @@ class _InputBarState extends State<_InputBar> {
 
   @override
   Widget build(BuildContext context) {
-    final canSend =
-        !widget.sending && widget.controller.text.trim().isNotEmpty;
+    final canSend = !widget.sending && widget.controller.text.trim().isNotEmpty;
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -288,4 +287,3 @@ class _SuggestionStrip extends StatelessWidget {
     );
   }
 }
-

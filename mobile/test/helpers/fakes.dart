@@ -193,7 +193,7 @@ class FakeTripsApi implements TripsApi {
     return sampleTripJson();
   }
 
-    @override
+  @override
   Future<List<Map<String, dynamic>>> listTrips() async {
     listCalls++;
     return [sampleTripJson()];
@@ -256,9 +256,10 @@ Map<String, dynamic> sampleBookingJson({
 /// create → pending, consent true → confirmed + EXT-…, false → cancelled,
 /// cancel → cancelled.
 class FakeBookingsApi implements BookingsApi {
-  FakeBookingsApi({List<Map<String, dynamic>>? bookings, this.failCreate = false})
-      : bookings = List<Map<String, dynamic>>.from(
-            bookings ?? [sampleBookingJson()]);
+  FakeBookingsApi(
+      {List<Map<String, dynamic>>? bookings, this.failCreate = false})
+      : bookings =
+            List<Map<String, dynamic>>.from(bookings ?? [sampleBookingJson()]);
 
   final bool failCreate;
   final List<Map<String, dynamic>> bookings;
@@ -391,3 +392,125 @@ class InMemoryTokenStore implements TokenStore {
   @override
   Future<void> writeToken(String value) async => token = value;
 }
+
+class FakeTenantsApi implements TenantsApi {
+  FakeTenantsApi({Map<String, dynamic>? tenant, this.fail = false})
+      : tenant = tenant ?? sampleTenantJson();
+
+  final bool fail;
+  final Map<String, dynamic> tenant;
+
+  @override
+  Future<Map<String, dynamic>> getCurrentTenant() async {
+    if (fail) {
+      throw ApiException(500, '{"detail":"Internal server error"}');
+    }
+    return Map<String, dynamic>.from(tenant);
+  }
+
+  /// Field-complete Algeria fixture mirroring the backend
+  /// TenantCategoryResponse: the 11 AppConfig slugs (thermal included —
+  /// 1:1 parity with the compile-time fallback catalog), parent families
+  /// and icon suggestions as the real API would advertise. `description`
+  /// is deliberately present on some entries and absent on others so
+  /// TenantCategory.fromJson exercises both its nullable paths.
+  @override
+  Future<List<Map<String, dynamic>>> getTenantCategories() async {
+    if (fail) {
+      throw ApiException(500, '{"detail":"Internal server error"}');
+    }
+    const catalog = [
+      (
+        'culture',
+        'Culture & Médinas',
+        'museum',
+        'culture',
+        'Medinas, museums and living heritage.'
+      ),
+      (
+        'history',
+        'Histoire & Antiquité',
+        'history_edu',
+        'history',
+        'Ruins and ancient civilizations.'
+      ),
+      (
+        'nature',
+        'Nature & Parcs',
+        'forest',
+        'nature',
+        'National parks and natural landscapes.'
+      ),
+      (
+        'desert',
+        'Sahara & Oasis',
+        'wb_sunny',
+        'nature',
+        'Sand dunes, oases and camel treks.'
+      ),
+      (
+        'adventure',
+        'Aventure & Trek',
+        'hiking',
+        'adventure',
+        'Hiking, climbing and outdoor sports.'
+      ),
+      (
+        'food',
+        'Gastronomie',
+        'restaurant',
+        'food',
+        'Local dishes and culinary traditions.'
+      ),
+      (
+        'beaches',
+        'Plages & Mer',
+        'beach_access',
+        'nature',
+        'Mediterranean coastline and hidden coves.'
+      ),
+      (
+        'monuments',
+        'Monuments & Sites',
+        'explore',
+        'history',
+        'Iconic landmarks and viewpoints.'
+      ),
+      ('crafts', 'Artisanat & Souks', 'shopping_bag', 'culture', null),
+      ('thermal', 'Thermalisme', 'hot_tub', 'wellness', null),
+      (
+        'wellness',
+        'Détente & Hammam',
+        'spa',
+        'wellness',
+        'Hammams, spas and relaxation.'
+      ),
+    ];
+    return [
+      for (final (i, (slug, label, icon, family, description))
+          in catalog.indexed)
+        {
+          'id': 'cat-$slug',
+          'tenant_id': 'tenant-1',
+          'slug': slug,
+          'label': label,
+          'parent_family': family,
+          'icon_suggestion': icon,
+          if (description != null) 'description': description,
+          'display_order': i + 1,
+          'ai_generated': true,
+        },
+    ];
+  }
+}
+
+Map<String, dynamic> sampleTenantJson() => {
+      'id': 'tenant-1',
+      'slug': 'algeria',
+      'name': 'Algeria',
+      'default_language': 'fr',
+      'supported_languages': ['fr', 'ar', 'en'],
+      'default_currency': 'DZD',
+      'primary_color': '#006233',
+      'secondary_color': '#FFFFFF',
+    };

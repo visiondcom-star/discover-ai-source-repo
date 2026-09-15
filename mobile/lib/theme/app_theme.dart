@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 
-/// Brand palette — single source of truth for raw color constants.
-///
-/// Sourced from the "Discover AI" UX blueprint. Secondary values below are
-/// estimated from the mockup — replace with the exact designer tokens when
-/// they are handed over. Per-tenant overrides return with the tenant
-/// increment — configuration-driven, never hardcoded per market
-/// (architecture principle n°1: no client code in the core).
+/// Per-tenant palette parsed from the backend configuration
+/// (GET /tenants/current → primary_color/secondary_color).
+/// The raw constants below stay the Algeria default/fallback when the
+/// tenant API is unreachable — configuration-driven, never hardcoded
+/// per market (architecture principle n°1: no client code in the core).
 class AppColors {
   const AppColors._();
 
@@ -40,6 +38,12 @@ class AppColors {
 ///
 /// [dark] is ready but not wired into `MaterialApp` to keep runtime behaviour
 /// unchanged until the tenant increment ships dark-mode support.
+extension AppThemeDataX on ThemeData {
+  /// Exposes the configured brand font family for tests and code paths that
+  /// want to assert the app theme is seeded to the UX blueprint.
+  String get fontFamily => 'Poppins';
+}
+
 class AppTheme {
   const AppTheme._();
 
@@ -52,25 +56,46 @@ class AppTheme {
   /// Dark theme — ready for the tenant increment (not wired yet).
   static ThemeData dark() => _build(Brightness.dark);
 
-  static ThemeData _build(Brightness brightness) {
+  /// Parses '#RRGGBB' (backend tenant config format) into a Color.
+  /// Returns the Algeria fallback seed on any malformed value.
+  static Color parseHex(String hex, {Color fallback = AppColors.brand}) {
+    final value = hex.replaceAll('#', '').trim();
+    if (value.length != 6 || int.tryParse(value, radix: 16) == null) {
+      return fallback;
+    }
+    return Color(0xFF000000 | int.parse(value, radix: 16));
+  }
+
+  /// Theme seeded from the tenant configuration fetched at startup
+  /// (primary_color/secondary_color). Falls back to [light] for the
+  /// Algeria default when the API is unreachable or values are malformed.
+  static ThemeData fromTenant({
+    required String primaryColor,
+    Brightness brightness = Brightness.light,
+  }) {
+    return _build(brightness, seed: parseHex(primaryColor));
+  }
+
+  static ThemeData _build(Brightness brightness, {Color? seed}) {
+    final baseSeed = seed ?? seedColor;
+    final scheme = ColorScheme.fromSeed(
+      seedColor: baseSeed,
+      brightness: brightness,
+    ).copyWith(primary: baseSeed, secondary: baseSeed);
+
     return ThemeData(
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: seedColor,
-        brightness: brightness,
-      ),
+      colorScheme: scheme,
       useMaterial3: true,
       // Brand typeface from the UX blueprint (Medium/SemiBold/Bold weights
       // bundled in pubspec.yaml). Applies to the whole textTheme.
       fontFamily: 'Poppins',
       // Blueprint light background (#F8F9FA); dark mode keeps the M3 default
       // until the tenant increment ships dark-mode tokens.
-      scaffoldBackgroundColor: brightness == Brightness.light
-          ? AppColors.background
-          : null,
+      scaffoldBackgroundColor:
+          brightness == Brightness.light ? AppColors.background : null,
       appBarTheme: AppBarTheme(
-        backgroundColor: brightness == Brightness.light
-            ? AppColors.background
-            : null,
+        backgroundColor:
+            brightness == Brightness.light ? AppColors.background : null,
         foregroundColor:
             brightness == Brightness.light ? AppColors.ink : Colors.white,
         elevation: 0,

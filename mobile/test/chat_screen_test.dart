@@ -30,15 +30,15 @@ void main() {
         findsOneWidget);
 
     // Type a real message and send.
-        await tester.enterText(
-        find.byKey(const Key('chat_input')),
+    await tester.enterText(find.byKey(const Key('chat_input')),
         'Bonjour, quels sont les sites à Alger ?');
     await tester.pump(); // flush controller listener -> canSend=true
     await tester.tap(find.byKey(const Key('chat_send')));
     await tester.pumpAndSettle();
 
     // The user turn is added locally...
-    expect(find.text('Bonjour, quels sont les sites à Alger ?'), findsOneWidget);
+    expect(
+        find.text('Bonjour, quels sont les sites à Alger ?'), findsOneWidget);
     // ...and the assistant reply is built exclusively from the API envelope.
     expect(fake.calls, 1);
     expect(fake.lastMessage, 'Bonjour, quels sont les sites à Alger ?');
@@ -63,8 +63,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-        await tester.enterText(
-        find.byKey(const Key('chat_input')), 'Test erreur');
+    await tester.enterText(find.byKey(const Key('chat_input')), 'Test erreur');
     await tester.pump(); // flush controller listener -> canSend=true
     await tester.tap(find.byKey(const Key('chat_send')));
     await tester.pumpAndSettle();
@@ -111,7 +110,7 @@ void main() {
     expect(fake.lastMessage, 'Suggestion 1');
     expect(find.text('Suggestion 1'), findsNWidgets(2),
         reason: 'the user bubble text plus the refreshed chip');
-    expect(find.text('Mocked assistant reply to: Suggestion 1'),
-        findsOneWidget);
+    expect(
+        find.text('Mocked assistant reply to: Suggestion 1'), findsOneWidget);
   });
 }

@@ -56,7 +56,7 @@ class POICard extends StatelessWidget {
                         color: Theme.of(context)
                             .colorScheme
                             .secondaryContainer
-                            .withOpacity(0.6),
+                            .withValues(alpha: 0.6),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
@@ -81,13 +81,13 @@ class POICard extends StatelessWidget {
                 children: [
                   for (final exp in poi.experiences.take(2))
                     Container(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 1.5),
                       decoration: BoxDecoration(
                         color: Theme.of(context)
                             .colorScheme
                             .primaryContainer
-                            .withOpacity(0.5),
+                            .withValues(alpha: 0.5),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
@@ -113,8 +113,7 @@ class POICard extends StatelessWidget {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.star_rounded,
-                      size: 16, color: Colors.amber),
+                  const Icon(Icons.star_rounded, size: 16, color: Colors.amber),
                   Text(poi.averageRating!.toStringAsFixed(1)),
                 ],
               ),

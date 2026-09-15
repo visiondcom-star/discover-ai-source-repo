@@ -22,6 +22,7 @@ import 'package:discover_ai/providers/booking_provider.dart';
 import 'package:discover_ai/providers/chat_provider.dart';
 import 'package:discover_ai/providers/poi_provider.dart';
 import 'package:discover_ai/providers/promotion_provider.dart';
+import 'package:discover_ai/providers/tenant_provider.dart';
 import 'package:discover_ai/providers/trip_provider.dart';
 import 'package:discover_ai/widgets/poi_card.dart';
 
@@ -52,6 +53,7 @@ void main() {
           // Same requirement for Accueil's promo banner (real /promotions
           // API — HomeScreen reads this provider at initState).
           ChangeNotifierProvider(create: (_) => PromotionProvider()),
+          ChangeNotifierProvider(create: (_) => TenantProvider()),
         ],
         child: const DiscoverAIApp(),
       );
@@ -89,11 +91,11 @@ void main() {
   }
 
   Future<void> typeCredentials(WidgetTester tester, String password) async {
-    await tester.enterText(
-        find.byKey(const Key('login_email')), demoEmail);
-    await tester.enterText(
-        find.byKey(const Key('login_password')), password);
-    await tester.tap(find.text('Sign in'));
+    await tester.enterText(find.byKey(const Key('login_email')), demoEmail);
+    await tester.enterText(find.byKey(const Key('login_password')), password);
+    await tester.ensureVisible(find.byKey(const Key('login_submit')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('login_submit')));
   }
 
   testWidgets('V1 — LoginScreen renders with email/password fields',
@@ -220,13 +222,12 @@ void main() {
     expect(timelineMounted, isTrue,
         reason: 'timeline list must replace the form after generation');
 
-    int countKeysStartingWith(String prefix) =>
-        find
-            .byWidgetPredicate((w) =>
-                w.key is ValueKey<String> &&
-                (w.key as ValueKey<String>).value.startsWith(prefix))
-            .evaluate()
-            .length;
+    int countKeysStartingWith(String prefix) => find
+        .byWidgetPredicate((w) =>
+            w.key is ValueKey<String> &&
+            (w.key as ValueKey<String>).value.startsWith(prefix))
+        .evaluate()
+        .length;
 
     final dayCards = countKeysStartingWith('day_card_');
     final poiRows = countKeysStartingWith('timeline_poi_');
@@ -270,6 +271,8 @@ void main() {
     await tester.tap(poiCardFinder.first);
     await waitFor(tester, find.byKey(const Key('poi_detail_book_button')),
         timeout: const Duration(seconds: 20));
+    await tester.ensureVisible(find.byKey(const Key('poi_detail_book_button')));
+    await tester.pumpAndSettle();
 
     // Booking sheet: real GET /bookings/adapters/available (JWT required).
     await tester.tap(find.byKey(const Key('poi_detail_book_button')));
@@ -315,8 +318,8 @@ void main() {
         (w.key as ValueKey<String>).value.startsWith('booking_card_'));
     await waitFor(tester, bookingCardFinder,
         timeout: const Duration(seconds: 20));
-    final extRefFinder = find.byWidgetPredicate(
-        (w) => w is Text && (w.data ?? '').contains('EXT-'));
+    final extRefFinder = find
+        .byWidgetPredicate((w) => w is Text && (w.data ?? '').contains('EXT-'));
     expect(extRefFinder, findsWidgets,
         reason: 'the confirmed booking must expose its EXT-… reference');
 

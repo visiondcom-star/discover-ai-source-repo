@@ -20,24 +20,25 @@ class Tenant {
   });
 
   factory Tenant.fromJson(Map<String, dynamic> json) => Tenant(
-    id: json['id'] ?? '',
-    slug: json['slug'] ?? '',
-    name: json['name'] ?? '',
-    defaultLanguage: json['default_language'] ?? 'fr',
-    supportedLanguages: List<String>.from(json['supported_languages'] ?? []),
-    defaultCurrency: json['default_currency'] ?? '',
-    primaryColor: json['primary_color'] ?? '#006233',
-    secondaryColor: json['secondary_color'] ?? '#FFFFFF',
-  );
+        id: json['id'] ?? '',
+        slug: json['slug'] ?? '',
+        name: json['name'] ?? '',
+        defaultLanguage: json['default_language'] ?? 'fr',
+        supportedLanguages:
+            List<String>.from(json['supported_languages'] ?? []),
+        defaultCurrency: json['default_currency'] ?? '',
+        primaryColor: json['primary_color'] ?? '#006233',
+        secondaryColor: json['secondary_color'] ?? '#FFFFFF',
+      );
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'slug': slug,
-    'name': name,
-    'default_language': defaultLanguage,
-    'supported_languages': supportedLanguages,
-    'default_currency': defaultCurrency,
-    'primary_color': primaryColor,
-    'secondary_color': secondaryColor,
-  };
+        'id': id,
+        'slug': slug,
+        'name': name,
+        'default_language': defaultLanguage,
+        'supported_languages': supportedLanguages,
+        'default_currency': defaultCurrency,
+        'primary_color': primaryColor,
+        'secondary_color': secondaryColor,
+      };
 }

@@ -185,8 +185,8 @@ class PoiDetailScreen extends StatelessWidget {
                             errorBuilder: (_, __, ___) => Container(
                               width: 200,
                               color: theme.colorScheme.surfaceContainerHighest,
-                              child:
-                                  const Icon(Icons.image_not_supported_outlined),
+                              child: const Icon(
+                                  Icons.image_not_supported_outlined),
                             ),
                           ),
                         ),
@@ -305,8 +305,8 @@ class _InfoTile extends StatelessWidget {
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
-          style: theme.textTheme.bodyMedium
-              ?.copyWith(fontWeight: FontWeight.w600),
+          style:
+              theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
         ),
       ],
     );

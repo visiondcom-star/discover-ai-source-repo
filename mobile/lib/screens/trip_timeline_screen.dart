@@ -65,7 +65,8 @@ class _TripTimelineView extends StatelessWidget {
                           children: [
                             Chip(label: Text('${trip.numDays} day(s)')),
                             Chip(label: Text('Budget: ${trip.budgetLevel}')),
-                            for (final i in trip.interests) Chip(label: Text(i)),
+                            for (final i in trip.interests)
+                              Chip(label: Text(i)),
                           ],
                         ),
                       ],

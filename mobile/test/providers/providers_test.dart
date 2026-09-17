@@ -7,7 +7,7 @@ import 'package:discover_ai/providers/poi_provider.dart';
 import 'package:discover_ai/providers/trip_provider.dart';
 import 'package:discover_ai/services/api_service.dart';
 
-import 'helpers/fakes.dart';
+import '../helpers/fakes.dart';
 
 class _ThrowingPoisApi implements PoisApi {
   @override

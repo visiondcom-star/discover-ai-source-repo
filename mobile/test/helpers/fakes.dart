@@ -1,5 +1,6 @@
 import 'package:discover_ai/services/api_service.dart';
 import 'package:discover_ai/services/secure_storage_service.dart';
+import 'package:discover_ai/models/research_job.dart';
 
 /// Deterministic AuthApi fake for tests.
 class FakeAuthApi implements AuthApi {
@@ -514,3 +515,100 @@ Map<String, dynamic> sampleTenantJson() => {
       'primary_color': '#006233',
       'secondary_color': '#FFFFFF',
     };
+// test/fakes/research_api_fake.dart
+//
+// À fusionner dans le fakes.dart existant du projet (mêmes conventions que
+// les autres Fake*Api : contrôle manuel des réponses pour les widget tests
+// et flutter drive, pas d'appel réseau réel).
+
+class FakeResearchApi implements ResearchApi {
+  /// File d'attente des jobs renvoyés successivement par runResearch().
+  /// Permet de scripter une séquence pending -> processing -> done dans un test.
+  final List<ResearchJob> jobsQueue;
+
+  /// Réponses successives de getJobStatus(), indexées par appel (dans l'ordre).
+  final List<ResearchJob> statusSequence;
+
+  /// Si non-null, force une exception au prochain appel de runResearch().
+  ApiException? runResearchError;
+
+  int _statusCallCount = 0;
+  int _runResearchCallCount = 0;
+
+  final List<Map<String, String>> runResearchCalls = [];
+  final List<Map<String, String>> getJobStatusCalls = [];
+
+  FakeResearchApi({
+    List<ResearchJob>? jobsQueue,
+    List<ResearchJob>? statusSequence,
+    this.runResearchError,
+  })  : jobsQueue = jobsQueue ?? [],
+        statusSequence = statusSequence ?? [];
+
+  @override
+  Future<Map<String, dynamic>> runResearch({
+    required String tenantId,
+    required String triggerType,
+  }) async {
+    runResearchCalls.add({
+      'tenantId': tenantId,
+      'triggerType': triggerType,
+    });
+
+    if (runResearchError != null) {
+      throw runResearchError!;
+    }
+
+    if (_runResearchCallCount >= jobsQueue.length) {
+      throw StateError(
+        'FakeResearchApi.runResearch appelé plus de fois que de jobs '
+        'fournis dans jobsQueue (${jobsQueue.length})',
+      );
+    }
+
+    return Map<String, dynamic>.from(
+        jobsQueue[_runResearchCallCount++].toJson());
+  }
+
+  @override
+  Future<Map<String, dynamic>> getJobStatus({
+    required String tenantId,
+    required String jobId,
+  }) async {
+    getJobStatusCalls.add({'tenantId': tenantId, 'jobId': jobId});
+
+    if (statusSequence.isEmpty) {
+      throw StateError('FakeResearchApi.statusSequence est vide');
+    }
+
+    // Reste sur la dernière valeur une fois la séquence épuisée, pour
+    // simuler un job resté "done"/"failed" si le polling continue d'appeler.
+    final index = _statusCallCount < statusSequence.length
+        ? _statusCallCount
+        : statusSequence.length - 1;
+    _statusCallCount++;
+
+    return Map<String, dynamic>.from(statusSequence[index].toJson());
+  }
+}
+
+/// Exemple d'usage dans un test :
+///
+/// final fake = FakeResearchApi(
+///   jobsQueue: [
+///     ResearchJob(id: 'job1', tenantId: 't1',
+///       triggerType: ResearchTriggerType.manualRefresh,
+///       status: ResearchJobStatus.pending),
+///   ],
+///   statusSequence: [
+///     ResearchJob(id: 'job1', tenantId: 't1',
+///       triggerType: ResearchTriggerType.manualRefresh,
+///       status: ResearchJobStatus.processing),
+///     ResearchJob(id: 'job1', tenantId: 't1',
+///       triggerType: ResearchTriggerType.manualRefresh,
+///       status: ResearchJobStatus.done,
+///       categoriesProposed: 5, categoriesAutoPublished: 3,
+///       categoriesPendingReview: 2),
+///   ],
+/// );
+/// final provider = ResearchProvider(fake, pollInterval: Duration(milliseconds: 10));

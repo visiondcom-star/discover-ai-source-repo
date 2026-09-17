@@ -33,11 +33,22 @@ class Settings(BaseSettings):
     # LLM Provider
     LLM_PROVIDER: str = "mock"
     USE_PGVECTOR: bool = False
-
     # OpenAI
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o"
     EMBEDDING_MODEL: str = "text-embedding-3-small"
+
+    # Research pipeline (destination → Niveau 2 categories)
+    # Default OFF: LLM proposals land as status='proposed' and wait for a
+    # human validation (PATCH .../status) — see Principe 5, never auto-activate.
+    RESEARCH_AUTO_PUBLISH: bool = False
+    # Auto-publish only kicks in when this flag is True AND every proposal
+    # carries at least this confidence (0..1).
+    RESEARCH_AUTO_PUBLISH_MIN_CONFIDENCE: float = 0.8
+    # Cosine similarity above which a new proposal is considered a
+    # near-duplicate of an existing tenant category ("Randonnée" vs
+    # "Trekking") and is dropped instead of inserted.
+    RESEARCH_SIMILARITY_THRESHOLD: float = 0.92
 
     # Default tenant
     DEFAULT_TENANT_SLUG: str = "algeria"

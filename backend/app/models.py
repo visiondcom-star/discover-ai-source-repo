@@ -1,7 +1,7 @@
 """SQLAlchemy ORM models with multi-tenant isolation."""
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, Text, ForeignKey, JSON, ARRAY, UniqueConstraint
+from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, Text, ForeignKey, JSON, ARRAY, UniqueConstraint, Index
 from sqlalchemy.dialects.postgresql import UUID
 from pgvector.sqlalchemy import Vector
 from sqlalchemy.orm import relationship
@@ -58,6 +58,8 @@ class Tenant(Base):
     chat_messages = relationship("ChatMessage", back_populates="tenant")
     promotions = relationship("Promotion", back_populates="tenant")
     tenant_categories = relationship("TenantCategory", back_populates="tenant", cascade="all, delete-orphan")
+    research_documents = relationship("DestinationResearchDocument", back_populates="tenant")
+    research_jobs = relationship("ResearchJob", back_populates="tenant")
 
 
 class TenantCategory(Base):
@@ -77,11 +79,97 @@ class TenantCategory(Base):
     display_order = Column(Integer, default=0)
     ai_generated = Column(Boolean, default=True)
 
+    # Cycle de vie d'une catégorie (pipeline de recherche IA, Principe 5:
+    # les propositions LLM n'activent rien seules — 'proposed' reste invisible
+    # pour trip planner / filtres POI / chat tant qu'un humain n'a pas
+    # validé. 'active' est le défaut : les lignes créées hors pipeline
+    # (seed, création manuelle admin) sont immédiatement utilisables.)
+    status = Column(String(20), nullable=False, default="active",
+                    server_default="active", index=True)  # proposed | active | rejected
+    confidence = Column(Float, nullable=True)             # confiance LLM 0..1 (extraction)
+    # Provenance : document de recherche d'origine de la proposition.
+    research_document_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("destination_research_documents.id"),
+        nullable=True,
+    )
+    # Embedding de la description (même dimension que POI.embedding) pour la
+    # dédup sémantique à la proposition ("Randonnée" vs "Trekking") et la
+    # future recherche. Gated par USE_PGVECTOR côté service.
+    embedding = Column(Vector(1536), nullable=True)
+
     __table_args__ = (
         UniqueConstraint("tenant_id", "slug", name="uq_tenant_category_slug"),
     )
 
     tenant = relationship("Tenant", back_populates="tenant_categories")
+
+
+class DestinationResearchDocument(Base):
+    """Document brut collecté par le pipeline de recherche destination.
+
+    Niveau 1-2 du pipeline (Recherche → Ingestion) : stockage brut avec
+    provenance, avant normalisation/extraction LLM. La dédup basique passe
+    par content_hash (sha256 du texte normalisé), unique par tenant —
+    relancer le pipeline sur les mêmes sources est donc idempotent.
+    """
+    __tablename__ = "destination_research_documents"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    # guide | office_tourisme | wiki | autre — valeur contrainte côté
+    # schémas Pydantic (pattern), pas de CHECK en DB (style du codebase)
+    source_type = Column(String(20), nullable=False)
+    # Provenance précise (nullable : sources hors-ligne / docs internes)
+    source_url = Column(String(500), nullable=True)
+    raw_text = Column(Text, nullable=False)
+    language = Column(String(10), nullable=True)                  # détecté à l'ingestion
+    # raw | processed | discarded — la normalisation/extraction est en
+    # mémoire pendant le run ; 'processed' = le LLM a fini de travailler
+    # sur ce document (au moins une passe d'extraction consommée).
+    status = Column(String(20), nullable=False, default="raw",
+                    server_default="raw", index=True)
+    content_hash = Column(String(64), nullable=False)             # sha256 hex
+    collected_at = Column(DateTime, default=utcnow)
+    created_at = Column(DateTime, default=utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "content_hash", name="uq_research_doc_tenant_hash"),
+    )
+
+    tenant = relationship("Tenant", back_populates="research_documents")
+
+
+class ResearchJob(Base):
+    """Trackable job for the AI research pipeline (Niveau 2 dynamique).
+
+    One row per POST /tenants/{id}/research/run, updated in place as a
+    FastAPI BackgroundTask progresses it through
+    pending -> processing -> done|failed.
+    """
+    __tablename__ = "research_jobs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    trigger_type = Column(String(20), nullable=False)
+    # pending | processing | done | failed — validated via Pydantic pattern,
+    # not DB CHECK (codebase convention).
+    status = Column(String(20), nullable=False, default="pending",
+                    server_default="pending", index=True)
+    started_at = Column(DateTime, nullable=True)
+    finished_at = Column(DateTime, nullable=True)
+    categories_proposed = Column(Integer, nullable=False, default=0, server_default="0")
+    categories_auto_published = Column(Integer, nullable=False, default=0, server_default="0")
+    categories_pending_review = Column(Integer, nullable=False, default=0, server_default="0")
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+
+    __table_args__ = (
+        Index("ix_research_jobs_tenant_trigger_created",
+              "tenant_id", "trigger_type", "created_at"),
+    )
+
+    tenant = relationship("Tenant", back_populates="research_jobs")
 
 
 class User(Base):

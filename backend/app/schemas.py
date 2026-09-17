@@ -5,6 +5,21 @@ from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from uuid import UUID
 
 
+from app.constants import (
+    CATEGORY_STATUSES,
+    PARENT_FAMILIES,
+    RESEARCH_DOCUMENT_STATUSES,
+    RESEARCH_JOB_STATUSES,
+    RESEARCH_SOURCE_TYPES,
+    RESEARCH_TRIGGER_TYPES,
+)
+
+
+def _pattern(values: tuple[str, ...]) -> str:
+    """Builds an anchored alternation pattern from a fixed value set."""
+    return "^(?:" + "|".join(values) + ")$"
+
+
 # ============= Tenant Schemas =============
 class TenantBase(BaseModel):
     slug: str = Field(..., min_length=2, max_length=50)
@@ -85,11 +100,80 @@ class TenantCategoryCreate(TenantCategoryBase):
     pass
 
 
+class TenantCategoryStatusUpdate(BaseModel):
+    """Manual lifecycle transition (admin validation endpoint).
+
+    proposed → active (publish), proposed → rejected (discard),
+    active → rejected (retire). No self-transition, no resurrect.
+    """
+    status: str = Field(..., pattern=_pattern(CATEGORY_STATUSES))
+
+
 class TenantCategoryResponse(TenantCategoryBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
     tenant_id: UUID
+    status: str = Field(..., pattern=_pattern(CATEGORY_STATUSES))
+    confidence: Optional[float] = None
+
+
+# ============= Research Pipeline Schemas =============
+class ResearchDocumentIngest(BaseModel):
+    """Payload of POST /tenants/research/ingest (admin) — one raw document.
+
+    The service normalizes, hashes and dedups; the client only needs to
+    hand over the text and where it came from.
+    """
+    source_type: str = Field(..., pattern=_pattern(RESEARCH_SOURCE_TYPES))
+    source_url: Optional[str] = Field(None, max_length=500)
+    raw_text: str = Field(..., min_length=50)
+    language: Optional[str] = Field(None, max_length=10)
+
+
+class ResearchDocumentResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    tenant_id: UUID
+    source_type: str = Field(..., pattern=_pattern(RESEARCH_SOURCE_TYPES))
+    source_url: Optional[str] = None
+    language: Optional[str] = None
+    status: str = Field(..., pattern=_pattern(RESEARCH_DOCUMENT_STATUSES))
+    content_hash: str
+    collected_at: datetime
+    created_at: datetime
+    # Never expose raw_text in list responses — it can be hundreds of KB;
+    # GET /{id}/raw serves it explicitly.
+    title: Optional[str] = None
+
+
+class ResearchRunRequest(BaseModel):
+    """Payload of POST /tenants/{tenant_id}/research/run."""
+    trigger_type: str = Field(
+        default="manual_refresh", pattern=_pattern(RESEARCH_TRIGGER_TYPES)
+    )
+
+
+class ResearchJobResponse(BaseModel):
+    """Result of POST /tenants/research/run and GET .../research/jobs/{id}.
+
+    Mirrors mobile's ResearchJob.fromJson() field-for-field — keep the two
+    in sync if either changes.
+    """
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    tenant_id: UUID
+    trigger_type: str = Field(..., pattern=_pattern(RESEARCH_TRIGGER_TYPES))
+    status: str = Field(..., pattern=_pattern(RESEARCH_JOB_STATUSES))
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+    categories_proposed: int = 0
+    categories_auto_published: int = 0
+    categories_pending_review: int = 0
+    error_message: Optional[str] = None
+    created_at: datetime
 
 
 # ============= POI Schemas =============

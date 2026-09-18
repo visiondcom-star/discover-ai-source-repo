@@ -50,7 +50,9 @@ class ResearchProvider extends ChangeNotifier {
       }
     } on ApiException catch (e) {
       _isLoading = false;
-      _error = e.body;
+      _error = e.statusCode == 429
+          ? 'Une actualisation manuelle a déjà été effectuée ce mois-ci.'
+          : 'Échec du lancement du run de recherche.';
       notifyListeners();
     }
   }
@@ -68,7 +70,7 @@ class ResearchProvider extends ChangeNotifier {
           _pollTimer?.cancel();
         }
       } on ApiException catch (e) {
-        _error = e.body;
+        _error = 'Impossible de récupérer le statut du job.';
         _pollTimer?.cancel();
         notifyListeners();
       }

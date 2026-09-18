@@ -83,7 +83,7 @@ void main() {
         triggerType: ResearchTriggerType.manualRefresh,
       );
 
-      expect(provider.error, 'Déjà actualisé ce mois-ci');
+      expect(provider.error, 'Une actualisation manuelle a déjà été effectuée ce mois-ci.');
       expect(provider.currentJob, isNull);
       expect(provider.isLoading, isFalse);
 

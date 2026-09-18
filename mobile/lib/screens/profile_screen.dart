@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../config.dart';
 import '../providers/auth_provider.dart';
+import 'admin_research_screen.dart';
 
 /// Profil tab — account summary and the explicit logout action.
 ///
@@ -66,6 +67,21 @@ class ProfileScreen extends StatelessWidget {
               leading: Icon(Icons.tune, color: scheme.onSurfaceVariant),
               title: const Text('Préférences'),
               subtitle: const Text('À venir — prochain incrément'),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            margin: EdgeInsets.zero,
+            child: ListTile(
+              key: const Key('admin_research_button'),
+              leading: Icon(Icons.travel_explore, color: scheme.primary),
+              title: const Text('Recherche IA — destination'),
+              subtitle: const Text('Admin : générer les catégories Niveau 2'),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const AdminResearchScreen(),
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 24),

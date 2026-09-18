@@ -14,6 +14,8 @@ class TenantCategory {
     this.description,
     this.displayOrder = 0,
     this.aiGenerated = true,
+    this.status = 'active',
+    this.confidence,
   });
 
   final String id;
@@ -25,6 +27,8 @@ class TenantCategory {
   final String? description;
   final int displayOrder;
   final bool aiGenerated;
+  final String status; // proposed | active | rejected
+  final double? confidence;
 
   factory TenantCategory.fromJson(Map<String, dynamic> json) => TenantCategory(
         id: json['id'] as String? ?? '',
@@ -36,6 +40,8 @@ class TenantCategory {
         description: json['description'] as String?,
         displayOrder: json['display_order'] as int? ?? 0,
         aiGenerated: json['ai_generated'] as bool? ?? true,
+        status: json['status'] as String? ?? 'active',
+        confidence: (json['confidence'] as num?)?.toDouble(),
       );
 
   Map<String, dynamic> toJson() => {
@@ -48,5 +54,7 @@ class TenantCategory {
         if (description != null) 'description': description,
         'display_order': displayOrder,
         'ai_generated': aiGenerated,
+        'status': status,
+        if (confidence != null) 'confidence': confidence,
       };
 }

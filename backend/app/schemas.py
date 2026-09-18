@@ -1,7 +1,7 @@
 """Pydantic schemas for request/response validation."""
 from datetime import datetime
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
 from uuid import UUID
 
 
@@ -146,6 +146,25 @@ class ResearchDocumentResponse(BaseModel):
     # Never expose raw_text in list responses — it can be hundreds of KB;
     # GET /{id}/raw serves it explicitly.
     title: Optional[str] = None
+
+
+class CategoryCandidate(BaseModel):
+    """Une proposition de catégorie Niveau 2 extraite par le LLM."""
+    label: str = Field(..., min_length=2, max_length=80)
+    description: str = Field(..., min_length=10, max_length=500)
+    parent_level1_id: Optional[str] = None
+    mapping_confidence: float = Field(..., ge=0.0, le=1.0)
+    category_confidence: float = Field(..., ge=0.0, le=1.0)
+    suggested_icon: Optional[str] = None
+    source_document_ids: list[UUID] = Field(..., min_length=1)
+
+    @field_validator("parent_level1_id")
+    @classmethod
+    def parent_must_be_known_or_null(cls, v, info):
+        allowed = (info.context or {}).get("level1_ids") or []
+        if v is not None and v not in allowed:
+            raise ValueError(f"parent_level1_id '{v}' hors de la liste fermée")
+        return v
 
 
 class ResearchRunRequest(BaseModel):

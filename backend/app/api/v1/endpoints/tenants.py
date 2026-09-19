@@ -7,7 +7,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Header, 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.database import get_db, AsyncSessionLocal
-from app.models import Tenant, TenantCategory, ResearchJob, DestinationResearchDocument
+from app.models import Tenant, TenantCategory, ResearchJob, DestinationResearchDocument, User
 from app.schemas import (
     TenantCreate,
     TenantUpdate,
@@ -20,7 +20,7 @@ from app.schemas import (
     ResearchDocumentResponse,
 )
 from app.constants import RESEARCH_MANUAL_REFRESH_COOLDOWN_DAYS
-from app.dependencies import get_current_admin
+from app.dependencies import get_current_admin, get_tenant_admin
 
 router = APIRouter()
 
@@ -68,6 +68,9 @@ async def create_tenant_category(
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
 
+    if str(tenant.id) != str(current_admin.tenant_id):
+        raise HTTPException(status_code=403, detail="Tenant mismatch")
+
     existing = await db.execute(
         select(TenantCategory).where(
             TenantCategory.tenant_id == tenant.id,
@@ -87,9 +90,15 @@ async def create_tenant_category(
 @router.get("/", response_model=List[TenantResponse])
 async def list_tenants(
     db: AsyncSession = Depends(get_db),
-    current_admin: Tenant = Depends(get_current_admin),
+    current_admin: User = Depends(get_current_admin),
 ):
-    result = await db.execute(select(Tenant).where(Tenant.is_active == True))
+    """Un admin ne voit que son propre tenant (pas de super-admin de plateforme)."""
+    result = await db.execute(
+        select(Tenant).where(
+            Tenant.id == current_admin.tenant_id,
+            Tenant.is_active == True,
+        )
+    )
     return result.scalars().all()
 
 
@@ -112,10 +121,10 @@ async def create_tenant(
 
 @router.patch("/{tenant_id}", response_model=TenantResponse)
 async def update_tenant(
-    tenant_id: str,
+    tenant_id: UUID,
     data: TenantUpdate,
     db: AsyncSession = Depends(get_db),
-    current_admin: Tenant = Depends(get_current_admin),
+    current_admin: User = Depends(get_tenant_admin),
 ):
     result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
     tenant = result.scalar_one_or_none()
@@ -139,7 +148,7 @@ async def ingest_research_document(
     tenant_id: UUID,
     data: ResearchDocumentIngest,
     db: AsyncSession = Depends(get_db),
-    current_admin: Tenant = Depends(get_current_admin),
+    current_admin: User = Depends(get_tenant_admin),
 ):
     """Ingère un document brut de recherche destination (étape Ingestion).
 
@@ -218,7 +227,7 @@ async def start_tenant_research(
     data: ResearchRunRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    current_admin: Tenant = Depends(get_current_admin),
+    current_admin: User = Depends(get_tenant_admin),
 ):
     """Lance un run de recherche IA pour un tenant (background execution).
 
@@ -271,7 +280,7 @@ async def get_research_job_status(
     tenant_id: UUID,
     job_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_admin: Tenant = Depends(get_current_admin),
+    current_admin: User = Depends(get_tenant_admin),
 ):
     """Retourne le statut d'un job de recherche (polling mobile)."""
     result = await db.execute(

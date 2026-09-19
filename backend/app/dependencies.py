@@ -1,4 +1,5 @@
 """FastAPI dependencies for auth, DB, tenant, and CSRF protection."""
+from uuid import UUID
 import secrets
 from typing import Optional
 
@@ -125,3 +126,17 @@ async def get_current_admin(
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
+
+
+async def get_tenant_admin(
+    tenant_id: UUID,
+    current_admin: User = Depends(get_current_admin),
+) -> User:
+    """Admin autorisé à agir sur le tenant visé par l'URL (/{tenant_id}/...).
+
+    Un admin n'administre que son propre tenant. Le 404 (et non 403) évite de
+    révéler l'existence d'un autre tenant.
+    """
+    if str(current_admin.tenant_id) != str(tenant_id):
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    return current_admin

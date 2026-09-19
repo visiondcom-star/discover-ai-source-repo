@@ -11,6 +11,7 @@ import app.database as database_module
 from app.core.security import get_password_hash
 from app.database import Base, get_db
 from app.main import app
+import app.api.v1.endpoints.tenants as tenants_endpoints
 from app.models import POI, Tenant, User
 
 TEST_DATABASE_URL = os.getenv(
@@ -35,6 +36,8 @@ async def override_get_db():
 database_module.engine = engine
 database_module.AsyncSessionLocal = TestSessionLocal
 tenant_module.AsyncSessionLocal = TestSessionLocal
+# tenants.py importe AsyncSessionLocal par nom (tâche de fond de recherche).
+tenants_endpoints.AsyncSessionLocal = TestSessionLocal
 
 app.dependency_overrides[get_db] = override_get_db
 
@@ -153,3 +156,44 @@ async def admin_headers(client, test_admin, test_tenant):
     )
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}", "X-Tenant-Slug": "test-tenant"}
+
+
+@pytest_asyncio.fixture
+async def other_tenant(db_session):
+    tenant = Tenant(
+        slug="other-tenant",
+        name="Other Tenant",
+        default_language="fr",
+        default_currency="EUR",
+    )
+    db_session.add(tenant)
+    await db_session.commit()
+    await db_session.refresh(tenant)
+    return tenant
+
+
+@pytest_asyncio.fixture
+async def other_admin(db_session, other_tenant):
+    user = User(
+        tenant_id=other_tenant.id,
+        email="admin@other.example.com",
+        hashed_password=get_password_hash("otheradminpass123"),
+        full_name="Other Admin",
+        is_active=True,
+        is_admin=True,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture
+async def other_admin_headers(client, other_admin, other_tenant):
+    response = await client.post(
+        "/api/v1/auth/login",
+        headers={"X-Tenant-Slug": other_tenant.slug},
+        json={"email": "admin@other.example.com", "password": "otheradminpass123"},
+    )
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}", "X-Tenant-Slug": other_tenant.slug}

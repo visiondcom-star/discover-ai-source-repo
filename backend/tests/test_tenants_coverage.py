@@ -48,40 +48,6 @@ async def _tenant_id(client, slug):
     return response.json()["id"]
 
 
-@pytest.fixture(autouse=True)
-def _route_background_task_to_test_db(monkeypatch):
-    """Redirige la tâche de fond de /research/run vers la base de test.
-
-    `_run_research_pipeline` ouvre sa propre session via `AsyncSessionLocal`,
-    importé par nom dans tenants.py : le routage vers la base de test fait
-    dans conftest.py ne l'atteint pas (elle cherchait l'hôte `postgres`).
-    La session est résolue au moment de l'appel, après le setup de conftest.
-    """
-    import app.api.v1.endpoints.tenants as tenants_module
-    import app.core.tenant as tenant_module
-
-    def _session(*args, **kwargs):
-        return tenant_module.AsyncSessionLocal(*args, **kwargs)
-
-    monkeypatch.setattr(tenants_module, "AsyncSessionLocal", _session)
-
-
-@pytest.fixture
-async def other_tenant(client, admin_headers, test_tenant):
-    response = await client.post(
-        f"{API}/",
-        headers=admin_headers,
-        json={
-            "slug": OTHER_SLUG,
-            "name": "Other Tenant",
-            "default_language": "fr",
-            "default_currency": "EUR",
-        },
-    )
-    assert response.status_code == 201, response.text
-    return response.json()
-
-
 # ------------------------------------------- résolution du tenant (header)
 
 
@@ -183,10 +149,6 @@ async def test_category_slug_must_be_unique_within_tenant(
     assert duplicate.status_code == 400
     assert "already exists" in duplicate.json()["detail"]
 
-    # TODO : vérifier que le même slug reste autorisé dans un AUTRE tenant.
-    # Il faut pour cela un jeton admin de cet autre tenant (fixture à ajouter
-    # dans conftest.py) : le jeton du tenant de base est refusé (403).
-
 
 # ------------------------------------------------------------ update tenant
 
@@ -223,13 +185,6 @@ async def test_update_tenant_unknown_id_returns_404(client, admin_headers):
     assert response.status_code == 404
 
 
-@pytest.mark.xfail(
-    reason=(
-        "update_tenant type tenant_id en str : un id non-UUID provoque "
-        "probablement une erreur DB (500) au lieu d'une 422."
-    ),
-    strict=False,
-)
 async def test_update_tenant_invalid_id_returns_422(client, admin_headers):
     response = await client.patch(
         f"{API}/not-a-uuid", headers=admin_headers, json={"name": "x"}
@@ -275,7 +230,7 @@ async def test_ingest_document_is_idempotent(client, admin_headers, test_tenant)
 
 
 async def test_same_document_in_two_tenants_creates_two_documents(
-    client, admin_headers, test_tenant, other_tenant
+    client, admin_headers, other_admin_headers
 ):
     id_a = await _tenant_id(client, BASE_SLUG)
     id_b = await _tenant_id(client, OTHER_SLUG)
@@ -284,7 +239,9 @@ async def test_same_document_in_two_tenants_creates_two_documents(
         f"{API}/{id_a}/research/documents", headers=admin_headers, json=DOCUMENT_PAYLOAD
     )
     doc_b = await client.post(
-        f"{API}/{id_b}/research/documents", headers=admin_headers, json=DOCUMENT_PAYLOAD
+        f"{API}/{id_b}/research/documents",
+        headers=other_admin_headers,
+        json=DOCUMENT_PAYLOAD,
     )
     assert doc_a.status_code == 200 and doc_b.status_code == 200
     # L'idempotence est par (tenant_id, content_hash), jamais globale.
@@ -333,7 +290,7 @@ async def test_run_research_returns_202_and_job_completes(
 
 
 async def test_manual_refresh_is_rate_limited_per_tenant(
-    client, admin_headers, test_tenant, other_tenant
+    client, admin_headers, other_admin_headers
 ):
     id_a = await _tenant_id(client, BASE_SLUG)
     id_b = await _tenant_id(client, OTHER_SLUG)
@@ -350,13 +307,13 @@ async def test_manual_refresh_is_rate_limited_per_tenant(
 
     # Le cooldown d'un tenant ne bloque pas un autre tenant.
     other = await client.post(
-        f"{API}/{id_b}/research/run", headers=admin_headers, json=RUN_MANUAL
+        f"{API}/{id_b}/research/run", headers=other_admin_headers, json=RUN_MANUAL
     )
     assert other.status_code == 202, other.text
 
 
 async def test_research_job_is_not_visible_from_another_tenant(
-    client, admin_headers, test_tenant, other_tenant
+    client, admin_headers, other_admin_headers
 ):
     id_a = await _tenant_id(client, BASE_SLUG)
     id_b = await _tenant_id(client, OTHER_SLUG)
@@ -373,7 +330,7 @@ async def test_research_job_is_not_visible_from_another_tenant(
     assert own.status_code == 200
 
     foreign = await client.get(
-        f"{API}/{id_b}/research/jobs/{job['id']}", headers=admin_headers
+        f"{API}/{id_b}/research/jobs/{job['id']}", headers=other_admin_headers
     )
     assert foreign.status_code == 404
 
@@ -396,23 +353,9 @@ async def test_research_job_status_requires_admin(client, test_tenant, auth_head
     assert response.status_code == 403
 
 
-# ------------------------------------------------ trou d'isolation suspecté
-# Le jeton admin est lié à un tenant (403 « Tenant mismatch » sur les routes
-# qui lisent X-Tenant-Slug), mais les routes /{tenant_id}/... ne vérifient pas
-# que tenant_id est celui de l'admin. Les tests ci-dessous décrivent le
-# comportement ATTENDU. Ils sont marqués xfail(strict=True) : tant que la
-# protection n'existe pas, ils sont « attendus en échec » ; le jour où elle
-# est ajoutée ils passent en XPASS et font échouer la suite, ce qui rappelle
-# de retirer le marqueur (le test devient alors un vrai garde-fou).
-
-CROSS_TENANT_REASON = (
-    "Un admin du tenant A peut agir sur le tenant B via l'id dans l'URL "
-    "(aucun contrôle admin.tenant_id == tenant_id). À trancher : admin "
-    "par tenant ou super-admin de plateforme ?"
-)
+# ------------------------------------------- isolation des admins par tenant
 
 
-@pytest.mark.xfail(strict=True, reason=CROSS_TENANT_REASON)
 async def test_admin_cannot_ingest_document_into_another_tenant(
     client, admin_headers, test_tenant, other_tenant
 ):
@@ -425,7 +368,6 @@ async def test_admin_cannot_ingest_document_into_another_tenant(
     assert response.status_code in (403, 404)
 
 
-@pytest.mark.xfail(strict=True, reason=CROSS_TENANT_REASON)
 async def test_admin_cannot_update_another_tenant(
     client, admin_headers, test_tenant, other_tenant
 ):
@@ -436,7 +378,6 @@ async def test_admin_cannot_update_another_tenant(
     assert response.status_code in (403, 404)
 
 
-@pytest.mark.xfail(strict=True, reason=CROSS_TENANT_REASON)
 async def test_admin_cannot_start_research_for_another_tenant(
     client, admin_headers, test_tenant, other_tenant
 ):
@@ -445,3 +386,39 @@ async def test_admin_cannot_start_research_for_another_tenant(
         f"{API}/{id_b}/research/run", headers=admin_headers, json=RUN_MANUAL
     )
     assert response.status_code in (403, 404)
+
+
+async def test_list_tenants_returns_only_the_admin_tenant(
+    client, admin_headers, other_admin_headers
+):
+    mine = await client.get(f"{API}/", headers=admin_headers)
+    theirs = await client.get(f"{API}/", headers=other_admin_headers)
+    assert mine.status_code == 200 and theirs.status_code == 200
+    assert [t["slug"] for t in mine.json()] == [BASE_SLUG]
+    assert [t["slug"] for t in theirs.json()] == [OTHER_SLUG]
+
+
+async def test_same_category_slug_is_allowed_in_another_tenant(
+    client, admin_headers, other_admin_headers
+):
+    for headers in (admin_headers, other_admin_headers):
+        response = await client.post(
+            f"{API}/categories", headers=headers, json=CATEGORY_PAYLOAD
+        )
+        assert response.status_code == 201, response.text
+
+
+async def test_admin_cannot_read_research_job_of_another_tenant_by_url(
+    client, admin_headers, other_admin_headers
+):
+    id_a = await _tenant_id(client, BASE_SLUG)
+    job = (
+        await client.post(
+            f"{API}/{id_a}/research/run", headers=admin_headers, json=RUN_MANUAL
+        )
+    ).json()
+
+    response = await client.get(
+        f"{API}/{id_a}/research/jobs/{job['id']}", headers=other_admin_headers
+    )
+    assert response.status_code == 404

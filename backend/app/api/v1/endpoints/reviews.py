@@ -41,7 +41,7 @@ async def create_review(
     poi_id: str,
     data: ReviewCreate,
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     current_user: User = Depends(get_current_user),
 ):
     poi = await _tenant_poi(db, x_tenant_slug, poi_id)
@@ -71,7 +71,7 @@ async def create_review(
 async def list_reviews(
     poi_id: str,
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     current_user: User = Depends(get_current_user),
 ):
     poi = await _tenant_poi(db, x_tenant_slug, poi_id)
@@ -90,7 +90,7 @@ async def get_review(
     poi_id: str,
     review_id: str,
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     current_user: User = Depends(get_current_user),
 ):
     poi = await _tenant_poi(db, x_tenant_slug, poi_id)
@@ -115,7 +115,7 @@ async def update_review(
     review_id: str,
     data: ReviewUpdate,
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     current_user: User = Depends(get_current_user),
 ):
     poi = await _tenant_poi(db, x_tenant_slug, poi_id)
@@ -150,7 +150,7 @@ async def delete_review(
     poi_id: str,
     review_id: str,
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     current_user: User = Depends(get_current_user),
 ):
     poi = await _tenant_poi(db, x_tenant_slug, poi_id)

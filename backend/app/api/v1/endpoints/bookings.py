@@ -24,7 +24,7 @@ ADAPTERS = {
 async def create_booking(
     data: BookingCreate,
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     current_user = Depends(get_current_user),
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)
@@ -59,7 +59,7 @@ async def create_booking(
 @router.get("/", response_model=List[BookingResponse])
 async def list_bookings(
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     current_user = Depends(get_current_user),
     status_filter: str = None,
 ):
@@ -79,7 +79,7 @@ async def list_bookings(
 async def get_booking(
     booking_id: str,
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     current_user = Depends(get_current_user),
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)
@@ -103,7 +103,7 @@ async def give_consent(
     booking_id: str,
     data: ConsentRequest,
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     current_user = Depends(get_current_user),
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)
@@ -138,7 +138,7 @@ async def give_consent(
 async def cancel_booking(
     booking_id: str,
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     current_user = Depends(get_current_user),
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)
@@ -168,7 +168,7 @@ async def cancel_booking(
 @router.get("/adapters/available")
 async def list_adapters(
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     current_user = Depends(get_current_user),
 ):
     return {"adapters": ADAPTERS}

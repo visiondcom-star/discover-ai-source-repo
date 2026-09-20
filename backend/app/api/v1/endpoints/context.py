@@ -29,7 +29,7 @@ WEATHER_MOCK = {
 async def get_weather(
     city: str = Query(..., min_length=2),
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)
 
@@ -70,7 +70,7 @@ async def get_forecast(
     city: str = Query(..., min_length=2),
     days: int = Query(5, ge=1, le=14),
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)
     conditions = ["Ensoleillé", "Partiellement nuageux", "Nuageux", "Pluie légère", "Orageux"]
@@ -96,7 +96,7 @@ async def get_forecast(
 @router.get("/events")
 async def get_events(
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     city: Optional[str] = None,
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)
@@ -139,7 +139,7 @@ async def get_events(
 async def publish_event(
     data: ContextEventCreate,
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     current_user = Depends(get_current_user),
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)
@@ -154,7 +154,7 @@ async def publish_event(
 @router.get("/notifications")
 async def get_notifications(
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     current_user = Depends(get_current_user),
     unread_only: bool = False,
 ):
@@ -188,7 +188,7 @@ async def get_notifications(
 @router.post("/notifications/read-all")
 async def mark_all_read(
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     current_user = Depends(get_current_user),
 ):
     return {"marked_as_read": 2}

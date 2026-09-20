@@ -26,7 +26,7 @@ _COOKIE_MAX_AGE = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
 async def register(
     data: UserRegister,
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)
 
@@ -54,7 +54,7 @@ async def login(
     data: UserLogin,
     response: Response,
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)
 

@@ -460,3 +460,16 @@ async def test_manual_refresh_returns_429_with_several_recent_jobs(
         json=RUN_MANUAL,
     )
     assert response.status_code == 429
+
+
+async def test_tenant_header_is_required(client, admin_headers):
+    # Plus de repli silencieux sur un tenant par défaut (principe 1 du CLAUDE.md).
+    response = await client.get(f"{API}/current")
+    assert response.status_code == 422
+
+    response = await client.get(f"{API}/categories")
+    assert response.status_code == 422
+
+    only_token = {"Authorization": admin_headers["Authorization"]}
+    response = await client.get(f"{API}/", headers=only_token)
+    assert response.status_code == 422

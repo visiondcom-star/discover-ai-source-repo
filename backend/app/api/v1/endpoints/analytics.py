@@ -17,7 +17,7 @@ router = APIRouter()
 async def track_event(
     data: AnalyticsTrackRequest,
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     current_user = Depends(get_current_user),
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)
@@ -38,7 +38,7 @@ async def track_event(
 async def track_batch(
     events: List[AnalyticsTrackRequest],
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     current_user = Depends(get_current_user),
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)
@@ -60,7 +60,7 @@ async def track_batch(
 @router.get("/dashboard/overview", response_model=DashboardOverview)
 async def dashboard_overview(
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     current_user = Depends(get_current_user),
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)
@@ -103,7 +103,7 @@ async def dashboard_overview(
 @router.get("/dashboard/content")
 async def content_analytics(
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     current_user = Depends(get_current_user),
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)
@@ -128,7 +128,7 @@ async def content_analytics(
 @router.get("/dashboard/users")
 async def user_analytics(
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     current_user = Depends(get_current_user),
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)
@@ -158,7 +158,7 @@ async def user_analytics(
 async def export_data(
     export_type: str,
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     current_user = Depends(get_current_user),
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)

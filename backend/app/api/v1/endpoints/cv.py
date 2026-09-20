@@ -15,7 +15,7 @@ router = APIRouter()
 async def identify_object(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     current_user = Depends(get_current_user),
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)
@@ -38,7 +38,7 @@ async def identify_object(
 async def get_ar_assets(
     poi_id: str,
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     current_user = Depends(get_current_user),
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)
@@ -76,7 +76,7 @@ async def get_nearby_ar(
     lon: float = Query(...),
     radius: float = Query(1000, ge=100, le=10000),
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     current_user = Depends(get_current_user),
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)

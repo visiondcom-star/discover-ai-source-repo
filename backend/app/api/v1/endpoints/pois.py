@@ -21,7 +21,7 @@ router = APIRouter()
 @router.get("", response_model=POIListResponse, include_in_schema=False)
 async def list_pois(
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     city: Optional[str] = Query(None),
     category: Optional[str] = Query(None),
     tag: Optional[str] = Query(None),
@@ -77,7 +77,7 @@ async def list_pois(
 async def get_poi(
     poi_id: str,
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)
     result = await db.execute(
@@ -93,7 +93,7 @@ async def get_poi(
 async def create_poi(
     data: POICreate,
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     current_user: User = Depends(get_current_user),
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)
@@ -127,7 +127,7 @@ async def update_poi(
     poi_id: str,
     data: POIUpdate,
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     current_user: User = Depends(get_current_user),
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)
@@ -151,7 +151,7 @@ async def update_poi(
 async def delete_poi(
     poi_id: str,
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     current_user: User = Depends(get_current_user),
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)

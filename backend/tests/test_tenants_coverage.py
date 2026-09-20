@@ -422,3 +422,16 @@ async def test_admin_cannot_read_research_job_of_another_tenant_by_url(
         f"{API}/{id_a}/research/jobs/{job['id']}", headers=other_admin_headers
     )
     assert response.status_code == 404
+
+
+async def test_admin_cannot_deactivate_own_tenant_via_api(
+    client, admin_headers, test_tenant
+):
+    tenant_id = await _tenant_id(client, BASE_SLUG)
+    response = await client.patch(
+        f"{API}/{tenant_id}", headers=admin_headers, json={"is_active": False}
+    )
+    assert response.status_code in (200, 422)
+
+    listed = await client.get(f"{API}/", headers=admin_headers)
+    assert [t["slug"] for t in listed.json()] == [BASE_SLUG]

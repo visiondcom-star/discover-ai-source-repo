@@ -9,7 +9,6 @@ from sqlalchemy import select
 from app.database import get_db, AsyncSessionLocal
 from app.models import Tenant, TenantCategory, ResearchJob, DestinationResearchDocument, User
 from app.schemas import (
-    TenantCreate,
     TenantUpdate,
     TenantResponse,
     TenantCategoryCreate,
@@ -100,23 +99,6 @@ async def list_tenants(
         )
     )
     return result.scalars().all()
-
-
-@router.post("/", response_model=TenantResponse, status_code=status.HTTP_201_CREATED)
-async def create_tenant(
-    data: TenantCreate,
-    db: AsyncSession = Depends(get_db),
-    current_admin: Tenant = Depends(get_current_admin),
-):
-    result = await db.execute(select(Tenant).where(Tenant.slug == data.slug))
-    if result.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Tenant slug already exists")
-
-    tenant = Tenant(**data.model_dump())
-    db.add(tenant)
-    await db.commit()
-    await db.refresh(tenant)
-    return tenant
 
 
 @router.patch("/{tenant_id}", response_model=TenantResponse)

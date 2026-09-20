@@ -5,6 +5,11 @@ Revises: 0004_poi_categories_array
 Create Date: 2026-09-11
 
 Creates the tenant_categories table backing TenantCategory (backend/app/models.py).
+The model was added in commit 99351ea without its migration — this fixes
+that gap. Without this table, app startup's init_db() crashes on the
+first SELECT against tenant_categories (UndefinedTableError), which
+looked like a hang because the error was only surfaced when called
+directly outside the lifespan's swallowed-exception context.
 """
 from typing import Sequence, Union
 
@@ -12,6 +17,7 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
+# revision identifiers, used by Alembic.
 revision: str = "0005_tenant_categories"
 down_revision: Union[str, None] = "0004_poi_categories_array"
 branch_labels: Union[str, Sequence[str], None] = None

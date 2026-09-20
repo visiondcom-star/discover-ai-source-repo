@@ -435,3 +435,28 @@ async def test_admin_cannot_deactivate_own_tenant_via_api(
 
     listed = await client.get(f"{API}/", headers=admin_headers)
     assert [t["slug"] for t in listed.json()] == [BASE_SLUG]
+
+
+async def test_manual_refresh_returns_429_with_several_recent_jobs(
+    client, admin_headers, test_tenant, db_session
+):
+    # Deux jobs récents (ex. deux requêtes simultanées) ne doivent pas faire
+    # planter le contrôle du cooldown (MultipleResultsFound -> 500).
+    from app.models import ResearchJob
+
+    for _ in range(2):
+        db_session.add(
+            ResearchJob(
+                tenant_id=test_tenant.id,
+                trigger_type="manual_refresh",
+                status="done",
+            )
+        )
+    await db_session.commit()
+
+    response = await client.post(
+        f"{API}/{test_tenant.id}/research/run",
+        headers=admin_headers,
+        json=RUN_MANUAL,
+    )
+    assert response.status_code == 429

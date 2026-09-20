@@ -234,8 +234,9 @@ async def start_tenant_research(
                 ResearchJob.created_at >= cutoff,
             )
             .order_by(ResearchJob.created_at.desc())
+            .limit(1)
         )
-        if result.scalar_one_or_none():
+        if result.scalars().first():
             raise HTTPException(
                 status_code=429,
                 detail="Une actualisation manuelle a déjà été effectuée ce mois-ci.",

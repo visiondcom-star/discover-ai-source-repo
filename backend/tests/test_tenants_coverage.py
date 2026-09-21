@@ -422,3 +422,54 @@ async def test_admin_cannot_read_research_job_of_another_tenant_by_url(
         f"{API}/{id_a}/research/jobs/{job['id']}", headers=other_admin_headers
     )
     assert response.status_code == 404
+
+
+async def test_admin_cannot_deactivate_own_tenant_via_api(
+    client, admin_headers, test_tenant
+):
+    tenant_id = await _tenant_id(client, BASE_SLUG)
+    response = await client.patch(
+        f"{API}/{tenant_id}", headers=admin_headers, json={"is_active": False}
+    )
+    assert response.status_code in (200, 422)
+
+    listed = await client.get(f"{API}/", headers=admin_headers)
+    assert [t["slug"] for t in listed.json()] == [BASE_SLUG]
+
+
+async def test_manual_refresh_returns_429_with_several_recent_jobs(
+    client, admin_headers, test_tenant, db_session
+):
+    # Deux jobs récents (ex. deux requêtes simultanées) ne doivent pas faire
+    # planter le contrôle du cooldown (MultipleResultsFound -> 500).
+    from app.models import ResearchJob
+
+    for _ in range(2):
+        db_session.add(
+            ResearchJob(
+                tenant_id=test_tenant.id,
+                trigger_type="manual_refresh",
+                status="done",
+            )
+        )
+    await db_session.commit()
+
+    response = await client.post(
+        f"{API}/{test_tenant.id}/research/run",
+        headers=admin_headers,
+        json=RUN_MANUAL,
+    )
+    assert response.status_code == 429
+
+
+async def test_tenant_header_is_required(client, admin_headers):
+    # Plus de repli silencieux sur un tenant par défaut (principe 1 du CLAUDE.md).
+    response = await client.get(f"{API}/current")
+    assert response.status_code == 422
+
+    response = await client.get(f"{API}/categories")
+    assert response.status_code == 422
+
+    only_token = {"Authorization": admin_headers["Authorization"]}
+    response = await client.get(f"{API}/", headers=only_token)
+    assert response.status_code == 422

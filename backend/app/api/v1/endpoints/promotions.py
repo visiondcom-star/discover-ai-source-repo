@@ -21,7 +21,7 @@ router = APIRouter()
 @router.get("", response_model=PromotionListResponse, include_in_schema=False)
 async def list_promotions(
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
 ):
     """Public: active promotions for the current tenant, in display order.
 
@@ -64,7 +64,7 @@ async def list_promotions(
 async def create_promotion(
     data: PromotionCreate,
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     current_user: User = Depends(get_current_user),
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)
@@ -84,7 +84,7 @@ async def update_promotion(
     promotion_id: str,
     data: PromotionUpdate,
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     current_user: User = Depends(get_current_user),
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)
@@ -110,7 +110,7 @@ async def update_promotion(
 async def delete_promotion(
     promotion_id: str,
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     current_user: User = Depends(get_current_user),
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)

@@ -69,7 +69,7 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     request: Request = None,
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
 ) -> User:
     # Mobile: `Authorization: Bearer <token>`. Web: HttpOnly cookie. Bearer wins
     # when present (keeps the existing mobile/Bearer tests and callers intact).

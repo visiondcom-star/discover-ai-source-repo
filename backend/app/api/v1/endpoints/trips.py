@@ -17,7 +17,7 @@ router = APIRouter()
 async def generate_trip(
     data: TripGenerateRequest,
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     current_user: User = Depends(get_current_user),
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)
@@ -34,7 +34,7 @@ async def generate_trip(
 @router.get("/", response_model=List[TripResponse])
 async def list_trips(
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     current_user: User = Depends(get_current_user),
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)
@@ -50,7 +50,7 @@ async def list_trips(
 async def get_trip(
     trip_id: str,
     db: AsyncSession = Depends(get_db),
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     current_user: User = Depends(get_current_user),
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)

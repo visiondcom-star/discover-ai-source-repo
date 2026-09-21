@@ -26,7 +26,7 @@ router = APIRouter()
 
 @router.get("/current", response_model=TenantResponse)
 async def get_current_tenant_config(
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(Tenant).where(Tenant.slug == x_tenant_slug))
@@ -38,7 +38,7 @@ async def get_current_tenant_config(
 
 @router.get("/categories", response_model=List[TenantCategoryResponse])
 async def list_tenant_categories(
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     db: AsyncSession = Depends(get_db),
 ):
     """Retourne l'arborescence des catégories touristiques dynamiques pour le tenant actif."""
@@ -57,7 +57,7 @@ async def list_tenant_categories(
 @router.post("/categories", response_model=TenantCategoryResponse, status_code=status.HTTP_201_CREATED)
 async def create_tenant_category(
     data: TenantCategoryCreate,
-    x_tenant_slug: str = Header(default="algeria"),
+    x_tenant_slug: str = Header(...),
     db: AsyncSession = Depends(get_db),
     current_admin = Depends(get_current_admin),
 ):
@@ -234,8 +234,9 @@ async def start_tenant_research(
                 ResearchJob.created_at >= cutoff,
             )
             .order_by(ResearchJob.created_at.desc())
+            .limit(1)
         )
-        if result.scalar_one_or_none():
+        if result.scalars().first():
             raise HTTPException(
                 status_code=429,
                 detail="Une actualisation manuelle a déjà été effectuée ce mois-ci.",

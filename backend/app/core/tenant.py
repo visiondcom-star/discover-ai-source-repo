@@ -6,7 +6,7 @@ from app.models import Tenant
 from app.database import AsyncSessionLocal
 
 
-async def get_tenant_from_header(x_tenant_slug: str = Header(default="algeria")) -> Tenant:
+async def get_tenant_from_header(x_tenant_slug: str = Header(...)) -> Tenant:
     async with AsyncSessionLocal() as session:
         result = await session.execute(
             select(Tenant).where(Tenant.slug == x_tenant_slug, Tenant.is_active == True)
@@ -18,5 +18,7 @@ async def get_tenant_from_header(x_tenant_slug: str = Header(default="algeria"))
 
 
 async def get_current_tenant(request: Request) -> Tenant:
-    tenant_slug = request.headers.get("x-tenant-slug", "algeria")
+    tenant_slug = request.headers.get("x-tenant-slug")
+    if not tenant_slug:
+        raise HTTPException(status_code=400, detail="X-Tenant-Slug header is required")
     return await get_tenant_from_header(tenant_slug)

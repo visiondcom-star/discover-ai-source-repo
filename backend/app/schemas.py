@@ -44,7 +44,6 @@ class TenantUpdate(BaseModel):
     default_currency: Optional[str] = None
     primary_color: Optional[str] = None
     secondary_color: Optional[str] = None
-    is_active: Optional[bool] = None
     config: Optional[Dict[str, Any]] = None
 
 

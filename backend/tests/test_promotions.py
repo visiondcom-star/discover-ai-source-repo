@@ -172,37 +172,36 @@ async def test_update_and_delete_unknown_promotion_return_404(client, admin_head
     assert (await client.delete(url, headers=admin_headers)).status_code == 404
 
 
-# -------------------------------------------- défauts suspectés (xfail)
+# ------------------------------------------------ identifiants et dates
 
 
-@pytest.mark.xfail(
-    reason=(
-        "promotion_id est typé str : un id non-UUID provoque probablement une "
-        "erreur DB (500) au lieu d'une 422."
-    ),
-    strict=False,
-)
-async def test_update_with_invalid_id_returns_422(client, admin_headers):
-    response = await client.patch(
+async def test_update_and_delete_with_invalid_id_return_422(client, admin_headers):
+    patch = await client.patch(
         f"{URL}not-a-uuid", headers=admin_headers, json={"title": "x"}
     )
-    assert response.status_code == 422
+    delete = await client.delete(f"{URL}not-a-uuid", headers=admin_headers)
+    assert patch.status_code == 422
+    assert delete.status_code == 422
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Les colonnes starts_at/ends_at sont des DateTime naïfs : une date ISO "
-        "avec fuseau (« Z ») provoque probablement une erreur asyncpg (500)."
-    ),
-    strict=False,
-)
 async def test_create_accepts_timezone_aware_dates(client, admin_headers):
-    response = await client.post(
-        URL,
+    # Une date avec fuseau est convertie en UTC naïf : la première est expirée.
+    await _create(client, admin_headers, title="Expirée", ends_at="2020-01-01T00:00:00Z")
+    await _create(client, admin_headers, title="Visible", ends_at="2999-01-01T00:00:00+02:00")
+
+    assert await _titles(client, BASE_HEADERS) == ["Visible"]
+
+
+async def test_update_accepts_timezone_aware_dates(client, admin_headers):
+    created = await _create(client, admin_headers, title="Promo")
+
+    response = await client.patch(
+        f"{URL}{created['id']}",
         headers=admin_headers,
-        json=_payload(starts_at="2026-01-01T00:00:00Z"),
+        json={"ends_at": "2020-01-01T00:00:00Z"},
     )
-    assert response.status_code == 201
+    assert response.status_code == 200, response.text
+    assert await _titles(client, BASE_HEADERS) == []
 
 
 # ------------------------------------------ gestion réservée aux admins

@@ -1,5 +1,7 @@
 """Home-screen promo banner endpoints."""
+from datetime import timezone
 from typing import Optional
+from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Header, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func
@@ -11,6 +13,18 @@ from app.dependencies import get_current_admin
 from app.models import utcnow
 
 router = APIRouter()
+
+
+def _normalize_dates(values: dict) -> dict:
+    """Ramène starts_at/ends_at en UTC naïf, comme les colonnes DateTime.
+
+    Une date ISO avec fuseau (ex. « Z ») ferait sinon échouer l'écriture en base.
+    """
+    for field in ("starts_at", "ends_at"):
+        value = values.get(field)
+        if value is not None and value.tzinfo is not None:
+            values[field] = value.astimezone(timezone.utc).replace(tzinfo=None)
+    return values
 
 
 # Both "/promotions" and "/promotions/" are registered for the same reason
@@ -71,7 +85,7 @@ async def create_promotion(
 
     promotion = Promotion(
         tenant_id=tenant.id,
-        **data.model_dump(),
+        **_normalize_dates(data.model_dump()),
     )
     db.add(promotion)
     await db.commit()
@@ -81,7 +95,7 @@ async def create_promotion(
 
 @router.patch("/{promotion_id}", response_model=PromotionResponse)
 async def update_promotion(
-    promotion_id: str,
+    promotion_id: UUID,
     data: PromotionUpdate,
     db: AsyncSession = Depends(get_db),
     x_tenant_slug: str = Header(...),
@@ -97,7 +111,7 @@ async def update_promotion(
     if not promotion:
         raise HTTPException(status_code=404, detail="Promotion not found")
 
-    update_data = data.model_dump(exclude_unset=True)
+    update_data = _normalize_dates(data.model_dump(exclude_unset=True))
     for field, value in update_data.items():
         setattr(promotion, field, value)
 
@@ -108,7 +122,7 @@ async def update_promotion(
 
 @router.delete("/{promotion_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_promotion(
-    promotion_id: str,
+    promotion_id: UUID,
     db: AsyncSession = Depends(get_db),
     x_tenant_slug: str = Header(...),
     current_admin: User = Depends(get_current_admin),

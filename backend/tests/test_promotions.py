@@ -203,3 +203,23 @@ async def test_create_accepts_timezone_aware_dates(client, admin_headers):
         json=_payload(starts_at="2026-01-01T00:00:00Z"),
     )
     assert response.status_code == 201
+
+
+# ------------------------------------------ gestion réservée aux admins
+
+
+async def test_regular_user_cannot_manage_promotions(
+    client, auth_headers, admin_headers
+):
+    created = await _create(client, admin_headers, title="Officielle")
+    url = f"{URL}{created['id']}"
+
+    create = await client.post(URL, headers=auth_headers, json=_payload(title="Pirate"))
+    patch = await client.patch(url, headers=auth_headers, json={"title": "Piraté"})
+    delete = await client.delete(url, headers=auth_headers)
+    assert create.status_code == 403
+    assert patch.status_code == 403
+    assert delete.status_code == 403
+
+    # Rien n'a changé pour les visiteurs.
+    assert await _titles(client, BASE_HEADERS) == ["Officielle"]

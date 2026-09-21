@@ -7,7 +7,7 @@ from app.database import get_db
 from app.models import Promotion, User
 from app.schemas import PromotionCreate, PromotionUpdate, PromotionResponse, PromotionListResponse
 from app.core.tenant import get_tenant_from_header
-from app.dependencies import get_current_user
+from app.dependencies import get_current_admin
 from app.models import utcnow
 
 router = APIRouter()
@@ -65,7 +65,7 @@ async def create_promotion(
     data: PromotionCreate,
     db: AsyncSession = Depends(get_db),
     x_tenant_slug: str = Header(...),
-    current_user: User = Depends(get_current_user),
+    current_admin: User = Depends(get_current_admin),
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)
 
@@ -85,7 +85,7 @@ async def update_promotion(
     data: PromotionUpdate,
     db: AsyncSession = Depends(get_db),
     x_tenant_slug: str = Header(...),
-    current_user: User = Depends(get_current_user),
+    current_admin: User = Depends(get_current_admin),
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)
     result = await db.execute(
@@ -111,7 +111,7 @@ async def delete_promotion(
     promotion_id: str,
     db: AsyncSession = Depends(get_db),
     x_tenant_slug: str = Header(...),
-    current_user: User = Depends(get_current_user),
+    current_admin: User = Depends(get_current_admin),
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)
     result = await db.execute(

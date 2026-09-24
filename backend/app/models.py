@@ -1,10 +1,10 @@
 """SQLAlchemy ORM models with multi-tenant isolation."""
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, Text, ForeignKey, JSON, ARRAY, UniqueConstraint, Index
+from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, Text, ForeignKey, JSON, ARRAY, UniqueConstraint, Index, Numeric
 from sqlalchemy.dialects.postgresql import UUID
 from pgvector.sqlalchemy import Vector
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, validates
 from app.database import Base
 
 
@@ -382,3 +382,64 @@ class ChatMessage(Base):
 
     tenant = relationship("Tenant", back_populates="chat_messages")
     user = relationship("User", back_populates="chat_messages")
+
+# Features dont le modèle est choisi par le tenant. « embeddings » est volontairement
+# absent : le modèle d'embedding est fixé au niveau plateforme (pgvector = dimension fixe).
+TENANT_CONFIGURABLE_FEATURES = ("chat", "research", "recommendation", "translation")
+
+
+class TenantAIConfig(Base):
+    """Configuration IA d'un tenant : provider, modèles par feature, limites.
+    Les secrets (clés API BYOK) sont dans TenantAICredential, jamais ici."""
+    __tablename__ = "tenant_ai_configs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    primary_provider = Column(String(32), nullable=False, default="openai")
+    fallback_provider = Column(String(32), nullable=True)   # stocké, pas encore utilisé
+    models = Column(JSON, nullable=False, default=dict)     # {"chat": "...", "research": "..."}
+    default_params = Column(JSON, nullable=False, default=dict)  # {"temperature": 0.7, "max_tokens": 1024}
+    enabled_features = Column(ARRAY(String), nullable=False, default=lambda: ["chat", "recommendation"])
+    monthly_spend_limit_usd = Column(Numeric(10, 4), nullable=True)  # None = pas de plafond
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+    tenant = relationship("Tenant")
+
+    @validates("models")
+    def _validate_models(self, _key, value):
+        value = value or {}
+        unknown = set(value) - set(TENANT_CONFIGURABLE_FEATURES)
+        if unknown:
+            raise ValueError(
+                f"Features non configurables par tenant : {sorted(unknown)} "
+                f"(autorisées : {list(TENANT_CONFIGURABLE_FEATURES)})"
+            )
+        return value
+
+
+class TenantAICredential(Base):
+    """Clé API BYOK d'un tenant pour un provider, chiffrée (AES-256-GCM, AAD tenant+provider).
+    Une ligne par (tenant, provider) : prépare le fallback avec des credentials distincts."""
+    __tablename__ = "tenant_ai_credentials"
+    __table_args__ = (UniqueConstraint("tenant_id", "provider", name="uq_tenant_ai_credential"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    provider = Column(String(32), nullable=False)
+    encrypted_key = Column(Text, nullable=False)   # jeton produit par CredentialCrypto
+    key_version = Column(Integer, nullable=False)  # version de la clé maître utilisée
+    key_last4 = Column(String(4), nullable=False)  # affichage UI uniquement
+    created_at = Column(DateTime, default=utcnow)
+    rotated_at = Column(DateTime, nullable=True)
+
+    tenant = relationship("Tenant")

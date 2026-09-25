@@ -12,6 +12,8 @@ from app.models import User, Tenant
 from app.core.security import decode_token
 from app.core.tenant import get_tenant_from_header
 
+TENANT_MISMATCH_DETAIL = "Tenant mismatch"
+
 security = HTTPBearer(auto_error=False)
 
 # ---- CSRF (double-submit cookie) helpers -------------------------------------
@@ -108,6 +110,17 @@ async def get_current_user(
 
     if not user or not user.is_active:
         raise HTTPException(status_code=404, detail="User not found")
+
+    # Défense en profondeur : la vérification ci-dessus ne compare que deux valeurs
+    # fournies par l'appelant (le token et l'en-tête). Ici on ancre la décision dans
+    # ce que la base sait réellement de l'utilisateur (user.tenant_id), pour rester
+    # protégé même si un futur flux émet un token sans revendication "tenant".
+    tenant_result = await db.execute(select(Tenant).where(Tenant.slug == x_tenant_slug))
+    request_tenant = tenant_result.scalar_one_or_none()
+    if not request_tenant:
+        raise HTTPException(status_code=404, detail=f"Tenant '{x_tenant_slug}' not found")
+    if user.tenant_id != request_tenant.id:
+        raise HTTPException(status_code=403, detail=TENANT_MISMATCH_DETAIL)
 
     return user
 

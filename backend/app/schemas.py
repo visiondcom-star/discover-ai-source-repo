@@ -479,3 +479,60 @@ class ReviewResponse(BaseModel):
     comment: Optional[str]
     created_at: datetime
     updated_at: datetime
+
+
+class TenantAIConfigUpdate(BaseModel):
+    """Corps de PUT /tenants/{tenant_id}/ai-config (upsert)."""
+    primary_provider: str = Field(..., min_length=2, max_length=32)
+    fallback_provider: Optional[str] = Field(None, max_length=32)
+    models: Dict[str, str] = {}          # ex: {"chat": "gpt-4o-mini", "research": "gpt-4o"}
+    default_params: Dict[str, Any] = {}  # ex: {"temperature": 0.7, "max_tokens": 800}
+    enabled_features: List[str] = ["chat", "recommendation"]
+    monthly_spend_limit_usd: Optional[float] = Field(None, ge=0)
+
+
+class TenantAIConfigResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    tenant_id: UUID
+    primary_provider: str
+    fallback_provider: Optional[str] = None
+    models: Dict[str, str]
+    default_params: Dict[str, Any]
+    enabled_features: List[str]
+    monthly_spend_limit_usd: Optional[float] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class TenantAICredentialCreate(BaseModel):
+    """Corps de PUT /tenants/{tenant_id}/ai-config/credentials/{provider}.
+    La clé en clair n'apparaît que dans cette requête ; jamais dans une réponse."""
+    api_key: str = Field(..., min_length=8)
+
+
+class ProviderTestResult(BaseModel):
+    """Réponse de POST .../credentials/{provider}/test.
+    `reason` est une des valeurs : None (succès), "no_credential",
+    "credential_unreadable", "invalid_api_key", "permission_denied",
+    "model_unavailable", "quota_exceeded", "network_error", "provider_error",
+    "unknown_error", "test_not_implemented_for_provider"."""
+    provider: str
+    connected: bool
+    reason: Optional[str] = None
+    model_tested: Optional[str] = None
+
+
+class TenantAICredentialResponse(BaseModel):
+    """Ne contient jamais encrypted_key ni la clé en clair — seulement ses 4 derniers
+    caractères, pour affichage admin (ex. 'sk-...1234')."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    tenant_id: UUID
+    provider: str
+    key_last4: str
+    key_version: int
+    created_at: datetime
+    rotated_at: Optional[datetime] = None

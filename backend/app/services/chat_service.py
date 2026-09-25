@@ -1,12 +1,14 @@
 """AI Chat service with RAG enhancement."""
 from typing import List, Dict, Any, Optional
+import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, text
 from app.models import ChatMessage, Tenant
 from app.config import get_settings
 from app.services.llm_providers.factory import get_llm_provider
+from app.services.tenant_llm_provider import get_tenant_llm_provider
 
-
+logger = structlog.get_logger(__name__)
 settings = get_settings()
 
 
@@ -57,6 +59,10 @@ Sois concis mais complet."""
         message: str,
         context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
+        # Provider du tenant (clé BYOK, modèle choisi), repli sur la config globale s'il n'en a pas.
+        # Résolu hors du try et avant le RAG : une erreur de configuration doit remonter
+        # à l'endpoint (403/503), pas devenir un message de chat ni coûter un embedding.
+        provider = await get_tenant_llm_provider(self.db, self.tenant.id, "chat")
         history = await self._get_history(user_id, limit=10)
         rag_context = await self._get_rag_context(message)
 
@@ -71,11 +77,12 @@ Sois concis mais complet."""
 
         messages.append({"role": "user", "content": message})
 
-        provider = get_llm_provider()
         try:
             assistant_message = await provider.complete(messages, temperature=0.7, max_tokens=800)
         except Exception as e:
-            assistant_message = f"Je suis désolé, je rencontre un problème technique. ({str(e)})"
+            # Jamais le détail au client : l'erreur d'un provider peut contenir un fragment de clé API.
+            logger.error("chat.completion_failed", tenant_id=str(self.tenant.id), error_type=type(e).__name__)
+            assistant_message = "Je suis désolé, je rencontre un problème technique. Réessaie dans un instant."
         suggestions = self._extract_suggestions(assistant_message)
 
         await self._save_message(user_id, "user", message, context)

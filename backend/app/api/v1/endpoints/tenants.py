@@ -20,6 +20,15 @@ from app.schemas import (
 )
 from app.constants import RESEARCH_MANUAL_REFRESH_COOLDOWN_DAYS
 from app.dependencies import get_current_admin, get_tenant_admin
+from app.services import tenant_ai_config_service as ai_config_service
+from app.services.tenant_ai_config_service import UnsupportedProviderError
+from app.schemas import (
+    TenantAIConfigUpdate,
+    TenantAIConfigResponse,
+    TenantAICredentialCreate,
+    TenantAICredentialResponse,
+    ProviderTestResult,
+)
 
 router = APIRouter()
 
@@ -254,7 +263,6 @@ async def start_tenant_research(
     background_tasks.add_task(_run_research_pipeline, job.id)
     return job
 
-
 @router.get(
     "/{tenant_id}/research/jobs/{job_id}",
     response_model=ResearchJobResponse,
@@ -276,3 +284,94 @@ async def get_research_job_status(
     if not job:
         raise HTTPException(status_code=404, detail="Research job not found")
     return job
+
+@router.get("/{tenant_id}/ai-config", response_model=TenantAIConfigResponse)
+async def get_tenant_ai_config(
+    tenant_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(get_tenant_admin),
+):
+    config = await ai_config_service.get_config(db, tenant_id)
+    if config is None:
+        raise HTTPException(status_code=404, detail="Configuration IA non définie pour ce tenant")
+    return config
+ 
+ 
+@router.put("/{tenant_id}/ai-config", response_model=TenantAIConfigResponse)
+async def upsert_tenant_ai_config(
+    tenant_id: UUID,
+    data: TenantAIConfigUpdate,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(get_tenant_admin),
+):
+    try:
+        return await ai_config_service.upsert_config(
+            db, tenant_id,
+            primary_provider=data.primary_provider,
+            fallback_provider=data.fallback_provider,
+            models=data.models,
+            default_params=data.default_params,
+            enabled_features=data.enabled_features,
+            monthly_spend_limit_usd=data.monthly_spend_limit_usd,
+        )
+    except (UnsupportedProviderError, ValueError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+ 
+ 
+@router.get("/{tenant_id}/ai-config/credentials", response_model=List[TenantAICredentialResponse])
+async def list_tenant_ai_credentials(
+    tenant_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(get_tenant_admin),
+):
+    return await ai_config_service.list_credentials(db, tenant_id)
+ 
+ 
+@router.put(
+    "/{tenant_id}/ai-config/credentials/{provider}",
+    response_model=TenantAICredentialResponse,
+)
+async def upsert_tenant_ai_credential(
+    tenant_id: UUID,
+    provider: str,
+    data: TenantAICredentialCreate,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(get_tenant_admin),
+):
+    try:
+        return await ai_config_service.upsert_credential(db, tenant_id, provider, data.api_key)
+    except (UnsupportedProviderError, ValueError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+ 
+ 
+@router.post(
+    "/{tenant_id}/ai-config/credentials/{provider}/test",
+    response_model=ProviderTestResult,
+)
+async def test_tenant_ai_credential(
+    tenant_id: UUID,
+    provider: str,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(get_tenant_admin),
+):
+    """Appel réel minimal (1 token) vers le provider, pour vérifier que la clé BYOK
+    enregistrée fonctionne. Toujours 200 : "aucun credential" et "clé invalide" sont
+    des résultats de test valides (connected=False, reason=...), pas des erreurs HTTP —
+    seul un provider non supporté (ex. 'gemini') reste un 400."""
+    try:
+        return await ai_config_service.test_connection(db, tenant_id, provider)
+    except UnsupportedProviderError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+ 
+ 
+@router.delete("/{tenant_id}/ai-config/credentials/{provider}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_tenant_ai_credential(
+    tenant_id: UUID,
+    provider: str,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(get_tenant_admin),
+):
+    deleted = await ai_config_service.delete_credential(db, tenant_id, provider)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Aucun credential enregistré pour ce provider")
+ 

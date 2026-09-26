@@ -10,6 +10,8 @@ Règles :
     * modèle = celui choisi pour la feature, sinon le modèle plateforme.
 - Le modèle d'embedding reste celui de la plateforme (jamais choisi par le tenant).
 - La clé déchiffrée n'est jamais loggée ni renvoyée : elle n'existe que dans le provider construit.
+- Le quota mensuel du tenant est vérifié pour *tous* les tenants, y compris ceux en repli
+  plateforme : un dépassement (hard limit) lève QuotaExceededError avant tout appel provider.
 """
 from __future__ import annotations
 
@@ -28,6 +30,9 @@ from app.services.llm_providers.base import LLMProvider
 from app.services.llm_providers.factory import get_llm_provider
 from app.services.llm_providers.mock_provider import MockProvider
 from app.services.llm_providers.openai_provider import OpenAIProvider
+# Ré-exporté pour les appelants (endpoints/chat_service) : ils attrapent l'erreur sans
+# importer le module de quota directement.
+from app.services.tenant_ai_quota_service import QuotaExceededError, check_quota  # noqa: F401
 
 logger = structlog.get_logger(__name__)
 
@@ -89,7 +94,8 @@ async def _load_credential(
 async def get_tenant_llm_provider(
     db: AsyncSession, tenant_id: object, feature: str
 ) -> LLMProvider:
-    """Retourne le provider LLM à utiliser pour ce tenant et cette feature."""
+    """Retourne le provider LLM à utiliser pour ce tenant et cette feature.
+    Lève QuotaExceededError si le quota mensuel du tenant est dépassé (hard limit)."""
     if feature not in TENANT_CONFIGURABLE_FEATURES:
         raise ValueError(
             f"Feature IA inconnue ou non configurable par tenant : {feature!r} "
@@ -97,6 +103,10 @@ async def get_tenant_llm_provider(
         )
     # Normalisé : l'AAD du chiffrement repose sur la forme canonique de l'UUID.
     tenant_id = uuid.UUID(str(tenant_id))
+
+    # Vérifié pour TOUS les tenants, y compris ceux sans TenantAIConfig (repli plateforme) :
+    # le quota protège le budget consommé, indépendamment du choix de provider.
+    await check_quota(db, tenant_id)
 
     config = await _load_config(db, tenant_id)
     if config is None:

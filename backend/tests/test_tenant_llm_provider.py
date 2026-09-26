@@ -67,6 +67,19 @@ def _patch_loaders(monkeypatch, config, credential=None):
     monkeypatch.setattr(mod, "_load_credential", load_credential)
 
 
+@pytest.fixture(autouse=True)
+def quota(monkeypatch):
+    """Le quota a ses propres tests (test_tenant_ai_quota_service) : ici il est isolé pour que
+    la résolution de provider reste testable sans base réelle."""
+    calls = []
+
+    async def fake_check_quota(db, tenant_id):
+        calls.append({"db": db, "tenant_id": tenant_id})
+
+    monkeypatch.setattr(mod, "check_quota", fake_check_quota)
+    return calls
+
+
 async def test_no_config_falls_back_to_global_provider(monkeypatch):
     sentinel = object()
     monkeypatch.setattr(mod, "get_llm_provider", lambda: sentinel)
@@ -145,6 +158,50 @@ async def test_master_key_only_needed_when_a_credential_exists(monkeypatch, reco
     monkeypatch.setattr(mod, "_get_crypto", no_key)
     _patch_loaders(monkeypatch, _config(), None)
     await mod.get_tenant_llm_provider(DB, TENANT, "chat")
+
+
+# --- quota (voir aussi test_tenant_ai_quota_service) -------------------------------------------
+
+async def test_quota_is_checked_even_without_tenant_config(monkeypatch, quota):
+    """Le repli plateforme n'exempte pas du quota : le budget est consommé pareil."""
+    sentinel = object()
+    monkeypatch.setattr(mod, "get_llm_provider", lambda: sentinel)
+    _patch_loaders(monkeypatch, None)
+
+    assert await mod.get_tenant_llm_provider(DB, TENANT, "chat") is sentinel
+    assert quota == [{"db": DB, "tenant_id": TENANT}]
+
+
+async def test_quota_receives_the_normalized_tenant_uuid(monkeypatch, quota):
+    _patch_loaders(monkeypatch, _config(), None)
+    await mod.get_tenant_llm_provider(DB, str(TENANT).upper(), "chat")
+    assert [call["tenant_id"] for call in quota] == [TENANT]
+
+
+async def test_quota_exceeded_propagates_before_reading_the_config(monkeypatch):
+    async def boom(*a, **k):
+        raise AssertionError("la config ne doit pas être lue si le quota est dépassé")
+
+    monkeypatch.setattr(mod, "_load_config", boom)
+
+    async def over(db, tenant_id):
+        raise mod.QuotaExceededError(tenant_id, 50, 50)
+
+    monkeypatch.setattr(mod, "check_quota", over)
+    with pytest.raises(mod.QuotaExceededError):
+        await mod.get_tenant_llm_provider(DB, TENANT, "chat")
+
+
+async def test_quota_exceeded_builds_no_provider(monkeypatch, recorded):
+    async def over(db, tenant_id):
+        raise mod.QuotaExceededError(tenant_id, 50, 50)
+
+    monkeypatch.setattr(mod, "check_quota", over)
+    _patch_loaders(monkeypatch, _config())
+
+    with pytest.raises(mod.QuotaExceededError):
+        await mod.get_tenant_llm_provider(DB, TENANT, "chat")
+    assert recorded == []
 
 
 # --- builder openai (sans le faux builder) -------------------------------------------------

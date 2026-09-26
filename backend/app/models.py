@@ -443,3 +443,96 @@ class TenantAICredential(Base):
     rotated_at = Column(DateTime, nullable=True)
 
     tenant = relationship("Tenant")
+QUOTA_METRICS = ("usd_cost", "credits", "tokens")
+AI_CALL_STATUSES = (
+    "success", "invalid_api_key", "permission_denied", "model_unavailable",
+    "quota_exceeded", "rate_limited", "network_error", "timeout",
+    "cancelled", "provider_error", "unknown_error",
+)  # aligné sur les catégories déjà renvoyées par _run_health_check
+
+
+class TenantAIQuotaConfig(Base):
+    """Quota mensuel IA d'un tenant : limite, consommation courante, comportement au seuil.
+    current_period_usage est un compteur dénormalisé (source de vérité = TenantAIUsageLog)."""
+    __tablename__ = "tenant_ai_quota_configs"
+
+    tenant_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    quota_metric = Column(String(16), nullable=False, default="usd_cost")
+    monthly_limit = Column(Numeric(12, 4), nullable=False, default=50)
+    current_period_usage = Column(Numeric(12, 4), nullable=False, default=0)
+    soft_limit_threshold_pct = Column(Integer, nullable=False, default=80)
+    soft_limit_alert_sent = Column(Boolean, nullable=False, default=False)
+    hard_limit_enforced = Column(Boolean, nullable=False, default=True)
+    billing_cycle_anchor_day = Column(Integer, nullable=False, default=1)
+    current_period_start = Column(DateTime, default=utcnow)
+    current_period_end = Column(DateTime, nullable=False)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+    tenant = relationship("Tenant")
+
+    @validates("quota_metric")
+    def _validate_quota_metric(self, _key, value):
+        if value not in QUOTA_METRICS:
+            raise ValueError(f"quota_metric invalide : {value!r} (autorisés : {QUOTA_METRICS})")
+        return value
+
+    @validates("soft_limit_threshold_pct")
+    def _validate_threshold(self, _key, value):
+        if not (1 <= value <= 100):
+            raise ValueError("soft_limit_threshold_pct doit être entre 1 et 100")
+        return value
+
+    @validates("billing_cycle_anchor_day")
+    def _validate_anchor_day(self, _key, value):
+        if not (1 <= value <= 28):
+            raise ValueError("billing_cycle_anchor_day doit être entre 1 et 28")
+        return value
+
+
+class TenantAIUsageLog(Base):
+    """Journal d'usage IA, append-only : une ligne par appel provider effectif.
+    Source de vérité pour l'audit/facturation ; TenantAIQuotaConfig.current_period_usage
+    n'est qu'un cache incrémenté dans la même transaction que l'insert ici."""
+    __tablename__ = "tenant_ai_usage_logs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id = Column(UUID(as_uuid=True), nullable=True)  # NULL = appel système
+    request_id = Column(UUID(as_uuid=True), nullable=True)  # corrèle plusieurs appels d'une requête logique
+
+    provider = Column(String(32), nullable=False)
+    model = Column(String(150), nullable=False)
+    feature = Column(String(64), nullable=False)  # 'chat', 'rag_ingestion', 'cv_extract', ...
+
+    prompt_tokens = Column(Integer, nullable=False, default=0)
+    completion_tokens = Column(Integer, nullable=False, default=0)
+    cached_tokens = Column(Integer, nullable=False, default=0)
+
+    estimated_cost_usd = Column(Numeric(12, 6), nullable=False, default=0)
+    pricing_snapshot = Column(JSON, nullable=False, default=dict)  # tarif appliqué au moment de l'appel
+
+    status = Column(String(24), nullable=False, default="success")
+    error_code = Column(String(100), nullable=True)  # catégorie stable uniquement, jamais le texte brut provider
+    latency_ms = Column(Integer, nullable=True)
+
+    created_at = Column(DateTime, default=utcnow)
+
+    tenant = relationship("Tenant")
+
+    @validates("status")
+    def _validate_status(self, _key, value):
+        if value not in AI_CALL_STATUSES:
+            raise ValueError(f"status invalide : {value!r} (autorisés : {AI_CALL_STATUSES})")
+        return value
+
+    @property
+    def total_tokens(self):
+        return self.prompt_tokens + self.completion_tokens

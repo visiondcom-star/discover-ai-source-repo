@@ -5,7 +5,8 @@ from datetime import datetime, timezone, timedelta
 from uuid import UUID
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Header, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, and_, not_
+from slugify import slugify
 from app.database import get_db, AsyncSessionLocal
 from app.models import Tenant, TenantCategory, ResearchJob, DestinationResearchDocument, User
 from app.schemas import (
@@ -21,7 +22,9 @@ from app.schemas import (
 from app.constants import RESEARCH_MANUAL_REFRESH_COOLDOWN_DAYS
 from app.dependencies import get_current_admin, get_tenant_admin
 from app.services import tenant_ai_config_service as ai_config_service
+from app.services.research_service import ResearchService
 from app.services.tenant_ai_config_service import UnsupportedProviderError
+from app.services.tenant_ai_quota_service import QuotaExceededError
 from app.schemas import (
     TenantAIConfigUpdate,
     TenantAIConfigResponse,
@@ -178,10 +181,24 @@ async def ingest_research_document(
 
 
 async def _run_research_pipeline(job_id):
-    """Exécute le pipeline en tâche de fond (sa propre session DB).
+    """Exécute le pipeline complet en tâche de fond (sa propre session DB).
 
-    STUB : fait avancer le job pending -> processing -> done sans
-    extraction réelle pour l'instant.
+    Étapes : documents bruts du tenant (l'Ingestion est déjà couverte par
+    l'endpoint dédié) → Extraction LLM (ResearchService) → dédup par slug →
+    publication conditionnelle : ``active`` si mapping_confidence >= 0.90 ET
+    category_confidence >= 0.85 ET parent Niveau 1 résolu, sinon ``proposed``
+    (invisible pour l'application tant qu'un humain n'a pas validé).
+
+    Échecs différenciés : un dépassement de quota est journalisé avec le
+    préfixe "quota_exceeded:" pour que le rate-limit manual_refresh ignore ce
+    job failed (un quota épuisé n'est pas la faute de l'opérateur) ; toute
+    autre erreur technique compte normalement dans le cooldown.
+
+    ``confidence`` stocké = min(mapping, category) : un candidat proposed
+    (rattachement Niveau 1 incertain) ne doit pas afficher une confiance
+    trompeusement élevée côté admin — le champ reflète le plus faible des
+    deux scores, cohérent avec le fait que la publication elle-même dépend
+    des deux seuils croisés.
     """
     async with AsyncSessionLocal() as session:
         result = await session.execute(
@@ -196,10 +213,116 @@ async def _run_research_pipeline(job_id):
         await session.commit()
 
         try:
+            tenant = (
+                await session.execute(select(Tenant).where(Tenant.id == job.tenant_id))
+            ).scalar_one()
+
+            # Seuls les documents "raw" sont consommés : un document déjà
+            # processed ne repasse pas par le LLM, un document sans candidat
+            # exploitable reste "raw" et sera retenté au prochain run.
+            documents = (
+                await session.execute(
+                    select(DestinationResearchDocument).where(
+                        DestinationResearchDocument.tenant_id == job.tenant_id,
+                        DestinationResearchDocument.status == "raw",
+                    )
+                )
+            ).scalars().all()
+
             job.categories_proposed = 0
             job.categories_auto_published = 0
             job.categories_pending_review = 0
+
+            if documents:
+                service = ResearchService(session, tenant)
+                existing_labels = list(
+                    (
+                        await session.execute(
+                            select(TenantCategory.label).where(
+                                TenantCategory.tenant_id == job.tenant_id
+                            )
+                        )
+                    ).scalars().all()
+                )
+                candidates = await service.extract_categories(
+                    list(documents), existing_labels
+                )
+
+                docs_by_id = {doc.id: doc for doc in documents}
+                seen_slugs = set()
+                consumed_doc_ids = set()
+
+                for candidate in candidates:
+                    # Provenance : seuls les documents bruts de ce run sont
+                    # rattachables (le LLM peut inventer des IDs — jamais de
+                    # FK vers une table hors de ce périmètre).
+                    source_ids = [
+                        doc_id
+                        for doc_id in candidate.source_document_ids
+                        if doc_id in docs_by_id
+                    ]
+                    # Un document référencé par au moins un candidat est
+                    # consommé même si le candidat est finalement dédupé.
+                    consumed_doc_ids.update(source_ids)
+
+                    slug = slugify(candidate.label)[:50]
+                    if not slug or slug in seen_slugs:
+                        continue
+                    # Dédup applicatif AVANT insert : la UniqueConstraint
+                    # (tenant_id, slug) ne doit jamais être testée en échec,
+                    # la vérification l'empêche en amont.
+                    existing = await session.execute(
+                        select(TenantCategory.id).where(
+                            TenantCategory.tenant_id == job.tenant_id,
+                            TenantCategory.slug == slug,
+                        )
+                    )
+                    if existing.scalar_one_or_none() is not None:
+                        continue
+                    seen_slugs.add(slug)
+
+                    auto_published = (
+                        candidate.mapping_confidence >= 0.90
+                        and candidate.category_confidence >= 0.85
+                        and candidate.parent_level1_id is not None
+                    )
+                    session.add(
+                        TenantCategory(
+                            tenant_id=job.tenant_id,
+                            parent_family=candidate.parent_level1_id,
+                            slug=slug,
+                            label=candidate.label,
+                            icon_suggestion=candidate.suggested_icon,
+                            description=candidate.description,
+                            status="active" if auto_published else "proposed",
+                            # Plus faible des deux scores : jamais une
+                            # confiance trompeusement élevée côté admin.
+                            confidence=min(
+                                candidate.mapping_confidence,
+                                candidate.category_confidence,
+                            ),
+                            research_document_id=source_ids[0] if source_ids else None,
+                            ai_generated=True,
+                        )
+                    )
+                    job.categories_proposed += 1
+                    if auto_published:
+                        job.categories_auto_published += 1
+                    else:
+                        job.categories_pending_review += 1
+
+                # Un document consommé par au moins un candidat (même dédupé)
+                # est traité ; sans candidat exploitable il reste "raw" et
+                # sera retenté au prochain run.
+                for doc_id in consumed_doc_ids:
+                    docs_by_id[doc_id].status = "processed"
+
             job.status = "done"
+        except QuotaExceededError as exc:
+            # Préfixe "quota_exceeded:" : contract de lecture partagé avec le
+            # rate-limit manual_refresh (voir start_tenant_research).
+            job.status = "failed"
+            job.error_message = f"quota_exceeded: {exc}"
         except Exception as exc:
             job.status = "failed"
             job.error_message = str(exc)
@@ -241,6 +364,15 @@ async def start_tenant_research(
                 ResearchJob.tenant_id == tenant.id,
                 ResearchJob.trigger_type == "manual_refresh",
                 ResearchJob.created_at >= cutoff,
+                # Un run échoué par dépassement de quota ne consomme pas le
+                # cooldown : le tenant n'a rien pu faire d'autre que retenter
+                # plus tard (préfixe posé par _run_research_pipeline).
+                not_(
+                    and_(
+                        ResearchJob.status == "failed",
+                        ResearchJob.error_message.like("quota_exceeded:%"),
+                    )
+                ),
             )
             .order_by(ResearchJob.created_at.desc())
             .limit(1)

@@ -11,16 +11,24 @@ TENANT = SimpleNamespace(id=uuid.uuid4(), name="Testland", default_language="fr"
 
 
 class FakeProvider:
-    def __init__(self, reply="Bonjour voyageur", error=None):
+    def __init__(self, reply="Bonjour voyageur", error=None, model="test-model"):
         self.reply = reply
         self.error = error
+        self.name = "fake"
+        self.configured_model = model
         self.calls = []
 
     async def complete(self, messages, temperature=0.7, max_tokens=800):
         self.calls.append(messages)
         if self.error:
             raise self.error
-        return self.reply
+        from app.services.llm_providers.base import CompletionResult, TokenUsage
+
+        return CompletionResult(
+            text=self.reply,
+            model=self.configured_model,
+            usage=TokenUsage(prompt_tokens=10, completion_tokens=5),
+        )
 
 
 def _build(monkeypatch, provider=None, resolver_error=None):

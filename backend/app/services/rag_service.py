@@ -12,14 +12,18 @@ search are refused rather than silently writing/matching fake vectors --
 callers fall back to keyword search instead.
 """
 import logging
-from typing import List, Dict, Any
+from typing import Any, Dict, List, Tuple
+import time
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 
 from app.models import POI, Tenant
+from app.services.llm_providers.base import TokenUsage
+from app.services.llm_providers.errors import classify_provider_error
 from app.services.llm_providers.factory import get_llm_provider
 from app.services.llm_providers.mock_provider import MockProvider
+from app.services.tenant_ai_quota_service import record_llm_call
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +47,49 @@ class RAGService:
         description = poi.description or ""
         return f"{poi.name}. {description}. Categories: {categories}. Ville: {poi.city}. Tags: {tags}"
 
+    async def _embed(self, text_input: str, *, feature: str) -> Tuple[List[float], TokenUsage]:
+        """Appel provider d'embedding avec capture de l'usage et journalisation tenant."""
+        provider_name = getattr(self.provider, "name", "openai")
+        configured_model = getattr(self.provider, "configured_model", "text-embedding-3-small")
+        start = time.perf_counter()
+        try:
+            res = await self.provider.embed(text_input)
+            latency_ms = int((time.perf_counter() - start) * 1000)
+            if hasattr(res, "vector"):
+                vec = res.vector
+                model = res.model or configured_model
+                usage = res.usage or TokenUsage()
+            else:
+                vec = res
+                model = configured_model
+                usage = TokenUsage()
+            await record_llm_call(
+                self.db,
+                self.tenant.id,
+                feature=feature,
+                provider=provider_name,
+                model=model,
+                usage=usage,
+                status="success",
+                latency_ms=latency_ms,
+            )
+            return vec, usage
+        except Exception as exc:
+            latency_ms = int((time.perf_counter() - start) * 1000)
+            error_code = classify_provider_error(exc, provider=provider_name)
+            await record_llm_call(
+                self.db,
+                self.tenant.id,
+                feature=feature,
+                provider=provider_name,
+                model=configured_model,
+                usage=TokenUsage(),
+                status="error",
+                error_code=error_code,
+                latency_ms=latency_ms,
+            )
+            raise
+
     async def index_pois(self) -> Dict[str, Any]:
         """Embed every active POI of this tenant and store vectors in Postgres."""
         if isinstance(self.provider, MockProvider):
@@ -60,7 +107,8 @@ class RAGService:
 
             indexed = 0
             for poi in pois:
-                poi.embedding = await self.provider.embed(self._poi_to_text(poi))
+                vec, _ = await self._embed(self._poi_to_text(poi), feature="rag_ingestion")
+                poi.embedding = vec
                 indexed += 1
 
             await self.db.commit()
@@ -77,7 +125,7 @@ class RAGService:
             return await self._text_search(query, top_k)
 
         try:
-            query_vec = await self.provider.embed(query)
+            query_vec, _ = await self._embed(query, feature="rag_search")
 
             result = await self.db.execute(
                 select(POI)

@@ -1,11 +1,15 @@
-"""AI Chat service with RAG enhancement."""
-from typing import List, Dict, Any, Optional
+"""AI Chat service with RAG enhancement and tenant usage tracking."""
+import time
+from typing import Any, Dict, List, Optional
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, text
 from app.models import ChatMessage, Tenant
 from app.config import get_settings
+from app.services.llm_providers.base import TokenUsage
+from app.services.llm_providers.errors import classify_provider_error
 from app.services.llm_providers.factory import get_llm_provider
+from app.services.tenant_ai_quota_service import record_llm_call
 from app.services.tenant_llm_provider import get_tenant_llm_provider
 
 logger = structlog.get_logger(__name__)
@@ -34,7 +38,8 @@ Sois concis mais complet."""
 
         try:
             provider = get_llm_provider()
-            embedding = await provider.embed(message)
+            embed_res = await provider.embed(message)
+            embedding = embed_res.vector if hasattr(embed_res, "vector") else embed_res
 
             # `<->` est l'opérateur pgvector pour la distance cosinus.
             query = text("""
@@ -77,12 +82,61 @@ Sois concis mais complet."""
 
         messages.append({"role": "user", "content": message})
 
+        start = time.perf_counter()
+        provider_name = getattr(provider, "name", "openai")
+        configured_model = getattr(provider, "configured_model", "unknown")
         try:
-            assistant_message = await provider.complete(messages, temperature=0.7, max_tokens=800)
+            result = await provider.complete(messages, temperature=0.7, max_tokens=800)
+            latency_ms = int((time.perf_counter() - start) * 1000)
+            if hasattr(result, "text"):
+                assistant_message = result.text or ""
+                served_model = result.model or configured_model
+                usage = result.usage or TokenUsage()
+            else:
+                assistant_message = str(result or "")
+                served_model = configured_model
+                usage = TokenUsage()
+            try:
+                await record_llm_call(
+                    self.db,
+                    self.tenant.id,
+                    feature="chat",
+                    provider=provider_name,
+                    model=served_model,
+                    usage=usage,
+                    status="success",
+                    latency_ms=latency_ms,
+                    user_id=user_id,
+                )
+            except Exception:
+                logger.warning("chat.record_llm_call_failed", exc_info=True)
         except Exception as e:
-            # Jamais le détail au client : l'erreur d'un provider peut contenir un fragment de clé API.
-            logger.error("chat.completion_failed", tenant_id=str(self.tenant.id), error_type=type(e).__name__)
-            assistant_message = "Je suis désolé, je rencontre un problème technique. Réessaie dans un instant."
+            latency_ms = int((time.perf_counter() - start) * 1000)
+            logger.error(
+                "chat.completion_failed",
+                tenant_id=str(self.tenant.id),
+                error_type=type(e).__name__,
+            )
+            error_code = classify_provider_error(e, provider=provider_name)
+            try:
+                await record_llm_call(
+                    self.db,
+                    self.tenant.id,
+                    feature="chat",
+                    provider=provider_name,
+                    model=configured_model,
+                    usage=TokenUsage(),
+                    status="error",
+                    error_code=error_code,
+                    latency_ms=latency_ms,
+                    user_id=user_id,
+                )
+            except Exception:
+                logger.warning("chat.record_llm_call_failed", exc_info=True)
+            assistant_message = (
+                "Je suis désolé, je rencontre un problème technique. Réessaie dans un instant."
+            )
+
         suggestions = self._extract_suggestions(assistant_message)
 
         await self._save_message(user_id, "user", message, context)

@@ -385,7 +385,7 @@ class ChatMessage(Base):
 
 # Features dont le modèle est choisi par le tenant. « embeddings » est volontairement
 # absent : le modèle d'embedding est fixé au niveau plateforme (pgvector = dimension fixe).
-TENANT_CONFIGURABLE_FEATURES = ("chat", "research", "recommendation", "translation")
+TENANT_CONFIGURABLE_FEATURES = ("chat", "research", "recommendation", "translation", "cv")
 
 
 class TenantAIConfig(Base):

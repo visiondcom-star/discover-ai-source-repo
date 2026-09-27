@@ -1,9 +1,11 @@
 """Tenant management endpoints."""
-from typing import List
+from typing import List, Optional
 import hashlib
+import io
 from datetime import datetime, timezone, timedelta
 from uuid import UUID
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Header, status
+import pypdf
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Header, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, not_
 from slugify import slugify
@@ -19,7 +21,7 @@ from app.schemas import (
     ResearchDocumentIngest,
     ResearchDocumentResponse,
 )
-from app.constants import RESEARCH_MANUAL_REFRESH_COOLDOWN_DAYS
+from app.constants import RESEARCH_MANUAL_REFRESH_COOLDOWN_DAYS, RESEARCH_SOURCE_TYPES
 from app.dependencies import get_current_admin, get_tenant_admin
 from app.services import tenant_ai_config_service as ai_config_service
 from app.services.research_service import ResearchService
@@ -134,6 +136,63 @@ async def update_tenant(
     return tenant
 
 
+async def _ingest_document(
+    db: AsyncSession,
+    tenant_id: UUID,
+    source_type: str,
+    source_url: Optional[str],
+    raw_text: str,
+    language: Optional[str],
+) -> DestinationResearchDocument:
+    """Logique de dédup/création partagée entre l'ingestion texte brut et
+    l'ingestion PDF (upload_research_document).
+
+    Idempotent par (tenant_id, content_hash) : redéposer le même contenu ne
+    crée pas de doublon, renvoie simplement le document déjà stocké.
+    """
+    if source_type not in RESEARCH_SOURCE_TYPES:
+        # La variante JSON est validée par ResearchDocumentIngest (422 côté
+        # schéma) ; la variante Form (upload PDF) bypass ce schéma, donc on
+        # rejette ici avant que response_model ne provoque un 500.
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "source_type invalide — attendu parmi : "
+                + ", ".join(RESEARCH_SOURCE_TYPES)
+            ),
+        )
+
+    result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
+    tenant = result.scalar_one_or_none()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
+    content_hash = hashlib.sha256(raw_text.strip().encode("utf-8")).hexdigest()
+
+    existing = await db.execute(
+        select(DestinationResearchDocument).where(
+            DestinationResearchDocument.tenant_id == tenant.id,
+            DestinationResearchDocument.content_hash == content_hash,
+        )
+    )
+    existing_doc = existing.scalar_one_or_none()
+    if existing_doc:
+        return existing_doc
+
+    doc = DestinationResearchDocument(
+        tenant_id=tenant.id,
+        source_type=source_type,
+        source_url=source_url,
+        raw_text=raw_text,
+        language=language,
+        content_hash=content_hash,
+    )
+    db.add(doc)
+    await db.commit()
+    await db.refresh(doc)
+    return doc
+
+
 @router.post(
     "/{tenant_id}/research/documents",
     response_model=ResearchDocumentResponse,
@@ -149,35 +208,51 @@ async def ingest_research_document(
     Idempotent par (tenant_id, content_hash) : redéposer le même texte ne
     crée pas de doublon, renvoie simplement le document déjà stocké.
     """
-    result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
-    tenant = result.scalar_one_or_none()
-    if not tenant:
-        raise HTTPException(status_code=404, detail="Tenant not found")
+    return await _ingest_document(
+        db, tenant_id, data.source_type, data.source_url, data.raw_text, data.language
+    )
 
-    content_hash = hashlib.sha256(data.raw_text.strip().encode("utf-8")).hexdigest()
 
-    existing = await db.execute(
-        select(DestinationResearchDocument).where(
-            DestinationResearchDocument.tenant_id == tenant.id,
-            DestinationResearchDocument.content_hash == content_hash,
+@router.post(
+    "/{tenant_id}/research/documents/upload",
+    response_model=ResearchDocumentResponse,
+)
+async def upload_research_document(
+    tenant_id: UUID,
+    source_type: str = Form(...),
+    source_url: Optional[str] = Form(None),
+    language: Optional[str] = Form(None),
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_admin: User = Depends(get_tenant_admin),
+):
+    """Ingère un document PDF de recherche destination (variante fichier de
+    ingest_research_document) : extrait le texte du PDF, puis réutilise
+    exactement la même logique de dédup par content_hash.
+
+    Rejette explicitement un PDF scanné sans calque texte (extraction vide
+    ou quasi) plutôt que de créer un document quasi vide qui ferait échouer
+    silencieusement l'extraction LLM plus tard.
+    """
+    if file.content_type != "application/pdf":
+        raise HTTPException(status_code=400, detail="Seuls les PDF sont acceptés")
+
+    raw_bytes = await file.read()
+    try:
+        reader = pypdf.PdfReader(io.BytesIO(raw_bytes))
+        raw_text = "\n".join(page.extract_text() or "" for page in reader.pages).strip()
+    except Exception:
+        raise HTTPException(status_code=422, detail="PDF illisible ou corrompu")
+
+    if len(raw_text) < 50:
+        raise HTTPException(
+            status_code=422,
+            detail="Texte extrait trop court — PDF scanné sans OCR ?",
         )
-    )
-    existing_doc = existing.scalar_one_or_none()
-    if existing_doc:
-        return existing_doc
 
-    doc = DestinationResearchDocument(
-        tenant_id=tenant.id,
-        source_type=data.source_type,
-        source_url=data.source_url,
-        raw_text=data.raw_text,
-        language=data.language,
-        content_hash=content_hash,
+    return await _ingest_document(
+        db, tenant_id, source_type, source_url, raw_text, language
     )
-    db.add(doc)
-    await db.commit()
-    await db.refresh(doc)
-    return doc
 
 
 async def _run_research_pipeline(job_id):

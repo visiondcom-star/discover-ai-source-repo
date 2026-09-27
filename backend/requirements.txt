@@ -24,3 +24,4 @@ python-slugify==8.0.4
 prometheus-client==0.20.0
 structlog==24.4.0
 cryptography==50.0.1
+pypdf==6.19.0

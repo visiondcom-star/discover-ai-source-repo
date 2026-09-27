@@ -14,6 +14,7 @@ from app.config import get_settings
 from app.api.v1.api import api_router
 from app.database import engine, Base
 from app.initial_data import init_db
+from app.services.tenant_ai_quota_service import QuotaExceededError
 
 settings = get_settings()
 
@@ -106,6 +107,20 @@ async def root():
         "docs": "/docs",
         "health": "/health",
     }
+
+
+@app.exception_handler(QuotaExceededError)
+async def quota_exceeded_handler(request: Request, exc: QuotaExceededError):
+    return JSONResponse(
+        status_code=429,
+        content={
+            "detail": "Quota IA dépassé pour ce territoire.",
+            "error": "quota_exceeded",
+            "tenant_id": str(exc.tenant_id),
+            "monthly_limit": str(exc.monthly_limit),
+            "current_usage": str(exc.current_usage),
+        },
+    )
 
 
 @app.exception_handler(Exception)

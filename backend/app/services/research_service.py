@@ -1,8 +1,9 @@
 """AI destination-research service — extraction step of the pipeline.
 
-Mirrors the CVService pattern: resolve the active LLM provider via the
-factory, ask for strict JSON, parse it, and degrade gracefully (skip, don't
-crash) on malformed or invalid candidates rather than failing the whole run.
+Mirrors the CVService pattern: resolve the tenant-scoped LLM provider
+(quota-checked), ask for strict JSON, parse it, and degrade gracefully
+(skip, don't crash) on malformed or invalid candidates rather than failing
+the whole run.
 
 Scope of this module: extract_categories() only (the Extraction step).
 Collection/ingestion of destination_research_documents, deduplication
@@ -11,23 +12,29 @@ publication rules (category_confidence >= 0.85, mapping_confidence >= 0.90)
 are separate steps, not yet wired into research_service.run_research_job().
 """
 import json
-import logging
+import time
 from typing import List
 
+import structlog
 from pydantic import ValidationError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants import PARENT_FAMILIES
 from app.models import DestinationResearchDocument, Tenant
 from app.schemas import CategoryCandidate
-from app.services.llm_providers.factory import get_llm_provider
+from app.services.llm_providers.base import TokenUsage
+from app.services.llm_providers.errors import classify_provider_error
+from app.services.tenant_ai_quota_service import record_llm_call
+from app.services.tenant_llm_provider import get_tenant_llm_provider
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 MAX_DOCUMENT_CHARS_PER_PROMPT = 12_000
 
 
 class ResearchService:
-    def __init__(self, tenant: Tenant):
+    def __init__(self, db: AsyncSession, tenant: Tenant):
+        self.db = db
         self.tenant = tenant
 
     @staticmethod
@@ -88,18 +95,54 @@ class ResearchService:
             self.tenant.name, documents_text, existing_labels
         )
 
-        provider = get_llm_provider()
+        # Résolution du provider tenant + vérification du hard limit AVANT tout appel :
+        # QuotaExceededError doit remonter intacte à l'appelant (le job de recherche),
+        # jamais absorbée par le except ci-dessous.
+        provider = await get_tenant_llm_provider(self.db, self.tenant.id, "research")
+        provider_name = getattr(provider, "name", "openai")
+        configured_model = getattr(provider, "configured_model", "unknown")
+
+        start = time.perf_counter()
         try:
-            result_text = await provider.complete(
+            result = await provider.complete(
                 [{"role": "user", "content": prompt}],
                 temperature=0.3,
                 max_tokens=2000,
             )
+            latency_ms = int((time.perf_counter() - start) * 1000)
+            result_text = result.text if hasattr(result, "text") else result
+            served_model = getattr(result, "model", None) or configured_model
+            usage = getattr(result, "usage", None) or TokenUsage()
+
             raw_candidates = json.loads(result_text)
             if not isinstance(raw_candidates, list):
                 raise ValueError("expected a JSON array")
+
+            await record_llm_call(
+                self.db,
+                self.tenant.id,
+                feature="research",
+                provider=provider_name,
+                model=served_model,
+                usage=usage,
+                status="success",
+                latency_ms=latency_ms,
+            )
         except Exception as exc:
-            logger.warning("extract_categories: LLM call or JSON parse failed: %s", exc)
+            latency_ms = int((time.perf_counter() - start) * 1000)
+            error_code = classify_provider_error(exc, provider=provider_name)
+            await record_llm_call(
+                self.db,
+                self.tenant.id,
+                feature="research",
+                provider=provider_name,
+                model=configured_model,
+                usage=TokenUsage(),
+                status="error",
+                error_code=error_code,
+                latency_ms=latency_ms,
+            )
+            logger.warning("extract_categories.llm_call_failed", error_type=type(exc).__name__)
             return []
 
         candidates: List[CategoryCandidate] = []
@@ -109,7 +152,7 @@ class ResearchService:
                     raw, context={"level1_ids": PARENT_FAMILIES}
                 )
             except ValidationError as exc:
-                logger.info("extract_categories: candidate rejected: %s", exc)
+                logger.info("extract_categories.candidate_rejected", error=str(exc))
                 continue
             candidates.append(candidate)
 

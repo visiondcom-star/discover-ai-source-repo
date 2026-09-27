@@ -7,8 +7,12 @@ from app.models import TENANT_CONFIGURABLE_FEATURES, TenantAIConfig
 
 
 def test_models_accepts_configurable_features():
-    cfg = TenantAIConfig(tenant_id=uuid.uuid4(), models={"chat": "m1", "research": "m2"})
-    assert cfg.models == {"chat": "m1", "research": "m2"}
+    cfg = TenantAIConfig(
+        tenant_id=uuid.uuid4(),
+        models={"chat": "m1", "research": "m2", "cv": "m3"},
+    )
+    assert cfg.models == {"chat": "m1", "research": "m2", "cv": "m3"}
+    assert "cv" in TENANT_CONFIGURABLE_FEATURES
 
 
 def test_embeddings_is_not_tenant_configurable():

@@ -3,7 +3,12 @@ import hashlib
 import json
 from typing import Dict, List
 
-from app.services.llm_providers.base import LLMProvider
+from app.services.llm_providers.base import (
+    CompletionResult,
+    EmbeddingResult,
+    LLMProvider,
+    TokenUsage,
+)
 
 # Deterministic candidate answers for the mock vision path (mirrors the previous
 # hardcoded mock list in cv.py, but selection is hash-based instead of random so
@@ -31,12 +36,26 @@ _MOCK_IDENTIFICATIONS = [
 
 
 class MockProvider(LLMProvider):
+    """Provider local déterministe : usage toujours nul, donc coût nul (jamais de faux montant)."""
+
+    name = "mock"
+
+    @property
+    def configured_model(self) -> str:
+        return self.name
+
     async def complete(
         self,
         messages: List[Dict[str, str]],
         temperature: float = 0.7,
         max_tokens: int = 800,
-    ) -> str:
+    ) -> CompletionResult:
+        return CompletionResult(
+            text=self._complete_text(messages), model=self.name, usage=TokenUsage()
+        )
+
+    @staticmethod
+    def _complete_text(messages: List[Dict[str, str]]) -> str:
         user_message = ""
         for m in reversed(messages):
             if m.get("role") == "user":
@@ -57,7 +76,11 @@ class MockProvider(LLMProvider):
         else:
             return "Merci pour votre question ! Je suis votre guide touristique local, je suis là pour vous aider. Pourriez-vous me donner plus de détails sur ce que vous cherchez ?"
 
-    async def embed(self, text: str) -> List[float]:
+    async def embed(self, text: str) -> EmbeddingResult:
+        return EmbeddingResult(vector=self._fake_vector(text), model=self.name, usage=TokenUsage())
+
+    @staticmethod
+    def _fake_vector(text: str) -> List[float]:
         """Deterministic fake embedding — hash-based, no network call, 1536 dims to match text-embedding-3-small."""
         h = hashlib.sha256(text.encode()).digest()
         # Répète le hash pour remplir 1536 dimensions, normalisé entre -1 et 1
@@ -70,7 +93,13 @@ class MockProvider(LLMProvider):
         prompt: str,
         temperature: float = 0.2,
         max_tokens: int = 500,
-    ) -> str:
+    ) -> CompletionResult:
+        return CompletionResult(
+            text=self._fake_identification(image_data_url), model=self.name, usage=TokenUsage()
+        )
+
+    @staticmethod
+    def _fake_identification(image_data_url: str) -> str:
         """Deterministic fake vision — no network call.
 
         Picks one of the canned identifications based on a hash of the image data,

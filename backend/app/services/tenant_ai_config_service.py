@@ -158,29 +158,17 @@ async def test_connection(db: AsyncSession, tenant_id: uuid.UUID, provider: str)
 
 async def _run_health_check(provider: str, llm_provider) -> Optional[str]:
     """Un appel réel minimal, classé en catégories stables (jamais le texte brut du
-    fournisseur). Ajouter un provider ici = ajouter sa propre correspondance d'erreurs."""
-    if provider == "openai":
-        import openai
+    fournisseur). Centralisé dans ``llm_providers/errors.py``."""
+    from app.services.llm_providers.errors import classify_provider_error
 
+    if provider == "openai":
         try:
             await llm_provider.complete(
                 [{"role": "user", "content": "ping"}], temperature=0, max_tokens=1
             )
             return None
-        except openai.AuthenticationError:
-            return "invalid_api_key"
-        except openai.PermissionDeniedError:
-            return "permission_denied"
-        except openai.NotFoundError:
-            return "model_unavailable"
-        except openai.RateLimitError:
-            return "quota_exceeded"
-        except (openai.APIConnectionError, openai.APITimeoutError):
-            return "network_error"
-        except openai.APIStatusError:
-            return "provider_error"
-        except Exception:
-            return "unknown_error"
+        except Exception as exc:
+            return classify_provider_error(exc, provider="openai")
     return "test_not_implemented_for_provider"
 
 

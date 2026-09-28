@@ -18,6 +18,8 @@ from app.services.research_source_service import (
     resolve_sources,
     create_tenant_source,
     create_country_source,
+    update_tenant_source,
+    delete_tenant_source,
     DuplicateSourceError,
 )
 
@@ -330,6 +332,133 @@ async def test_api_crud_and_isolation(
     res_other_list_after_tamper = await client.get(other_base_url, headers=other_admin_headers)
     assert res_other_list_after_tamper.status_code == 200
     assert res_other_list_after_tamper.json() == []
+
+
+@pytest.mark.asyncio
+async def test_tenant_override_lifecycle_drives_resolved_sources(db_session: AsyncSession):
+    """Contrat dont dépend la collecte : `resolve_sources` doit refléter
+    immédiatement les mutations faites via `update_tenant_source` /
+    `delete_tenant_source`.
+
+    1. Une source pays seule est servie au tenant.
+    2. Une surcharge tenant sur la même URL normalisée remplace la source pays.
+    3. Désactiver la surcharge retire l'URL des sources effectives — la source
+       pays héritée ne réapparaît pas silencieusement (pas de repli).
+    4. Réactiver la surcharge la remet dans les sources effectives.
+    5. Supprimer la surcharge fait réapparaître la source pays (repli normal).
+    """
+    tenant = Tenant(
+        slug="dz-override-tenant", name="DZ Override", country_code="DZ", default_currency="DZD"
+    )
+    db_session.add(tenant)
+    await db_session.commit()
+    await db_session.refresh(tenant)
+
+    country_source = await create_country_source(
+        db_session,
+        "DZ",
+        ResearchSourceConfigCreate(name="Pays — Office national", url="https://ont.dz/info/"),
+    )
+
+    # 1. Sans surcharge tenant, la source pays est servie.
+    resolved = await resolve_sources(db_session, tenant)
+    assert [s.id for s in resolved] == [country_source.id]
+
+    # 2. Surcharge tenant sur la même URL (variante non normalisée) : elle gagne.
+    override = await create_tenant_source(
+        db_session,
+        tenant.id,
+        ResearchSourceConfigCreate(name="Tenant — Office national", url="https://ont.dz/info"),
+    )
+    resolved = await resolve_sources(db_session, tenant)
+    assert [s.id for s in resolved] == [override.id]
+    assert resolved[0].tenant_id == tenant.id
+
+    # 3. Désactivation de la surcharge tenant.
+    updated = await update_tenant_source(
+        db_session, tenant.id, override.id, ResearchSourceConfigUpdate(enabled=False)
+    )
+    assert updated is not None
+    assert updated.enabled is False
+    assert await resolve_sources(db_session, tenant) == []
+
+    # 4. Réactivation de la surcharge tenant.
+    updated = await update_tenant_source(
+        db_session, tenant.id, override.id, ResearchSourceConfigUpdate(enabled=True)
+    )
+    assert updated is not None
+    assert updated.enabled is True
+    assert [s.id for s in await resolve_sources(db_session, tenant)] == [override.id]
+
+    # 5. Suppression de la surcharge -> la source pays reprend la main.
+    assert await delete_tenant_source(db_session, tenant.id, override.id) is True
+    resolved = await resolve_sources(db_session, tenant)
+    assert [s.id for s in resolved] == [country_source.id]
+
+
+@pytest.mark.asyncio
+async def test_update_and_delete_tenant_source_not_found_and_isolation(
+    db_session: AsyncSession, test_tenant: Tenant, other_tenant: Tenant
+):
+    """`update_tenant_source` / `delete_tenant_source` renvoient None / False
+    (jamais d'exception) si la source est inconnue ou appartient à un autre
+    tenant, et ne modifient jamais une source d'un autre tenant."""
+    foreign = await create_tenant_source(
+        db_session,
+        other_tenant.id,
+        ResearchSourceConfigCreate(name="Autre tenant", url="https://other-tenant.dz"),
+    )
+
+    # Source inconnue.
+    assert (
+        await update_tenant_source(
+            db_session, test_tenant.id, uuid.uuid4(), ResearchSourceConfigUpdate(name="Inconnue")
+        )
+        is None
+    )
+    assert await delete_tenant_source(db_session, test_tenant.id, uuid.uuid4()) is False
+
+    # Source d'un autre tenant : refusée, et intacte.
+    assert (
+        await update_tenant_source(
+            db_session, test_tenant.id, foreign.id, ResearchSourceConfigUpdate(name="Piraté")
+        )
+        is None
+    )
+    assert await delete_tenant_source(db_session, test_tenant.id, foreign.id) is False
+
+    await db_session.refresh(foreign)
+    assert foreign.name == "Autre tenant"
+
+
+@pytest.mark.asyncio
+async def test_update_tenant_source_rejects_url_taken_by_sibling(
+    db_session: AsyncSession, test_tenant: Tenant
+):
+    """Le contrôle de doublon de `update_tenant_source` compare les URLs
+    normalisées et ignore la source en cours de modification."""
+    await create_tenant_source(
+        db_session, test_tenant.id, ResearchSourceConfigCreate(name="A", url="https://a.dz/docs")
+    )
+    second = await create_tenant_source(
+        db_session, test_tenant.id, ResearchSourceConfigCreate(name="B", url="https://b.dz/docs")
+    )
+
+    # URL déjà prise par une source sœur (même forme normalisée) -> refus.
+    with pytest.raises(DuplicateSourceError):
+        await update_tenant_source(
+            db_session, test_tenant.id, second.id, ResearchSourceConfigUpdate(url="https://a.dz/docs/")
+        )
+
+    await db_session.refresh(second)
+    assert second.url == "https://b.dz/docs"
+
+    # Retaper sa propre URL reste autorisé (la source est exclue de la comparaison).
+    updated = await update_tenant_source(
+        db_session, test_tenant.id, second.id, ResearchSourceConfigUpdate(url="https://b.dz/docs/")
+    )
+    assert updated is not None
+    assert updated.url == "https://b.dz/docs/"
 
 
 

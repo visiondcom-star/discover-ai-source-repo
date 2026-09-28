@@ -576,6 +576,10 @@ class ProviderTestResult(BaseModel):
     "credential_unreadable", "invalid_api_key", "permission_denied",
     "model_unavailable", "quota_exceeded", "network_error", "provider_error",
     "unknown_error", "test_not_implemented_for_provider"."""
+    # `model_tested` ne doit pas déclencher l'avertissement de namespace protégé
+    # « model_ » de pydantic.
+    model_config = ConfigDict(protected_namespaces=())
+
     provider: str
     connected: bool
     reason: Optional[str] = None

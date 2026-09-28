@@ -43,3 +43,7 @@ RESEARCH_JOB_STATUSES = ("pending", "processing", "done", "failed")
 # Manual refresh rate-limit: at most one manual_refresh trigger per tenant
 # in this rolling window, enforced in the research/run endpoint.
 RESEARCH_MANUAL_REFRESH_COOLDOWN_DAYS = 30
+
+# research_collection_jobs.status lifecycle.
+RESEARCH_COLLECTION_JOB_STATUSES = ("pending", "processing", "done", "failed")
+

@@ -20,13 +20,20 @@ from app.schemas import (
     ResearchRunRequest,
     ResearchDocumentIngest,
     ResearchDocumentResponse,
+    ResearchSourceConfigCreate,
+    ResearchSourceConfigUpdate,
+    ResearchSourceConfigResponse,
 )
+
 from app.constants import RESEARCH_MANUAL_REFRESH_COOLDOWN_DAYS, RESEARCH_SOURCE_TYPES
 from app.dependencies import get_current_admin, get_tenant_admin
 from app.services import tenant_ai_config_service as ai_config_service
 from app.services.research_service import ResearchService
 from app.services.tenant_ai_config_service import UnsupportedProviderError
 from app.services.tenant_ai_quota_service import QuotaExceededError
+from app.services import research_source_service
+from app.services.research_source_service import DuplicateSourceError
+
 from app.schemas import (
     TenantAIConfigUpdate,
     TenantAIConfigResponse,
@@ -582,3 +589,73 @@ async def delete_tenant_ai_credential(
     if not deleted:
         raise HTTPException(status_code=404, detail="Aucun credential enregistré pour ce provider")
  
+
+
+
+# ============= Research Sources Endpoints =============
+@router.get(
+    "/{tenant_id}/research/sources",
+    response_model=List[ResearchSourceConfigResponse],
+)
+async def list_tenant_research_sources(
+    tenant_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(get_tenant_admin),
+):
+    """Liste les sources de recherche configurées pour ce tenant."""
+    return await research_source_service.list_tenant_sources(db, tenant_id)
+
+
+@router.post(
+    "/{tenant_id}/research/sources",
+    response_model=ResearchSourceConfigResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_tenant_research_source(
+    tenant_id: UUID,
+    data: ResearchSourceConfigCreate,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(get_tenant_admin),
+):
+    """Ajoute une nouvelle source de recherche pour ce tenant."""
+    try:
+        return await research_source_service.create_tenant_source(db, tenant_id, data)
+    except DuplicateSourceError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+
+@router.patch(
+    "/{tenant_id}/research/sources/{source_id}",
+    response_model=ResearchSourceConfigResponse,
+)
+async def update_tenant_research_source(
+    tenant_id: UUID,
+    source_id: UUID,
+    data: ResearchSourceConfigUpdate,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(get_tenant_admin),
+):
+    """Met à jour une source de recherche d'un tenant."""
+    try:
+        updated = await research_source_service.update_tenant_source(db, tenant_id, source_id, data)
+    except DuplicateSourceError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    if not updated:
+        raise HTTPException(status_code=404, detail="Source not found")
+    return updated
+
+
+@router.delete(
+    "/{tenant_id}/research/sources/{source_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_tenant_research_source(
+    tenant_id: UUID,
+    source_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(get_tenant_admin),
+):
+    """Supprime une source de recherche d'un tenant."""
+    deleted = await research_source_service.delete_tenant_source(db, tenant_id, source_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Source not found")

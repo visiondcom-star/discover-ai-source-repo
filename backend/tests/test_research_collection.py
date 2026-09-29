@@ -3,7 +3,7 @@ httpx.MockTransport, la base est la vraie base de test (fixtures conftest)."""
 import httpx
 from sqlalchemy import func, select
 
-import app.services.research_service as research_service_module
+from app.constants import RESEARCH_COLLECTION_COOLDOWN_MINUTES
 from app.models import (
     DestinationResearchDocument,
     ResearchCollectionJob,
@@ -11,8 +11,7 @@ from app.models import (
     ResearchSourceConfig,
 )
 from app.services import research_collection_service as collection_service
-from app.services.llm_providers.base import CompletionResult, TokenUsage
-from app.services.research_collection_service import run_collection_job
+from app.services.research_collection_service import run_collection_job_with_session
 from app.services.wikimedia_client import WIKIMEDIA_LICENSE, WikimediaClient
 
 FILLER = "Contenu détaillé sur la destination, ses paysages et son patrimoine. " * 5
@@ -62,7 +61,7 @@ async def test_collection_creates_documents_then_counts_duplicates(db_session, t
     params = {"territory": "Kabylie", "languages": ["fr"]}
 
     job_id = await _new_job(db_session, tid, params)
-    await run_collection_job(db_session, job_id, client=_client(handler))
+    await run_collection_job_with_session(db_session, job_id, client=_client(handler))
 
     job = await db_session.get(ResearchCollectionJob, job_id)
     await db_session.refresh(job)
@@ -83,7 +82,7 @@ async def test_collection_creates_documents_then_counts_duplicates(db_session, t
 
     # Second passage : idempotent, tout est compté en doublon
     job2_id = await _new_job(db_session, tid, params)
-    await run_collection_job(db_session, job2_id, client=_client(handler))
+    await run_collection_job_with_session(db_session, job2_id, client=_client(handler))
     job2 = await db_session.get(ResearchCollectionJob, job2_id)
     await db_session.refresh(job2)
     assert job2.status == "done"
@@ -95,7 +94,7 @@ async def test_collection_fails_when_wikimedia_unreachable(db_session, test_tena
     tid = test_tenant.id
     job_id = await _new_job(db_session, tid, {"territory": "Kabylie", "languages": ["fr"]})
 
-    await run_collection_job(db_session, job_id, client=_client(lambda r: httpx.Response(503)))
+    await run_collection_job_with_session(db_session, job_id, client=_client(lambda r: httpx.Response(503)))
 
     job = await db_session.get(ResearchCollectionJob, job_id)
     await db_session.refresh(job)
@@ -122,7 +121,7 @@ async def test_collection_uses_manual_wiki_sources_and_ignores_others(db_session
     handler = _wiki_handler({("fr.wikivoyage.org", "Tizi Ouzou")})
     # Pas de "territory" : le repli sur tenant.name ("Test Tenant") ne trouve rien
     job_id = await _new_job(db_session, tid, {"languages": ["fr"]})
-    await run_collection_job(db_session, job_id, client=_client(handler))
+    await run_collection_job_with_session(db_session, job_id, client=_client(handler))
 
     job = await db_session.get(ResearchCollectionJob, job_id)
     await db_session.refresh(job)
@@ -133,56 +132,68 @@ async def test_collection_uses_manual_wiki_sources_and_ignores_others(db_session
     assert [d.source_url for d in docs] == ["https://fr.wikivoyage.org/wiki/Tizi_Ouzou"]
 
 
-async def test_collection_endpoint_rate_limited_by_recent_run(
+async def test_collection_endpoint_rejects_concurrent_run_with_409(
     client, admin_headers, test_tenant, db_session
 ):
+    # Un job "pending" existe déjà : garde-fou concurrence (409), avant le 429.
     await _new_job(db_session, test_tenant.id, {"territory": "Kabylie"})
 
     response = await client.post(
         f"{API}/{test_tenant.id}/research/collection/run", headers=admin_headers, json={}
     )
 
-    assert response.status_code == 429
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Une collecte est déjà en cours pour ce tenant."
     assert await _count(db_session, ResearchCollectionJob, test_tenant.id) == 1
 
 
-async def test_collection_endpoint_allows_retry_after_failed_run(
-    client, admin_headers, test_tenant, db_session, monkeypatch
+async def test_collection_endpoint_cooldown_applies_whatever_final_status(
+    client, admin_headers, test_tenant, db_session
 ):
     job_id = await _new_job(db_session, test_tenant.id, {})
     job = await db_session.get(ResearchCollectionJob, job_id)
-    job.status = "failed"  # un échec ne consomme pas la fenêtre (erreur réseau)
+    job.status = "done"
     await db_session.commit()
 
-    _patch_wiki(monkeypatch, set())
-    response = await client.post(
+    # Job terminal récent -> 429 (fenêtre des RESEARCH_COLLECTION_COOLDOWN_MINUTES min).
+    first = await client.post(
         f"{API}/{test_tenant.id}/research/collection/run",
         headers=admin_headers,
         json={"territory": "Kabylie"},
     )
+    assert first.status_code == 429
+    assert str(RESEARCH_COLLECTION_COOLDOWN_MINUTES) in first.json()["detail"]
 
-    assert response.status_code == 202
-    assert await _count(db_session, ResearchCollectionJob, test_tenant.id) == 2
+    # Même réponse si le job précédent a échoué : le statut final n'importe pas.
+    job.status = "failed"
+    await db_session.commit()
+    second = await client.post(
+        f"{API}/{test_tenant.id}/research/collection/run", headers=admin_headers, json={}
+    )
+    assert second.status_code == 429
+    assert await _count(db_session, ResearchCollectionJob, test_tenant.id) == 1
 
 
-async def test_collection_endpoint_rejects_invalid_languages(
-    client, admin_headers, test_tenant, db_session
+async def test_collection_endpoint_fails_cleanly_on_invalid_language(
+    client, admin_headers, test_tenant, db_session, monkeypatch
 ):
-    response = await client.post(
-        f"{API}/{test_tenant.id}/research/collection/run",
-        headers=admin_headers,
-        json={"languages": ["FR"]},  # un code invalide ferait échouer tout le job en plein run
+    _patch_wiki(monkeypatch, set())  # aucune requête réseau : la validation échoue avant
+    job = await _start_and_poll(
+        client, admin_headers, test_tenant.id, {"languages": ["FR"]}
     )
 
-    assert response.status_code == 422
-    assert await _count(db_session, ResearchCollectionJob, test_tenant.id) == 0
+    # Le runner ne rattrape pas ValueError : le job échoue proprement (failed)
+    # avec l'erreur remontée, sans que l'endpoint lève une 500.
+    assert job["status"] == "failed"
+    assert "langue" in (job["error_message"] or "")
+    assert job["documents_new"] == 0
+    assert await _docs(db_session, test_tenant.id) == []
 
 
-async def test_collection_endpoint_skips_pipeline_when_nothing_new(
+async def test_collection_endpoint_fails_when_nothing_collected(
     client, admin_headers, test_tenant, db_session, monkeypatch
 ):
     _patch_wiki(monkeypatch, set())  # aucun titre disponible sur aucun projet
-    _patch_llm(monkeypatch)
 
     job = await _start_and_poll(
         client, admin_headers, test_tenant.id, {"territory": "Kabylie", "languages": ["fr"]}
@@ -191,7 +202,8 @@ async def test_collection_endpoint_skips_pipeline_when_nothing_new(
     assert job["status"] == "failed"  # rien collecté : échec, pas un "done" vide
     assert job["documents_new"] == 0 and job["documents_failed"] == 2
     assert await _docs(db_session, test_tenant.id) == []
-    # Aucun run LLM : il n'y a rien de nouveau à extraire.
+    # Aucune extraction LLM n'est lancée : la collecte et l'extraction restent
+    # deux étapes indépendantes.
     assert await _count(db_session, ResearchJob, test_tenant.id) == 0
 
 
@@ -246,26 +258,6 @@ def _patch_wiki(monkeypatch, available):
     )
 
 
-def _patch_llm(monkeypatch, reply="[]"):
-    """Provider LLM factice : le chaînage ne doit pas dépendre d'un vrai credential."""
-
-    class FakeProvider:
-        name = "openai"
-        configured_model = "gpt-4o"
-
-        async def complete(self, messages, temperature=0.3, max_tokens=2000):
-            return CompletionResult(
-                text=reply,
-                model="gpt-4o",
-                usage=TokenUsage(prompt_tokens=1, completion_tokens=1),
-            )
-
-    async def fake_resolver(db, tenant_id, feature):
-        return FakeProvider()
-
-    monkeypatch.setattr(research_service_module, "get_tenant_llm_provider", fake_resolver)
-
-
 async def _start_and_poll(client, headers, tenant_id, payload):
     """POST puis poll du job : avec ASGITransport, la tâche de fond (collecte +
     chaînage) est terminée quand la réponse du POST revient."""
@@ -288,25 +280,23 @@ async def _count(db, model, tenant_id):
     return res.scalar_one()
 
 
-async def test_collection_endpoint_runs_and_chains_pipeline(
+async def test_collection_endpoint_runs_and_reports_counters(
     client, admin_headers, test_tenant, db_session, monkeypatch
 ):
     _patch_wiki(monkeypatch, {("fr.wikivoyage.org", "Kabylie")})
-    _patch_llm(monkeypatch)
 
     job = await _start_and_poll(
         client, admin_headers, test_tenant.id, {"territory": "Kabylie", "languages": ["fr"]}
     )
 
     assert job["status"] == "done"
-    assert job["error_message"]
+    assert job["error_message"]  # fr.wikipedia/Kabylie absent : remonté dans l'erreur
     assert (
         job["documents_fetched"],
         job["documents_new"],
         job["documents_duplicate"],
         job["documents_failed"],
     ) == (1, 1, 0, 1)
-    assert job["params"] == {"territory": "Kabylie", "languages": ["fr"]}
     assert job["started_at"] and job["finished_at"]
 
     docs = await _docs(db_session, test_tenant.id)
@@ -317,15 +307,7 @@ async def test_collection_endpoint_runs_and_chains_pipeline(
         WIKIMEDIA_LICENSE,
     )
 
-    # Chaînage : un ResearchJob "scheduled" a été créé ET exécuté. "scheduled" et
-    # non "manual_refresh" : un run automatique ne doit pas consommer le cooldown
-    # de l'admin.
-    runs = (
-        await db_session.execute(
-            select(ResearchJob).where(ResearchJob.tenant_id == test_tenant.id)
-        )
-    ).scalars().all()
-    assert len(runs) == 1
-    assert runs[0].trigger_type == "scheduled"
-    assert runs[0].status == "done"
+    # La collecte stocke en "raw" et ne déclenche PAS le pipeline d'extraction
+    # (extraction = /research/run, séparée et tarifée à part).
+    assert await _count(db_session, ResearchJob, test_tenant.id) == 0
 

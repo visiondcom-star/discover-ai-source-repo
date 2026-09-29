@@ -83,12 +83,27 @@ def build_targets(
     return targets
 
 
-async def run_collection_job(
+async def run_collection_job(job_id: UUID, client: Optional[WikimediaClient] = None) -> None:
+    """Point d'entrée pour BackgroundTasks (même forme que `_run_research_pipeline`) :
+    ouvre sa propre session DB, indépendante de celle de la requête HTTP qui l'a
+    lancé (elle serait déjà fermée au moment où la tâche de fond s'exécute)."""
+    from app.database import AsyncSessionLocal  # import local : évite un cycle au chargement du module
+
+    async with AsyncSessionLocal() as session:
+        await run_collection_job_with_session(session, job_id, client=client)
+
+
+async def run_collection_job_with_session(
     db: AsyncSession,
     job_id: UUID,
     client: Optional[WikimediaClient] = None,
 ) -> None:
-    """Exécute le job : pending -> processing -> done | failed. Ne lève pas."""
+    """Cœur de la collecte, avec une session fournie par l'appelant.
+
+    Utilisé directement par les tests (session de test déjà ouverte) ; en
+    production, passe toujours par `run_collection_job` ci-dessus.
+    Exécute le job : pending -> processing -> done | failed. Ne lève pas.
+    """
     job = await db.get(ResearchCollectionJob, job_id)
     if job is None:
         logger.error("ResearchCollectionJob %s introuvable", job_id)

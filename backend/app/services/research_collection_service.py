@@ -39,7 +39,7 @@ DEFAULT_LANGUAGES = ["fr", "en"]
 MIN_TEXT_LENGTH = 100  # en dessous : page vide / homonymie / ébauche inutilisable
 MAX_ERRORS_KEPT = 5
 
-Target = Tuple[str, str, str]  # (projet, langue, titre)
+Target = Tuple[str, str, str, bool]  # (projet, langue, titre, allow_fallback)
 
 
 def _now() -> datetime:
@@ -63,21 +63,23 @@ def build_targets(
     targets: List[Target] = []
     seen: Set[Tuple[str, str, str]] = set()
 
-    def add(project: str, lang: str, title: str) -> None:
+    def add(project: str, lang: str, title: str, allow_fallback: bool) -> None:
         key = (project, lang, title.strip().lower())
         if key not in seen:
             seen.add(key)
-            targets.append((project, lang, title.strip()))
+            targets.append((project, lang, title.strip(), allow_fallback))
 
     if territory and territory.strip():
         for project in WIKI_PROJECTS:
             for lang in languages:
-                add(project, lang, territory)
+                add(project, lang, territory, allow_fallback=True)
 
     for url in wiki_source_urls:
         parsed = parse_wiki_url(url)
         if parsed:
-            add(*parsed)
+            # Source ajoutée à la main par l'admin : titre exact voulu, jamais
+            # de repli par recherche (l'admin a choisi cette page précise).
+            add(*parsed, allow_fallback=False)
         else:
             logger.info("Source wiki ignorée (URL non Wikimedia) : %s", url)
     return targets
@@ -130,16 +132,27 @@ async def run_collection_job_with_session(
         targets = build_targets(territory, languages, wiki_urls)
 
         async with (client or WikimediaClient()) as wiki:
-            for project, lang, title in targets:
+            for project, lang, title, allow_fallback in targets:
                 try:
                     page = await wiki.fetch_page(project, lang, title)
+                    if page is None and allow_fallback:
+                        candidates = await wiki.search_title(project, lang, title)
+                        for candidate in candidates:
+                            if candidate.strip().lower() == title.strip().lower():
+                                continue  # déjà tenté sous ce nom exact
+                            page = await wiki.fetch_page(project, lang, candidate)
+                            if page is not None:
+                                logger.info(
+                                    "Repli titre %s/%s : %r -> %r", project, lang, title, candidate
+                                )
+                                break
                 except WikimediaError as exc:
                     failed += 1
                     errors.append(str(exc))
                     continue
 
                 if page is None or len(page.text) < MIN_TEXT_LENGTH:
-                    # Page absente (fréquent : titre inexistant dans cette langue) ou inutilisable
+                    # Page absente (même après repli) ou inutilisable
                     failed += 1
                     errors.append(f"{project}/{lang}/{title} : page absente ou trop courte")
                     continue

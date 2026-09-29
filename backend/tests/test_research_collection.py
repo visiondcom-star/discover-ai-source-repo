@@ -108,6 +108,71 @@ async def test_collection_fails_when_wikimedia_unreachable(db_session, test_tena
     assert await _docs(db_session, tid) == []
 
 
+async def test_collection_fails_when_pages_missing(db_session, test_tenant):
+    """Wikimedia répond 200 mais aucune page n'existe : on passe par le test
+    `page is None` de run_collection_job_with_session, et non par le except
+    WikimediaError — même statut final, chemin différent (cf.
+    test_collection_fails_when_wikimedia_unreachable pour l'autre chemin).
+
+    `_wiki_handler(set())` : aucune page disponible, et son stub `opensearch`
+    renvoie déjà zéro candidat — sans quoi le repli pourrait trouver une page
+    et masquer la branche qu'on veut couvrir."""
+    tid = test_tenant.id
+    job_id = await _new_job(db_session, tid, {"territory": "Kabylie", "languages": ["fr"]})
+
+    await run_collection_job_with_session(
+        db_session, job_id, client=_client(_wiki_handler(set()))
+    )
+
+    job = await db_session.get(ResearchCollectionJob, job_id)
+    await db_session.refresh(job)
+    assert job.status == "failed"
+    assert job.documents_fetched == 0
+    assert job.documents_new == 0 and job.documents_failed == 2  # fr.wikivoyage + fr.wikipedia
+    assert "page absente ou trop courte" in job.error_message
+    assert await _docs(db_session, tid) == []
+
+
+async def test_collection_fails_when_page_too_short(db_session, test_tenant):
+    """L'autre moitié de la branche (`or`) : la page existe mais son extrait est
+    sous MIN_TEXT_LENGTH (page vide, ébauche, homonymie). Même construction de
+    réponse que `_wiki_handler`, extrait seul raccourci.
+
+    Contrairement au test précédent, le repli `opensearch` n'est jamais
+    sollicité : le garde `page is None and allow_fallback` court-circuite dès
+    que la page existe, même inutilisable."""
+    tid = test_tenant.id
+    job_id = await _new_job(db_session, tid, {"territory": "Kabylie", "languages": ["fr"]})
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        # Filet de sécurité : le repli n'est PAS sollicité ici (vérifié — lever
+        # une assertion à cet endroit ne casse pas le test). Le garde
+        # `page is None and allow_fallback` short-circuite quand la page existe
+        # mais est trop courte. Stub conservé pour qu'une évolution du repli ne
+        # puisse pas faire diverger ce test sans qu'on le voie.
+        if request.url.params.get("action") == "opensearch":
+            search = request.url.params.get("search", "")
+            return httpx.Response(200, json=[search, [], [], []])
+        host = request.url.host
+        title = request.url.params["titles"]
+        page_url = f"https://{host}/wiki/{title.replace(' ', '_')}"
+        return httpx.Response(200, json={"query": {"pages": [{
+            "title": title,
+            "extract": "Kb.",  # sous MIN_TEXT_LENGTH (100)
+            "fullurl": page_url,
+        }]}})
+
+    await run_collection_job_with_session(db_session, job_id, client=_client(handler))
+
+    job = await db_session.get(ResearchCollectionJob, job_id)
+    await db_session.refresh(job)
+    assert job.status == "failed"
+    assert job.documents_fetched == 0
+    assert job.documents_new == 0 and job.documents_failed == 2
+    assert "page absente ou trop courte" in job.error_message
+    assert await _docs(db_session, tid) == []
+
+
 async def test_collection_falls_back_to_search_when_exact_title_missing(db_session, test_tenant):
     """Ex. Alger : le nom saisi par l'admin ne correspond pas toujours au
     titre exact de la page (accent, forme longue, homonymie). Le repli par

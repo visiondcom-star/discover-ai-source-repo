@@ -43,3 +43,14 @@ RESEARCH_JOB_STATUSES = ("pending", "processing", "done", "failed")
 # Manual refresh rate-limit: at most one manual_refresh trigger per tenant
 # in this rolling window, enforced in the research/run endpoint.
 RESEARCH_MANUAL_REFRESH_COOLDOWN_DAYS = 30
+
+# Collection rate-limit: at most one collection run per tenant in this rolling
+# window, whatever the previous run's final status, enforced in the
+# research/collection/run endpoint. A collection costs no LLM quota: this only
+# protects the Wikimedia servers, so the window is far shorter than the
+# manual-refresh cooldown.
+RESEARCH_COLLECTION_COOLDOWN_MINUTES = 10
+
+# research_collection_jobs.status lifecycle.
+RESEARCH_COLLECTION_JOB_STATUSES = ("pending", "processing", "done", "failed")
+

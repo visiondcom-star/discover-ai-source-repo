@@ -10,7 +10,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, not_
 from slugify import slugify
 from app.database import get_db, AsyncSessionLocal
-from app.models import Tenant, TenantCategory, ResearchJob, DestinationResearchDocument, User
+from app.models import (
+    Tenant,
+    TenantCategory,
+    ResearchJob,
+    ResearchCollectionJob,
+    DestinationResearchDocument,
+    User,
+)
 from app.schemas import (
     TenantUpdate,
     TenantResponse,
@@ -18,22 +25,33 @@ from app.schemas import (
     TenantCategoryResponse,
     ResearchJobResponse,
     ResearchRunRequest,
+    ResearchCollectionJobResponse,
+    ResearchCollectionRunRequest,
     ResearchDocumentIngest,
     ResearchDocumentResponse,
-)
-from app.constants import RESEARCH_MANUAL_REFRESH_COOLDOWN_DAYS, RESEARCH_SOURCE_TYPES
-from app.dependencies import get_current_admin, get_tenant_admin
-from app.services import tenant_ai_config_service as ai_config_service
-from app.services.research_service import ResearchService
-from app.services.tenant_ai_config_service import UnsupportedProviderError
-from app.services.tenant_ai_quota_service import QuotaExceededError
-from app.schemas import (
+    ResearchSourceConfigCreate,
+    ResearchSourceConfigUpdate,
+    ResearchSourceConfigResponse,
     TenantAIConfigUpdate,
     TenantAIConfigResponse,
     TenantAICredentialCreate,
     TenantAICredentialResponse,
     ProviderTestResult,
 )
+
+from app.constants import (
+    RESEARCH_COLLECTION_COOLDOWN_MINUTES,
+    RESEARCH_MANUAL_REFRESH_COOLDOWN_DAYS,
+    RESEARCH_SOURCE_TYPES,
+)
+from app.dependencies import get_current_admin, get_tenant_admin
+from app.services import tenant_ai_config_service as ai_config_service
+from app.services.research_service import ResearchService
+from app.services.tenant_ai_config_service import UnsupportedProviderError
+from app.services.tenant_ai_quota_service import QuotaExceededError
+from app.services import research_source_service
+from app.services.research_source_service import DuplicateSourceError
+from app.services.research_collection_service import run_collection_job
 
 router = APIRouter()
 
@@ -470,6 +488,105 @@ async def start_tenant_research(
     background_tasks.add_task(_run_research_pipeline, job.id)
     return job
 
+
+@router.post(
+    "/{tenant_id}/research/collection/run",
+    response_model=ResearchCollectionJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def start_research_collection(
+    tenant_id: UUID,
+    data: ResearchCollectionRunRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_admin: User = Depends(get_tenant_admin),
+):
+    """Lance la collecte automatique de documents (Wikivoyage/Wikipedia +
+    sources 'wiki' configurées) pour un tenant, en tâche de fond.
+
+    Contrairement à /research/run (pipeline IA, cooldown mensuel par quota),
+    la collecte n'a pas de coût LLM : la limite ici protège les serveurs
+    Wikimedia, pas le budget IA. Deux garde-fous indépendants :
+    - concurrence : un seul job pending/processing à la fois par tenant (409) ;
+    - fréquence : pas plus d'un lancement toutes les
+      RESEARCH_COLLECTION_COOLDOWN_MINUTES minutes, quel que soit le statut
+      final du job précédent (429).
+    """
+    result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
+    tenant = result.scalar_one_or_none()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
+    active = await db.execute(
+        select(ResearchCollectionJob).where(
+            ResearchCollectionJob.tenant_id == tenant.id,
+            ResearchCollectionJob.status.in_(("pending", "processing")),
+        )
+    )
+    if active.scalars().first():
+        raise HTTPException(
+            status_code=409,
+            detail="Une collecte est déjà en cours pour ce tenant.",
+        )
+
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(
+        minutes=RESEARCH_COLLECTION_COOLDOWN_MINUTES
+    )
+    recent = await db.execute(
+        select(ResearchCollectionJob).where(
+            ResearchCollectionJob.tenant_id == tenant.id,
+            ResearchCollectionJob.created_at >= cutoff,
+        )
+    )
+    if recent.scalars().first():
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                "Merci de patienter avant de relancer une collecte "
+                f"(limite : {RESEARCH_COLLECTION_COOLDOWN_MINUTES} min)."
+            ),
+        )
+
+    job = ResearchCollectionJob(
+        tenant_id=tenant.id,
+        status="pending",
+        params={
+            k: v
+            for k, v in {"territory": data.territory, "languages": data.languages}.items()
+            if v is not None
+        },
+    )
+    db.add(job)
+    await db.commit()
+    await db.refresh(job)
+
+    background_tasks.add_task(run_collection_job, job.id)
+    return job
+
+
+@router.get(
+    "/{tenant_id}/research/collection/jobs/{job_id}",
+    response_model=ResearchCollectionJobResponse,
+)
+async def get_research_collection_job_status(
+    tenant_id: UUID,
+    job_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_admin: User = Depends(get_tenant_admin),
+):
+    """Retourne le statut d'un job de collecte (polling mobile)."""
+    result = await db.execute(
+        select(ResearchCollectionJob).where(
+            ResearchCollectionJob.id == job_id,
+            ResearchCollectionJob.tenant_id == tenant_id,
+        )
+    )
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="Research collection job not found")
+    return job
+
+
 @router.get(
     "/{tenant_id}/research/jobs/{job_id}",
     response_model=ResearchJobResponse,
@@ -582,3 +699,75 @@ async def delete_tenant_ai_credential(
     if not deleted:
         raise HTTPException(status_code=404, detail="Aucun credential enregistré pour ce provider")
  
+
+
+
+# ============= Research Sources Endpoints =============
+@router.get(
+    "/{tenant_id}/research/sources",
+    response_model=List[ResearchSourceConfigResponse],
+)
+async def list_tenant_research_sources(
+    tenant_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(get_tenant_admin),
+):
+    """Liste les sources de recherche configurées pour ce tenant."""
+    return await research_source_service.list_tenant_sources(db, tenant_id)
+
+
+@router.post(
+    "/{tenant_id}/research/sources",
+    response_model=ResearchSourceConfigResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_tenant_research_source(
+    tenant_id: UUID,
+    data: ResearchSourceConfigCreate,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(get_tenant_admin),
+):
+    """Ajoute une nouvelle source de recherche pour ce tenant."""
+    try:
+        return await research_source_service.create_tenant_source(db, tenant_id, data)
+    except DuplicateSourceError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+
+@router.patch(
+    "/{tenant_id}/research/sources/{source_id}",
+    response_model=ResearchSourceConfigResponse,
+)
+async def update_tenant_research_source(
+    tenant_id: UUID,
+    source_id: UUID,
+    data: ResearchSourceConfigUpdate,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(get_tenant_admin),
+):
+    """Met à jour une source de recherche d'un tenant."""
+    try:
+        updated = await research_source_service.update_tenant_source(db, tenant_id, source_id, data)
+    except DuplicateSourceError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    if not updated:
+        raise HTTPException(status_code=404, detail="Source not found")
+    return updated
+
+
+@router.delete(
+    "/{tenant_id}/research/sources/{source_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_tenant_research_source(
+    tenant_id: UUID,
+    source_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(get_tenant_admin),
+):
+    """Supprime une source de recherche d'un tenant."""
+    deleted = await research_source_service.delete_tenant_source(db, tenant_id, source_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Source not found")
+
+

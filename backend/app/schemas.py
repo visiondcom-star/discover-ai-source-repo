@@ -1,7 +1,7 @@
 """Pydantic schemas for request/response validation."""
 from datetime import datetime
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator, model_validator
 from uuid import UUID
 
 
@@ -20,10 +20,12 @@ def _pattern(values: tuple[str, ...]) -> str:
     return "^(?:" + "|".join(values) + ")$"
 
 
+
 # ============= Tenant Schemas =============
 class TenantBase(BaseModel):
     slug: str = Field(..., min_length=2, max_length=50)
     name: str = Field(..., min_length=2, max_length=100)
+    country_code: Optional[str] = Field(None, pattern=r"^[A-Za-z]{2}$")
     default_language: str = "fr"
     supported_languages: List[str] = ["fr", "ar", "en"]
     default_currency: str  # required — each tenant must declare its currency
@@ -32,6 +34,13 @@ class TenantBase(BaseModel):
     is_active: bool = True
     config: Dict[str, Any] = {}
 
+    @field_validator("country_code")
+    @classmethod
+    def normalize_country_code(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        return v.upper()
+
 
 class TenantCreate(TenantBase):
     pass
@@ -39,6 +48,7 @@ class TenantCreate(TenantBase):
 
 class TenantUpdate(BaseModel):
     name: Optional[str] = None
+    country_code: Optional[str] = Field(None, pattern=r"^[A-Za-z]{2}$")
     default_language: Optional[str] = None
     supported_languages: Optional[List[str]] = None
     default_currency: Optional[str] = None
@@ -46,11 +56,19 @@ class TenantUpdate(BaseModel):
     secondary_color: Optional[str] = None
     config: Optional[Dict[str, Any]] = None
 
+    @field_validator("country_code")
+    @classmethod
+    def normalize_country_code(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        return v.upper()
+
 
 class TenantResponse(TenantBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
+    country_code: Optional[str] = None
     created_at: datetime
 
 
@@ -138,6 +156,8 @@ class ResearchDocumentResponse(BaseModel):
     source_type: str = Field(..., pattern=_pattern(RESEARCH_SOURCE_TYPES))
     source_url: Optional[str] = None
     language: Optional[str] = None
+    license: Optional[str] = None
+    attribution: Optional[str] = None
     status: str = Field(..., pattern=_pattern(RESEARCH_DOCUMENT_STATUSES))
     content_hash: str
     collected_at: datetime
@@ -192,6 +212,66 @@ class ResearchJobResponse(BaseModel):
     categories_pending_review: int = 0
     error_message: Optional[str] = None
     created_at: datetime
+
+
+class ResearchCollectionRunRequest(BaseModel):
+    territory: Optional[str] = None
+    languages: Optional[List[str]] = None
+
+
+class ResearchCollectionJobResponse(BaseModel):
+    id: UUID
+    tenant_id: UUID
+    status: str
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+    documents_fetched: int
+    documents_new: int
+    documents_duplicate: int
+    documents_failed: int
+    error_message: Optional[str] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ============= Research Source Config Schemas =============
+class ResearchSourceConfigCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    url: str = Field(..., max_length=500, pattern=r"^https?://[^\s/$.?#].[^\s]*$")
+    source_type: str = Field(default="office_tourisme", pattern=_pattern(RESEARCH_SOURCE_TYPES))
+    enabled: bool = True
+    config: Dict[str, Any] = {}
+
+
+class ResearchSourceConfigUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    url: Optional[str] = Field(None, max_length=500, pattern=r"^https?://[^\s/$.?#].[^\s]*$")
+    source_type: Optional[str] = Field(None, pattern=_pattern(RESEARCH_SOURCE_TYPES))
+    enabled: Optional[bool] = None
+    config: Optional[Dict[str, Any]] = None
+
+    @model_validator(mode="after")
+    def reject_explicit_nulls(self):
+        for field in self.model_fields_set:
+            if getattr(self, field) is None:
+                raise ValueError(f"'{field}' ne peut pas être null")
+        return self
+
+
+class ResearchSourceConfigResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    tenant_id: Optional[UUID] = None
+    country_code: Optional[str] = None
+    name: str
+    url: str
+    source_type: str
+    enabled: bool
+    config: Dict[str, Any]
+    created_at: datetime
+    updated_at: Optional[datetime] = None
 
 
 # ============= POI Schemas =============
@@ -518,6 +598,10 @@ class ProviderTestResult(BaseModel):
     "credential_unreadable", "invalid_api_key", "permission_denied",
     "model_unavailable", "quota_exceeded", "network_error", "provider_error",
     "unknown_error", "test_not_implemented_for_provider"."""
+    # `model_tested` ne doit pas déclencher l'avertissement de namespace protégé
+    # « model_ » de pydantic.
+    model_config = ConfigDict(protected_namespaces=())
+
     provider: str
     connected: bool
     reason: Optional[str] = None

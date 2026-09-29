@@ -6,6 +6,8 @@ from sqlalchemy.dialects.postgresql import UUID
 from pgvector.sqlalchemy import Vector
 from sqlalchemy.orm import relationship, validates
 from app.database import Base
+from app.constants import RESEARCH_COLLECTION_JOB_STATUSES, RESEARCH_SOURCE_TYPES
+
 
 
 def utcnow() -> datetime:
@@ -46,6 +48,7 @@ class Tenant(Base):
     primary_color = Column(String(7), default="#006233")
     secondary_color = Column(String(7), default="#FFFFFF")
     is_active = Column(Boolean, default=True)
+    country_code = Column(String(2), nullable=True, index=True)
     config = Column(JSON, default=dict)
     created_at = Column(DateTime, default=utcnow)
 
@@ -60,6 +63,18 @@ class Tenant(Base):
     tenant_categories = relationship("TenantCategory", back_populates="tenant", cascade="all, delete-orphan")
     research_documents = relationship("DestinationResearchDocument", back_populates="tenant")
     research_jobs = relationship("ResearchJob", back_populates="tenant")
+    research_source_configs = relationship("ResearchSourceConfig", back_populates="tenant", cascade="all, delete-orphan")
+
+    @validates("country_code")
+    def _validate_country_code(self, _key, value):
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError("country_code doit être une chaîne ou None")
+        normalized = value.strip().upper()
+        if len(normalized) != 2 or not normalized.isascii() or not normalized.isalpha():
+            raise ValueError("country_code doit être exactement 2 lettres ASCII (ISO 3166-1 alpha-2)")
+        return normalized
 
 
 class TenantCategory(Base):
@@ -124,6 +139,8 @@ class DestinationResearchDocument(Base):
     source_url = Column(String(500), nullable=True)
     raw_text = Column(Text, nullable=False)
     language = Column(String(10), nullable=True)                  # détecté à l'ingestion
+    license = Column(String(50), nullable=True)
+    attribution = Column(Text, nullable=True)
     # raw | processed | discarded — la normalisation/extraction est en
     # mémoire pendant le run ; 'processed' = le LLM a fini de travailler
     # sur ce document (au moins une passe d'extraction consommée).
@@ -536,3 +553,100 @@ class TenantAIUsageLog(Base):
     @property
     def total_tokens(self):
         return self.prompt_tokens + self.completion_tokens
+
+
+
+class ResearchSourceConfig(Base):
+    """Configuration d'une source pour le pipeline de collecte destination.
+
+    Une ligne appartient soit à un tenant (tenant_id non-nul, country_code nul),
+    soit à un pays (tenant_id nul, country_code renseigné), jamais aux deux ni à aucun.
+    """
+    __tablename__ = "research_source_configs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    country_code = Column(String(2), nullable=True, index=True)
+    name = Column(String(100), nullable=False)
+    url = Column(String(500), nullable=False)
+    source_type = Column(String(20), nullable=False, default="office_tourisme")
+    enabled = Column(Boolean, nullable=False, default=True)
+    config = Column(JSON, nullable=False, default=dict)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+    tenant = relationship("Tenant", back_populates="research_source_configs")
+
+    @validates("country_code")
+    def _validate_country_code(self, _key, value):
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError("country_code doit être une chaîne ou None")
+        normalized = value.strip().upper()
+        if len(normalized) != 2 or not normalized.isascii() or not normalized.isalpha():
+            raise ValueError("country_code doit être exactement 2 lettres ASCII (ISO 3166-1 alpha-2)")
+        return normalized
+
+    @validates("source_type")
+    def _validate_source_type(self, _key, value):
+        if value not in RESEARCH_SOURCE_TYPES:
+            raise ValueError(
+                f"source_type invalide : {value!r} (autorisés : {RESEARCH_SOURCE_TYPES})"
+            )
+        return value
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Validation d'exclusivité tenant_id / country_code en Python
+        has_tenant = self.tenant_id is not None
+        has_country = self.country_code is not None
+        if has_tenant == has_country:
+            raise ValueError(
+                "Une source doit appartenir soit à un tenant soit à un pays, "
+                "jamais aux deux ni à aucun."
+            )
+
+
+class ResearchCollectionJob(Base):
+    """Job de collecte automatique pour le pipeline de recherche destination."""
+    __tablename__ = "research_collection_jobs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    status = Column(
+        String(20),
+        nullable=False,
+        default="pending",
+        server_default="pending",
+        index=True,
+    )
+    started_at = Column(DateTime, nullable=True)
+    finished_at = Column(DateTime, nullable=True)
+    documents_fetched = Column(Integer, nullable=False, default=0, server_default="0")
+    documents_new = Column(Integer, nullable=False, default=0, server_default="0")
+    documents_duplicate = Column(Integer, nullable=False, default=0, server_default="0")
+    documents_failed = Column(Integer, nullable=False, default=0, server_default="0")
+    error_message = Column(Text, nullable=True)
+    params = Column(JSON, nullable=False, default=dict)
+    created_at = Column(DateTime, default=utcnow)
+
+    tenant = relationship("Tenant")
+
+    @validates("status")
+    def _validate_status(self, _key, value):
+        if value not in RESEARCH_COLLECTION_JOB_STATUSES:
+            raise ValueError(
+                f"status invalide : {value!r} (autorisés : {RESEARCH_COLLECTION_JOB_STATUSES})"
+            )
+        return value

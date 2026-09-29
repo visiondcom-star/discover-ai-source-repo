@@ -82,20 +82,9 @@ def test_build_targets_dedup_and_manual_pages():
     assert len(targets) == 5  # 4 (2 projets x 2 langues) + Tizi Ouzou, doublon Kabylie fusionné
 
 
-def test_content_hash_normalization_matches_ingest_document():
-    """Contrat partagé avec `_ingest_document` (endpoints/tenants.py:177) :
-    `strip()` des extrémités uniquement — l'espacement interne est significatif.
+def test_content_hash_matches_ingest_document():
+    # Même formule que _ingest_document : sha256(raw_text.strip())
+    import hashlib
 
-    Si la collecte normalisait plus que l'ingestion par API (réduction des
-    espaces, minuscules...), le même contenu produirait deux hashs différents,
-    donc deux `destination_research_documents` pour un seul texte.
-    """
-    # Extrémités ignorées (comportement identique des deux côtés du chemin).
-    assert compute_content_hash("  Kabylie, montagnes  ") == compute_content_hash(
-        "Kabylie, montagnes"
-    )
-    # Espacement interne significatif : pas de normalisation cachée.
+    assert compute_content_hash("  texte\n") == hashlib.sha256("texte".encode("utf-8")).hexdigest()
     assert compute_content_hash("a  b") != compute_content_hash("a b")
-    assert compute_content_hash("a\nb") != compute_content_hash("a b")
-    # sha256 hexdigest (64 caractères) — contrainte de la colonne content_hash.
-    assert len(compute_content_hash("Kabylie")) == 64

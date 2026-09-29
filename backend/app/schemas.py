@@ -1,4 +1,5 @@
 """Pydantic schemas for request/response validation."""
+import re
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator, model_validator
@@ -8,6 +9,7 @@ from uuid import UUID
 from app.constants import (
     CATEGORY_STATUSES,
     PARENT_FAMILIES,
+    RESEARCH_COLLECTION_JOB_STATUSES,
     RESEARCH_DOCUMENT_STATUSES,
     RESEARCH_JOB_STATUSES,
     RESEARCH_SOURCE_TYPES,
@@ -18,6 +20,11 @@ from app.constants import (
 def _pattern(values: tuple[str, ...]) -> str:
     """Builds an anchored alternation pattern from a fixed value set."""
     return "^(?:" + "|".join(values) + ")$"
+
+
+# Codes de langue Wikimedia acceptés (fr, en, zh-min-nan...).
+_WIKI_LANG_RE = re.compile(r"[a-z]{2,3}(?:-[a-z]+)?")
+
 
 
 # ============= Tenant Schemas =============
@@ -210,6 +217,60 @@ class ResearchJobResponse(BaseModel):
     categories_auto_published: int = 0
     categories_pending_review: int = 0
     error_message: Optional[str] = None
+    created_at: datetime
+
+
+class ResearchCollectionJobStartRequest(BaseModel):
+    """Payload de POST /tenants/{tenant_id}/research/collection/run.
+
+    Tous les champs sont optionnels : sans `territory` le runner collecte le nom
+    du tenant, sans `languages` les projets fr + en.
+    """
+    territory: Optional[str] = Field(None, min_length=1, max_length=100)
+    languages: Optional[List[str]] = None
+
+    @field_validator("languages")
+    @classmethod
+    def _validate_languages(cls, value: Optional[List[str]]) -> Optional[List[str]]:
+        """Codes de langue Wikimedia (`fr`, `en`, `zh-min-nan`...).
+
+        Validés ici pour que le runner ne lève pas ValueError en pleine
+        collecte : `WikimediaClient.fetch_page` valide `lang`, et un code
+        invalide ferait échouer tout le job au lieu d'une seule cible.
+        """
+        if value is None:
+            return None
+        normalized: List[str] = []
+        for lang in value:
+            candidate = (lang or "").strip()
+            if not _WIKI_LANG_RE.fullmatch(candidate):
+                raise ValueError(
+                    f"Code de langue Wikimedia invalide : {lang!r} "
+                    "(attendu : 2-3 lettres minuscules, ex. 'fr', 'en', 'zh-min-nan')"
+                )
+            if candidate not in normalized:
+                normalized.append(candidate)
+        if not normalized:
+            raise ValueError("'languages' ne peut pas être vide")
+        return normalized
+
+
+class ResearchCollectionJobResponse(BaseModel):
+    """Résultat de POST /tenants/{tenant_id}/research/collection/run et de
+    GET .../research/collection/jobs/{job_id}."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    tenant_id: UUID
+    status: str = Field(..., pattern=_pattern(RESEARCH_COLLECTION_JOB_STATUSES))
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+    documents_fetched: int = 0
+    documents_new: int = 0
+    documents_duplicate: int = 0
+    documents_failed: int = 0
+    error_message: Optional[str] = None
+    params: Dict[str, Any] = {}
     created_at: datetime
 
 

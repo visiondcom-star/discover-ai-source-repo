@@ -47,14 +47,10 @@ def _now() -> datetime:
 
 
 def compute_content_hash(text: str) -> str:
-    """sha256 du texte normalisé — MÊME normalisation que `_ingest_document`.
+    """sha256 hex de `text.strip()`.
 
-    Doit rester identique à la ligne `content_hash = ...` de
-    `_ingest_document` (app/api/v1/endpoints/tenants.py) : seul un `strip()`
-    des extrémités est appliqué, l'espacement interne est significatif. Toute
-    autre normalisation (réduction des espaces, minuscules, ...) ferait
-    diverger ce hash de celui de l'ingestion par API (upload/JSON) et le même
-    contenu serait alors stocké deux fois.
+    Identique à `_ingest_document` (tenants.py) : un même contenu ingéré par
+    upload ou par collecte produit le même hash et n'est stocké qu'une fois.
     """
     return hashlib.sha256(text.strip().encode("utf-8")).hexdigest()
 

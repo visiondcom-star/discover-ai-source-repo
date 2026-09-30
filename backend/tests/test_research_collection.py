@@ -1,13 +1,15 @@
 """Tests du runner de collecte (run_collection_job) : Wikimedia est simulé par
 httpx.MockTransport, la base est la vraie base de test (fixtures conftest)."""
 import httpx
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.models import (
     DestinationResearchDocument,
     ResearchCollectionJob,
+    ResearchJob,
     ResearchSourceConfig,
 )
+from app.services import research_collection_service as collection_service
 from app.services.research_collection_service import run_collection_job_with_session
 from app.services.wikimedia_client import WIKIMEDIA_LICENSE, WikimediaClient
 
@@ -232,3 +234,110 @@ async def test_collection_uses_manual_wiki_sources_and_ignores_others(db_session
 
     docs = await _docs(db_session, tid)
     assert [d.source_url for d in docs] == ["https://fr.wikivoyage.org/wiki/Tizi_Ouzou"]
+
+
+# ===== Endpoint POST /{tenant_id}/research/collection/run (tâche de fond) =====
+
+API = "/api/v1/tenants"
+
+
+def _patch_wiki(monkeypatch, available):
+    """Force le client Wikimedia du runner à passer par le transport simulé.
+
+    La tâche de fond instancie elle-même `WikimediaClient()` : on patche le nom
+    dans le module du runner pour qu'aucun test ne sorte sur Internet.
+    """
+    monkeypatch.setattr(
+        collection_service,
+        "WikimediaClient",
+        lambda *args, **kwargs: WikimediaClient(
+            transport=httpx.MockTransport(_wiki_handler(available))
+        ),
+    )
+
+
+async def _start_and_poll(client, headers, tenant_id, payload):
+    """POST puis poll du job : avec ASGITransport, la tâche de fond (collecte)
+    est terminée quand la réponse du POST revient."""
+    response = await client.post(
+        f"{API}/{tenant_id}/research/collection/run", headers=headers, json=payload
+    )
+    assert response.status_code == 202, response.text
+    job_id = response.json()["id"]
+    polled = await client.get(
+        f"{API}/{tenant_id}/research/collection/jobs/{job_id}", headers=headers
+    )
+    assert polled.status_code == 200, polled.text
+    return polled.json()
+
+
+async def _count(db, model, tenant_id):
+    res = await db.execute(
+        select(func.count()).select_from(model).where(model.tenant_id == tenant_id)
+    )
+    return res.scalar_one()
+
+
+async def test_collection_endpoint_fails_cleanly_on_invalid_language(
+    client, admin_headers, test_tenant, db_session, monkeypatch
+):
+    _patch_wiki(monkeypatch, set())  # aucune requête réseau : la validation échoue avant
+    job = await _start_and_poll(
+        client, admin_headers, test_tenant.id, {"languages": ["FR"]}
+    )
+
+    # Le ValueError n'est pas rattrapé par cible : le job échoue proprement
+    # (failed) avec l'erreur remontée, sans que l'endpoint lève une 500.
+    assert job["status"] == "failed"
+    assert "langue" in (job["error_message"] or "")
+    assert job["documents_new"] == 0
+    assert await _docs(db_session, test_tenant.id) == []
+
+
+async def test_collection_endpoint_fails_when_nothing_collected(
+    client, admin_headers, test_tenant, db_session, monkeypatch
+):
+    _patch_wiki(monkeypatch, set())  # aucun titre disponible sur aucun projet
+
+    job = await _start_and_poll(
+        client, admin_headers, test_tenant.id, {"territory": "Kabylie", "languages": ["fr"]}
+    )
+
+    assert job["status"] == "failed"  # rien collecté : échec, pas un "done" vide
+    assert job["documents_new"] == 0 and job["documents_failed"] == 2
+    assert await _docs(db_session, test_tenant.id) == []
+    # Aucune extraction LLM n'est lancée : la collecte et l'extraction restent
+    # deux étapes indépendantes.
+    assert await _count(db_session, ResearchJob, test_tenant.id) == 0
+
+
+async def test_collection_endpoint_runs_and_reports_counters(
+    client, admin_headers, test_tenant, db_session, monkeypatch
+):
+    _patch_wiki(monkeypatch, {("fr.wikivoyage.org", "Kabylie")})
+
+    job = await _start_and_poll(
+        client, admin_headers, test_tenant.id, {"territory": "Kabylie", "languages": ["fr"]}
+    )
+
+    assert job["status"] == "done"
+    assert job["error_message"]  # fr.wikipedia/Kabylie absent : remonté dans l'erreur
+    assert (
+        job["documents_fetched"],
+        job["documents_new"],
+        job["documents_duplicate"],
+        job["documents_failed"],
+    ) == (1, 1, 0, 1)
+    assert job["started_at"] and job["finished_at"]
+
+    docs = await _docs(db_session, test_tenant.id)
+    assert len(docs) == 1
+    assert (docs[0].source_type, docs[0].status, docs[0].license) == (
+        "wiki",
+        "raw",
+        WIKIMEDIA_LICENSE,
+    )
+
+    # La collecte stocke en "raw" et ne déclenche PAS le pipeline d'extraction
+    # (extraction = /research/run, séparée et tarifée à part).
+    assert await _count(db_session, ResearchJob, test_tenant.id) == 0

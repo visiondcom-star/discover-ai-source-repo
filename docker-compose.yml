@@ -45,6 +45,10 @@ services:
       - ./backend/tests:/app/tests
       # Keep migrations hot-mounted so new revisions apply on restart without a rebuild.
       - ./backend/alembic:/app/alembic
+      # pytest.ini carries `asyncio_mode = auto`. Without it, every async test
+      # lacking an explicit @pytest.mark.asyncio is silently SKIPPED (not failed),
+      # so the suite reports green while covering far less than it appears to.
+      - ./backend/pytest.ini:/app/pytest.ini:ro
 
   frontend:
     build:

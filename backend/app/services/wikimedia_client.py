@@ -5,11 +5,14 @@ son attribution (CC BY-SA). Aucun appel LLM ici.
 """
 import os
 import re
+import logging
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 from urllib.parse import quote, unquote, urlsplit
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 WIKIMEDIA_LICENSE = "CC BY-SA 4.0"
 WIKI_PROJECTS = {"wikivoyage": "Wikivoyage", "wikipedia": "Wikipedia"}
@@ -82,6 +85,40 @@ class WikimediaClient:
         if self._http is not None:
             await self._http.aclose()
             self._http = None
+
+    async def search_title(
+        self, project: str, lang: str, query: str, limit: int = 3
+    ) -> List[str]:
+        """Résout un nom approximatif vers de vrais titres via `action=opensearch`.
+
+        Utilisé en repli quand le titre exact n'existe pas (accents, forme
+        longue, homonymie). Renvoie une liste ordonnée par pertinence,
+        vide si rien n'est trouvé ou en cas d'erreur réseau (fail-open : un
+        repli qui échoue ne doit pas faire échouer toute la collecte)."""
+        if self._http is None:
+            raise RuntimeError("WikimediaClient doit être utilisé via 'async with'.")
+        if project not in WIKI_PROJECTS:
+            raise ValueError(f"Projet Wikimedia inconnu : {project!r}")
+        if not _LANG_RE.match(lang):
+            raise ValueError(f"Code de langue invalide : {lang!r}")
+
+        params = {
+            "action": "opensearch",
+            "format": "json",
+            "namespace": "0",
+            "limit": str(limit),
+            "redirects": "resolve",
+            "search": query,
+        }
+        try:
+            resp = await self._http.get(f"https://{lang}.{project}.org/w/api.php", params=params)
+            resp.raise_for_status()
+            payload = resp.json()
+        except (httpx.HTTPError, ValueError) as exc:
+            logger.info("opensearch %s/%s/%s indisponible : %s", project, lang, query, exc)
+            return []
+        titles = payload[1] if isinstance(payload, list) and len(payload) > 1 else []
+        return [t for t in titles if isinstance(t, str) and t.strip()]
 
     async def fetch_page(self, project: str, lang: str, title: str) -> Optional[WikiPage]:
         """Renvoie la page (texte brut) ou None si elle n'existe pas / est vide.

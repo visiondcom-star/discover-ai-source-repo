@@ -70,15 +70,32 @@ async def test_fetch_page_rejects_bad_lang():
             await wiki.fetch_page("wikipedia", "fr.evil.com/", "Kabylie")
 
 
+async def test_search_title_returns_candidates():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.params["action"] == "opensearch"
+        assert request.url.params["search"] == "Alger ville"
+        return httpx.Response(200, json=["Alger ville", ["Alger", "Alger Centre"], ["", ""], ["", ""]])
+
+    async with _client(handler) as wiki:
+        titles = await wiki.search_title("wikipedia", "fr", "Alger ville")
+    assert titles == ["Alger", "Alger Centre"]
+
+
+async def test_search_title_returns_empty_on_error():
+    async with _client(lambda r: httpx.Response(503)) as wiki:
+        assert await wiki.search_title("wikipedia", "fr", "x") == []
+
+
 def test_build_targets_dedup_and_manual_pages():
     targets = build_targets(
         "Kabylie",
         ["fr", "en"],
         ["https://fr.wikivoyage.org/wiki/Kabylie", "https://fr.wikivoyage.org/wiki/Tizi_Ouzou", "https://x.org/y"],
     )
-    assert ("wikivoyage", "fr", "Kabylie") in targets
-    assert ("wikipedia", "en", "Kabylie") in targets
-    assert ("wikivoyage", "fr", "Tizi Ouzou") in targets
+    by_key = {(p, l, t): fb for p, l, t, fb in targets}
+    assert by_key[("wikivoyage", "fr", "Kabylie")] is True  # dérivée du territoire : repli autorisé
+    assert by_key[("wikipedia", "en", "Kabylie")] is True
+    assert by_key[("wikivoyage", "fr", "Tizi Ouzou")] is False  # source manuelle : titre exact
     assert len(targets) == 5  # 4 (2 projets x 2 langues) + Tizi Ouzou, doublon Kabylie fusionné
 
 

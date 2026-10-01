@@ -28,6 +28,10 @@ def _job_url(tenant_id, job_id):
     return f"/api/v1/tenants/{tenant_id}/research/collection/jobs/{job_id}"
 
 
+def _research_run_url(tenant_id):
+    return f"/api/v1/tenants/{tenant_id}/research/run"
+
+
 @pytest.fixture(autouse=True)
 def _noop_collection_runner(monkeypatch):
     """Simule une collecte instantanée : marque le job "done" sans toucher
@@ -492,3 +496,45 @@ async def test_chain_helper_is_a_noop_on_unknown_job(db_session):
     """Job de collecte introuvable : le helper rend la main sans lever
     (même convention que run_collection_job)."""
     await _run_collection_then_pipeline(uuid.uuid4())
+
+
+@pytest.mark.asyncio
+async def test_collection_job_does_not_consume_manual_refresh_cooldown(
+    client, admin_headers, test_tenant, db_session, pipeline_calls
+):
+    """Un job `collection` ne doit pas consommer le cooldown manual_refresh.
+
+    Le rate-limit de /research/run filtre sur `trigger_type ==
+    "manual_refresh"` : sinon, enchaîner une collecte sur le pipeline
+    priverait l'admin de son actualisation manuelle du mois, alors que
+    l'opt-in a été déclenché par la plateforme et non par lui.
+
+    Le contrôle négatif (un manual_refresh bloque bien le suivant) est
+    indispensable : sans lui, ce test passerait aussi si le rate-limit
+    disparaissait entièrement.
+    """
+    db_session.add(
+        ResearchJob(
+            tenant_id=test_tenant.id, trigger_type="collection", status="done"
+        )
+    )
+    await db_session.commit()
+
+    response = await client.post(
+        _research_run_url(test_tenant.id),
+        headers=admin_headers,
+        json={"trigger_type": "manual_refresh"},
+    )
+    assert response.status_code == 202, response.text
+    assert response.json()["trigger_type"] == "manual_refresh"
+
+    # Contrôle négatif : le cooldown manuel, lui, s'applique toujours.
+    blocked = await client.post(
+        _research_run_url(test_tenant.id),
+        headers=admin_headers,
+        json={"trigger_type": "manual_refresh"},
+    )
+    assert blocked.status_code == 429, (
+        "le cooldown manual_refresh doit rester actif après le job "
+        f"collection (reçu {blocked.status_code})"
+    )

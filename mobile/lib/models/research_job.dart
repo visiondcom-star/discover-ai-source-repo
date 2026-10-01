@@ -7,7 +7,8 @@ enum ResearchTriggerType {
   tenantCreated,
   scheduled,
   manualRefresh,
-  adminReplay;
+  adminReplay,
+  collection;
 
   static ResearchTriggerType fromJson(String value) {
     switch (value) {
@@ -19,6 +20,8 @@ enum ResearchTriggerType {
         return ResearchTriggerType.manualRefresh;
       case 'admin_replay':
         return ResearchTriggerType.adminReplay;
+      case 'collection':
+        return ResearchTriggerType.collection;
       default:
         throw ArgumentError('Unknown trigger_type: $value');
     }
@@ -34,6 +37,8 @@ enum ResearchTriggerType {
         return 'manual_refresh';
       case ResearchTriggerType.adminReplay:
         return 'admin_replay';
+      case ResearchTriggerType.collection:
+        return 'collection';
     }
   }
 }

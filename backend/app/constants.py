@@ -35,7 +35,13 @@ RESEARCH_SOURCE_TYPES = ("guide", "office_tourisme", "wiki", "autre")
 RESEARCH_DOCUMENT_STATUSES = ("raw", "processed", "discarded")
 
 # research_jobs.trigger_type — how a run was started.
-RESEARCH_TRIGGER_TYPES = ("tenant_created", "scheduled", "manual_refresh", "admin_replay")
+RESEARCH_TRIGGER_TYPES = (
+    "tenant_created",
+    "scheduled",
+    "manual_refresh",
+    "admin_replay",
+    "collection",
+)
 
 # research_jobs.status lifecycle.
 RESEARCH_JOB_STATUSES = ("pending", "processing", "done", "failed")

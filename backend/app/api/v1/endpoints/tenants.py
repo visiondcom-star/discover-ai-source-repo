@@ -489,6 +489,51 @@ async def start_tenant_research(
     return job
 
 
+async def _run_collection_then_pipeline(job_id):
+    """Collecte, puis pipeline IA si la collecte a ramené du nouveau.
+
+    Le pipeline n'est lancé que si la collecte est `done`, a produit au moins
+    un document nouveau et si aucun ResearchJob du tenant n'est déjà actif
+    (le pipeline consomme tous les documents `raw` : deux runs simultanés
+    liraient les mêmes). Un échec du pipeline n'altère pas le statut de la
+    collecte, qui reste `done`.
+    """
+    await run_collection_job(job_id)
+
+    async with AsyncSessionLocal() as session:
+        job = await session.get(ResearchCollectionJob, job_id)
+        if job is None or job.status != "done" or job.documents_new == 0:
+            return
+
+        busy = await session.execute(
+            select(ResearchJob).where(
+                ResearchJob.tenant_id == job.tenant_id,
+                ResearchJob.status.in_(("pending", "processing")),
+            )
+        )
+        if busy.scalars().first():
+            return
+
+        research_job = ResearchJob(
+            tenant_id=job.tenant_id, trigger_type="collection", status="pending"
+        )
+        session.add(research_job)
+        await session.flush()  # génère research_job.id avant de le référencer
+        # Réaffectation d'un NOUVEAU dictionnaire, et non mutation en place :
+        # `params` est un Column(JSON) sans MutableDict, donc SQLAlchemy ne
+        # compare que l'identité de l'objet. `job.params["research_job_id"] = x`
+        # ne serait ni détecté au flush ni écrit en base — sans lever la moindre
+        # erreur, et en laissant même l'objet en session afficher la bonne
+        # valeur (le suivi HTTP, lui, relirait null).
+        job.params = {**(job.params or {}), "research_job_id": str(research_job.id)}
+        await session.commit()
+        # expire_on_commit=False (app/database.py) : l'attribut reste chargé
+        # après le commit, pas de rechargement lazy ni de DetachedInstanceError.
+        research_job_id = research_job.id
+
+    await _run_research_pipeline(research_job_id)
+
+
 @router.post(
     "/{tenant_id}/research/collection/run",
     response_model=ResearchCollectionJobResponse,
@@ -547,20 +592,30 @@ async def start_research_collection(
             ),
         )
 
+    # params n'est jamais null (colonne NOT NULL) et les clés absentes sont
+    # omises plutôt que mises à None : le service de collecte distingue ainsi
+    # « non fourni » de « fourni vide ».
+    params = {
+        k: v
+        for k, v in {"territory": data.territory, "languages": data.languages}.items()
+        if v is not None
+    }
+    if data.run_pipeline:
+        params["run_pipeline"] = True
+
     job = ResearchCollectionJob(
         tenant_id=tenant.id,
         status="pending",
-        params={
-            k: v
-            for k, v in {"territory": data.territory, "languages": data.languages}.items()
-            if v is not None
-        },
+        params=params,
     )
     db.add(job)
     await db.commit()
     await db.refresh(job)
 
-    background_tasks.add_task(run_collection_job, job.id)
+    # run_pipeline n'est lu que dans params : c'est ici, et seulement ici, que
+    # le drapeau décide si la collecte est enchaînée sur le pipeline IA.
+    runner = _run_collection_then_pipeline if data.run_pipeline else run_collection_job
+    background_tasks.add_task(runner, job.id)
     return job
 
 

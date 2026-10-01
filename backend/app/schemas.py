@@ -217,6 +217,10 @@ class ResearchJobResponse(BaseModel):
 class ResearchCollectionRunRequest(BaseModel):
     territory: Optional[str] = None
     languages: Optional[List[str]] = None
+    # Opt-in : la collecte seule ne consomme aucun quota IA. Ce drapeau est
+    # seulement mémorisé dans le job (params.run_pipeline) ; le déclenchement du
+    # pipeline reste à brancher.
+    run_pipeline: bool = False
 
 
 class ResearchCollectionJobResponse(BaseModel):
@@ -230,6 +234,11 @@ class ResearchCollectionJobResponse(BaseModel):
     documents_duplicate: int
     documents_failed: int
     error_message: Optional[str] = None
+    # Drapeau de chaînage demandé au moment du POST (miroir de params) et
+    # research_job_id dès qu'un job de recherche est enchaîné. Les deux restent
+    # None/False pour une collecte seule, qui est un cas valide.
+    run_pipeline: bool = False
+    research_job_id: Optional[UUID] = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

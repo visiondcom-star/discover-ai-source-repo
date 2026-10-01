@@ -650,3 +650,25 @@ class ResearchCollectionJob(Base):
                 f"status invalide : {value!r} (autorisés : {RESEARCH_COLLECTION_JOB_STATUSES})"
             )
         return value
+
+    @property
+    def run_pipeline(self) -> bool:
+        """Drapeau de chaînage du pipeline demandé au POST.
+
+        Vrai seulement si la clé a été écrite : une clé absente se lit False
+        (et non None), donc la réponse HTTP est toujours un booléen.
+        """
+        return bool((self.params or {}).get("run_pipeline"))
+
+    @property
+    def research_job_id(self):
+        """Job de recherche éventuellement enchaîné sur cette collecte.
+
+        Stocké dans params (donc sans migration) : la valeur est écrite par le
+        service de collecte quand il crée le ResearchJob.
+
+        On utilise ``uuid.UUID`` et non le nom ``UUID``, qui désigne ici le type
+        dialectal PostgreSQL importé en tête de module.
+        """
+        value = (self.params or {}).get("research_job_id")
+        return uuid.UUID(value) if value else None

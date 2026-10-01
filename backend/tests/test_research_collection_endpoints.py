@@ -143,3 +143,81 @@ async def test_get_collection_job_is_tenant_isolated(
 
     response = await client.get(_job_url(test_tenant.id, job.id), headers=other_admin_headers)
     assert response.status_code == 404
+
+
+# ===== run_pipeline (opt-in) + research_job_id (suivi) =====
+
+
+@pytest.mark.asyncio
+async def test_start_collection_default_does_not_chain_pipeline(client, admin_headers, test_tenant):
+    response = await client.post(_run_url(test_tenant.id), headers=admin_headers, json={})
+    assert response.status_code == 202
+    data = response.json()
+    assert data["run_pipeline"] is False
+    assert data["research_job_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_start_collection_with_run_pipeline_flag(client, admin_headers, test_tenant):
+    response = await client.post(
+        _run_url(test_tenant.id), headers=admin_headers, json={"run_pipeline": True}
+    )
+    assert response.status_code == 202
+    data = response.json()
+    assert data["run_pipeline"] is True
+    assert data["research_job_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_start_collection_rejects_non_boolean_run_pipeline(client, admin_headers, test_tenant):
+    response = await client.post(
+        _run_url(test_tenant.id), headers=admin_headers, json={"run_pipeline": "peut-etre"}
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_get_collection_job_exposes_chained_research_job_id(
+    client, admin_headers, db_session, test_tenant
+):
+    """Suivi après coup : le research_job_id écrit dans params par la collecte
+    ressort sur le GET, ainsi que le run_pipeline demandé au POST."""
+    research_job_id = uuid.uuid4()
+    job = ResearchCollectionJob(
+        tenant_id=test_tenant.id,
+        status="done",
+        documents_fetched=1,
+        documents_new=1,
+        params={"run_pipeline": True, "research_job_id": str(research_job_id)},
+    )
+    db_session.add(job)
+    await db_session.commit()
+    await db_session.refresh(job)
+
+    response = await client.get(_job_url(test_tenant.id, job.id), headers=admin_headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["run_pipeline"] is True
+    assert data["research_job_id"] == str(research_job_id)
+
+
+@pytest.mark.asyncio
+async def test_get_collection_job_without_run_pipeline_is_false(
+    client, admin_headers, db_session, test_tenant
+):
+    """Une clé absente dans params se lit False : la réponse reste un booléen,
+    jamais null (le POST n'écrit le drapeau que s'il est demandé)."""
+    job = ResearchCollectionJob(
+        tenant_id=test_tenant.id,
+        status="done",
+        params={"territory": "Tizi Ouzou"},
+    )
+    db_session.add(job)
+    await db_session.commit()
+    await db_session.refresh(job)
+
+    response = await client.get(_job_url(test_tenant.id, job.id), headers=admin_headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["run_pipeline"] is False
+    assert data["research_job_id"] is None

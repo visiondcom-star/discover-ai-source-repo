@@ -547,14 +547,21 @@ async def start_research_collection(
             ),
         )
 
+    # params n'est jamais null (colonne NOT NULL) et les clés absentes sont
+    # omises plutôt que mises à None : le service de collecte distingue ainsi
+    # « non fourni » de « fourni vide ».
+    params = {
+        k: v
+        for k, v in {"territory": data.territory, "languages": data.languages}.items()
+        if v is not None
+    }
+    if data.run_pipeline:
+        params["run_pipeline"] = True
+
     job = ResearchCollectionJob(
         tenant_id=tenant.id,
         status="pending",
-        params={
-            k: v
-            for k, v in {"territory": data.territory, "languages": data.languages}.items()
-            if v is not None
-        },
+        params=params,
     )
     db.add(job)
     await db.commit()

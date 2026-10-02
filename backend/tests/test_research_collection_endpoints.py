@@ -18,6 +18,7 @@ from sqlalchemy import select, text
 
 from app.api.v1.endpoints.tenants import _run_collection_then_pipeline
 from app.models import ResearchCollectionJob, ResearchJob
+from app.services.orphan_jobs_service import fail_orphan_jobs
 
 
 def _run_url(tenant_id):
@@ -551,6 +552,41 @@ async def test_collection_job_does_not_consume_manual_refresh_cooldown(
         "le cooldown manual_refresh doit rester actif après le job "
         f"collection (reçu {blocked.status_code})"
     )
+
+
+# ===== Référence croisée : un orphelin ne bloque plus la collecte =====
+
+
+@pytest.mark.asyncio
+async def test_orphan_collection_no_longer_blocks_a_new_collection(
+    client, admin_headers, test_tenant, db_session
+):
+    """Après le nettoyage, le tenant peut relancer une collecte (plus de 409)."""
+    db_session.add(
+        ResearchCollectionJob(
+            tenant_id=test_tenant.id, status="processing", params={}
+        )
+    )
+    await db_session.commit()
+
+    # Avant nettoyage : c'est le garde-fou de CONCURRENCE qui répond 409
+    # (job actif), pas le rate-limit de 10 min encore en passe.
+    blocked = await client.post(
+        _run_url(test_tenant.id), headers=admin_headers, json={}
+    )
+    assert blocked.status_code == 409, blocked.text
+    assert "déjà en cours" in blocked.json()["detail"]
+
+    assert await fail_orphan_jobs(db_session) == 1
+
+    # Après : le garde-fou de CONCURRENCE ne répond plus — le 409 est levé.
+    # On n'attend pas 202 pour autant : le rate-limit de 10 min rejette ce
+    # tenant sur ce même job (créé à l'instant, donc dans la fenêtre, et la
+    # requête de rate-limit ne filtre pas sur `status`). Le 429 qui suit est
+    # donc la preuve attendue : plus aucun 409, et bien le rate-limit.
+    after = await client.post(_run_url(test_tenant.id), headers=admin_headers, json={})
+    assert after.status_code == 429, after.text
+    assert "patienter" in after.json()["detail"]
 
 
 # ===== Garde-fou de concurrence sur /research/run =====

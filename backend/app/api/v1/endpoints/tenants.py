@@ -7,7 +7,7 @@ from uuid import UUID
 import pypdf
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Header, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, not_
+from sqlalchemy import select, and_, not_, or_
 from slugify import slugify
 from app.database import get_db, AsyncSessionLocal
 from app.models import (
@@ -472,13 +472,19 @@ async def start_tenant_research(
                 ResearchJob.tenant_id == tenant.id,
                 ResearchJob.trigger_type == "manual_refresh",
                 ResearchJob.created_at >= cutoff,
-                # Un run échoué par dépassement de quota ne consomme pas le
-                # cooldown : le tenant n'a rien pu faire d'autre que retenter
-                # plus tard (préfixe posé par _run_research_pipeline).
+                # Deux échecs ne consomment pas le cooldown, car le tenant n'a
+                # rien pu faire d'autre que retenter plus tard :
+                # - "quota_exceeded:" : crédit épuisé (posé par
+                #   _run_research_pipeline) ;
+                # - "interrupted:" : le serveur a redémarré en cours de run
+                #   (posé par fail_orphan_jobs au démarrage).
                 not_(
                     and_(
                         ResearchJob.status == "failed",
-                        ResearchJob.error_message.like("quota_exceeded:%"),
+                        or_(
+                            ResearchJob.error_message.like("quota_exceeded:%"),
+                            ResearchJob.error_message.like("interrupted:%"),
+                        ),
                     )
                 ),
             )

@@ -171,12 +171,12 @@ class _CategoriesList extends StatelessWidget {
     final categories = context.watch<TenantProvider>().categories;
 
     if (categories.isEmpty) {
-      return Card(
+      return const Card(
         margin: EdgeInsets.zero,
         child: ListTile(
           enabled: false,
-          leading: const Icon(Icons.category_outlined),
-          title: const Text('Aucune catégorie pour le moment'),
+          leading: Icon(Icons.category_outlined),
+          title: Text('Aucune catégorie pour le moment'),
         ),
       );
     }

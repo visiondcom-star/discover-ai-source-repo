@@ -69,7 +69,7 @@ class ResearchProvider extends ChangeNotifier {
         if (job.status.isTerminal) {
           _pollTimer?.cancel();
         }
-      } on ApiException catch (e) {
+      } on ApiException {
         _error = 'Impossible de récupérer le statut du job.';
         _pollTimer?.cancel();
         notifyListeners();

@@ -446,6 +446,21 @@ async def start_tenant_research(
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
 
+    # Concurrence : le pipeline consomme tous les documents "raw" du tenant,
+    # deux runs simultanés liraient donc les mêmes documents. Même garde-fou
+    # que pour la collecte, quel que soit le trigger_type.
+    active = await db.execute(
+        select(ResearchJob).where(
+            ResearchJob.tenant_id == tenant.id,
+            ResearchJob.status.in_(("pending", "processing")),
+        )
+    )
+    if active.scalars().first():
+        raise HTTPException(
+            status_code=409,
+            detail="Une recherche est déjà en cours pour ce tenant.",
+        )
+
     # Rate-limit: at most one manual_refresh per rolling cooldown window.
     if data.trigger_type == "manual_refresh":
         cutoff = datetime.now(timezone.utc).replace(

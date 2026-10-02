@@ -14,7 +14,7 @@ import uuid
 from datetime import datetime, timezone
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.api.v1.endpoints.tenants import _run_collection_then_pipeline
 from app.models import ResearchCollectionJob, ResearchJob
@@ -528,6 +528,19 @@ async def test_collection_job_does_not_consume_manual_refresh_cooldown(
     assert response.status_code == 202, response.text
     assert response.json()["trigger_type"] == "manual_refresh"
 
+    # Le job manual_refresh créé ci-dessus doit passer à `done` avant le
+    # second POST : `pipeline_calls` neutralise _run_research_pipeline, donc
+    # il reste `pending` et déclencherait le garde-fou de concurrence (409)
+    # au lieu du cooldown (429) — on veut tester le cooldown, rien d'autre.
+    await db_session.execute(
+        text(
+            "UPDATE research_jobs SET status = 'done' "
+            "WHERE tenant_id = :tid AND trigger_type = 'manual_refresh'"
+        ),
+        {"tid": str(test_tenant.id)},
+    )
+    await db_session.commit()
+
     # Contrôle négatif : le cooldown manuel, lui, s'applique toujours.
     blocked = await client.post(
         _research_run_url(test_tenant.id),
@@ -538,3 +551,132 @@ async def test_collection_job_does_not_consume_manual_refresh_cooldown(
         "le cooldown manual_refresh doit rester actif après le job "
         f"collection (reçu {blocked.status_code})"
     )
+
+
+# ===== Garde-fou de concurrence sur /research/run =====
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("active_status", ["pending", "processing"])
+@pytest.mark.parametrize(
+    "blocking_trigger", ["collection", "scheduled", "admin_replay"]
+)
+async def test_run_research_conflicts_when_job_already_active(
+    client,
+    admin_headers,
+    test_tenant,
+    db_session,
+    pipeline_calls,
+    active_status,
+    blocking_trigger,
+):
+    """Un run est refusé (409) si un autre job du tenant est pending/processing.
+
+    Symétrique du garde-fou de la collecte : le pipeline lit TOUS les documents
+    `raw` du tenant, donc deux runs concurrents consommeraient les mêmes
+    documents (le second ne verrait que ce que le premier a laissé).
+
+    Le `trigger_type` du job bloquant est paramétré parce que le garde-fou doit
+    être agnostique : `collection` est le nouveau cas de cette branche, mais un
+    `scheduled` ou un `admin_replay` en vol doit bloquer tout autant.
+
+    On demande `admin_replay` (et non `manual_refresh`) pour ne pas traverser le
+    rate-limit mensuel : le seul garde-fou en jeu reste alors la concurrence,
+    et un 202 inattendu ne pourra pas être attribué au cooldown.
+    """
+    db_session.add(
+        ResearchJob(
+            tenant_id=test_tenant.id,
+            trigger_type=blocking_trigger,
+            status=active_status,
+        )
+    )
+    await db_session.commit()
+
+    blocked = await client.post(
+        _research_run_url(test_tenant.id),
+        headers=admin_headers,
+        json={"trigger_type": "admin_replay"},
+    )
+    assert blocked.status_code == 409, (
+        f"un job {blocking_trigger}/{active_status} doit bloquer un nouveau run "
+        f"(reçu {blocked.status_code})"
+    )
+    assert pipeline_calls == [], "aucun pipeline ne doit démarrer sur un refus"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("finished_status", ["done", "failed"])
+async def test_run_research_accepted_when_previous_job_finished(
+    client,
+    admin_headers,
+    test_tenant,
+    db_session,
+    pipeline_calls,
+    finished_status,
+):
+    """Un job terminal (`done` ou `failed`) ne bloque pas le run suivant.
+
+    Contrôle négatif du garde-fou : sans lui, le test passerait aussi si le
+    409 se déclenchait pour n'importe quel job existant — et le tenant serait
+    bloqué indéfiniment après son premier run.
+
+    `failed` est inclus parce que c'est un statut courant : un run en erreur
+    technique ne doit pas condamner le tenant à ne plus jamais relancer.
+    """
+    db_session.add(
+        ResearchJob(
+            tenant_id=test_tenant.id, trigger_type="scheduled", status=finished_status
+        )
+    )
+    await db_session.commit()
+
+    response = await client.post(
+        _research_run_url(test_tenant.id),
+        headers=admin_headers,
+        json={"trigger_type": "admin_replay"},
+    )
+    assert response.status_code == 202, response.text
+    # admin_replay n'est pas concerné par le cooldown : le 202 prouve bien que
+    # seul le garde-fou de concurrence était en jeu ici.
+    assert len(pipeline_calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_run_research_conflict_is_scoped_to_the_tenant(
+    client,
+    admin_headers,
+    other_admin_headers,
+    db_session,
+    test_tenant,
+    other_tenant,
+    pipeline_calls,
+):
+    """Un job actif chez test_tenant ne bloque pas le run de other_tenant.
+
+    Sans le filtre sur `tenant_id`, un tenant très actif sature la file de
+    tous les autres : le garde-fou doit rester strictement cloisonné.
+    """
+    db_session.add(
+        ResearchJob(
+            tenant_id=test_tenant.id, trigger_type="collection", status="processing"
+        )
+    )
+    await db_session.commit()
+
+    # Le tenant bloqué refuse bien son propre run...
+    blocked = await client.post(
+        _research_run_url(test_tenant.id),
+        headers=admin_headers,
+        json={"trigger_type": "admin_replay"},
+    )
+    assert blocked.status_code == 409, blocked.text
+
+    # ...mais l'autre tenant passe.
+    allowed = await client.post(
+        _research_run_url(other_tenant.id),
+        headers=other_admin_headers,
+        json={"trigger_type": "admin_replay"},
+    )
+    assert allowed.status_code == 202, allowed.text
+    assert len(pipeline_calls) == 1, "seul le tenant libre doit lancer un pipeline"

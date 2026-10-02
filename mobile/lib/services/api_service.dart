@@ -108,6 +108,25 @@ abstract class ResearchApi {
   });
 }
 
+/// Destination-research collection seam — mirrors POST
+/// /tenants/{id}/research/collection/run and
+/// GET /tenants/{id}/research/collection/jobs/{jobId}.
+///
+/// Distinct de [ResearchApi] : la collecte n'est PAS le pipeline IA. Le job
+/// renvoyé peut enchaîner un job de recherche (champ `research_job_id`), que
+/// l'appelant suit alors via [ResearchApi].
+abstract class ResearchCollectionApi {
+  Future<Map<String, dynamic>> runCollection({
+    required String tenantId,
+    bool runPipeline = false,
+  });
+
+  Future<Map<String, dynamic>> getCollectionJobStatus({
+    required String tenantId,
+    required String jobId,
+  });
+}
+
 /// HTTP failure carrying status code and body.
 class ApiException implements Exception {
   ApiException(this.statusCode, this.body);
@@ -134,7 +153,8 @@ class ApiService
         BookingsApi,
         PromotionsApi,
         TenantsApi,
-        ResearchApi {
+        ResearchApi,
+        ResearchCollectionApi {
   ApiService._internal()
       : baseUrl = AppConfig.apiBaseUrl,
         tenantSlug = AppConfig.tenantSlug;
@@ -328,4 +348,22 @@ class ApiService
   }) async =>
       Map<String, dynamic>.from(
           await _get('/tenants/$tenantId/research/jobs/$jobId') as Map);
+
+  @override
+  Future<Map<String, dynamic>> runCollection({
+    required String tenantId,
+    bool runPipeline = false,
+  }) async =>
+      Map<String, dynamic>.from(await _post(
+        '/tenants/$tenantId/research/collection/run',
+        {'run_pipeline': runPipeline},
+      ) as Map);
+
+  @override
+  Future<Map<String, dynamic>> getCollectionJobStatus({
+    required String tenantId,
+    required String jobId,
+  }) async =>
+      Map<String, dynamic>.from(await _get(
+          '/tenants/$tenantId/research/collection/jobs/$jobId') as Map);
 }

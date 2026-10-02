@@ -1,5 +1,6 @@
 """FastAPI application entry point."""
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -17,6 +18,8 @@ from app.initial_data import init_db
 from app.services.tenant_ai_quota_service import QuotaExceededError
 
 settings = get_settings()
+
+logger = logging.getLogger(__name__)
 
 ALEMBIC_INI = Path(__file__).resolve().parent.parent / "alembic.ini"
 
@@ -53,11 +56,29 @@ async def _has_unversioned_schema() -> bool:
         await engine.dispose()
 
 
+async def _fail_orphan_jobs_on_startup() -> None:
+    """Ferme les jobs laissés actifs par l'arrêt précédent. Ne lève jamais :
+    un échec du nettoyage ne doit pas empêcher le serveur de démarrer."""
+    from app.database import AsyncSessionLocal
+    from app.services.orphan_jobs_service import fail_orphan_jobs
+
+    try:
+        async with AsyncSessionLocal() as session:
+            closed = await fail_orphan_jobs(session)
+        if closed:
+            logger.warning(
+                "%d job(s) de recherche orphelin(s) passé(s) en failed", closed
+            )
+    except Exception:
+        logger.exception("Nettoyage des jobs de recherche orphelins en échec")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup — schema is owned by Alembic (no more create_all), then seed demo data.
     await asyncio.to_thread(_run_migrations)
     await init_db()
+    await _fail_orphan_jobs_on_startup()
     yield
     # Shutdown
     await engine.dispose()

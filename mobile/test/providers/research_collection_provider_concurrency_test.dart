@@ -98,6 +98,40 @@ void main() {
       expect(fake.completedStatusCalls, greaterThanOrEqualTo(1));
     });
 
+    test('dispose() pendant un sondage en vol : le chaînage n\'est pas notifié',
+        () async {
+      final gate = Completer<void>();
+      var notified = 0;
+      final fake = FakeResearchCollectionApi(
+        jobsQueue: [_job(ResearchJobStatus.pending)],
+        statusSequence: [
+          const ResearchCollectionJob(
+            id: 'c1',
+            tenantId: 't1',
+            status: ResearchJobStatus.done,
+            documentsNew: 3,
+            runPipeline: true,
+            researchJobId: 'r1',
+          ),
+        ],
+        statusGate: gate,
+      );
+      final provider = ResearchCollectionProvider(
+        fake,
+        pollInterval: _fast,
+        onPipelineChained: (_, __) => notified++,
+      );
+
+      await provider.startCollection(tenantId: 't1');
+      await _waitFor(() => fake.startedStatusCalls >= 1);
+
+      provider.dispose();
+      gate.complete();
+      await _pause();
+
+      expect(notified, 0);
+    });
+
     test('un serveur lent ne provoque jamais deux sondages simultanés',
         () async {
       final fake = FakeResearchCollectionApi(

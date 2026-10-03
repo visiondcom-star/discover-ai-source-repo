@@ -41,6 +41,17 @@ class ResearchCollectionProvider extends ChangeNotifier {
   String? _error;
   String? get error => _error;
 
+  /// Incrémenté à chaque relance/reset/dispose : toute réponse HTTP en vol
+  /// portant une génération antérieure est ignorée. Sans cela, un `dispose()`
+  /// suivi d'une réponse tardive écrirait dans un provider détruit, et deux
+  /// lancements concurrents se marcheraient dessus.
+  int _generation = 0;
+
+  /// Empêche deux polls de se chevaucher quand la réponse HTTP est plus lente
+  /// que [pollInterval] (réseau lent) : sans ce verrou, les requêtes s'empilent
+  /// et une réponse ancienne peut écraser une plus récente.
+  bool _pollInFlight = false;
+
   Timer? _pollTimer;
   int _chainWaitPolls = 0;
   bool _chainNotified = false;
@@ -52,7 +63,12 @@ class ResearchCollectionProvider extends ChangeNotifier {
     required String tenantId,
     bool runPipeline = false,
   }) async {
+    // Anti double-tap : deux taps rapides ne doivent pas lancer deux collectes
+    // concurrentes (le serveur répondrait 409 à la seconde de toute façon).
+    if (_isLoading) return;
     _pollTimer?.cancel();
+    final gen = ++_generation;
+    _pollInFlight = false;
     _isLoading = true;
     _error = null;
     _chainWaitPolls = 0;
@@ -64,6 +80,7 @@ class ResearchCollectionProvider extends ChangeNotifier {
         tenantId: tenantId,
         runPipeline: runPipeline,
       ));
+      if (gen != _generation) return;
       _currentJob = job;
       _isLoading = false;
       final keepPolling = _afterUpdate(tenantId, job);
@@ -73,6 +90,7 @@ class ResearchCollectionProvider extends ChangeNotifier {
         _startPolling(tenantId: tenantId, jobId: job.id);
       }
     } on ApiException catch (e) {
+      if (gen != _generation) return;
       _isLoading = false;
       if (e.statusCode == 409) {
         _error = 'Une collecte est déjà en cours pour ce tenant.';
@@ -82,6 +100,13 @@ class ResearchCollectionProvider extends ChangeNotifier {
       } else {
         _error = 'Échec du lancement de la collecte.';
       }
+      notifyListeners();
+    } catch (_) {
+      // Repli : un StateError du faux d'API ou un FormatException de
+      // fromJson ne doivent pas laisser le provider bloqué sur isLoading.
+      if (gen != _generation) return;
+      _isLoading = false;
+      _error = 'Échec du lancement de la collecte.';
       notifyListeners();
     }
   }
@@ -116,26 +141,41 @@ class ResearchCollectionProvider extends ChangeNotifier {
 
   void _startPolling({required String tenantId, required String jobId}) {
     _pollTimer?.cancel();
+    final gen = _generation;
     _pollTimer = Timer.periodic(pollInterval, (_) async {
+      if (_pollInFlight) return;
+      _pollInFlight = true;
       try {
         final job = ResearchCollectionJob.fromJson(await _api
             .getCollectionJobStatus(tenantId: tenantId, jobId: jobId));
+        if (gen != _generation) return;
         _currentJob = job;
         final keepPolling = _afterUpdate(tenantId, job);
         if (!keepPolling) _pollTimer?.cancel();
         notifyListeners();
-      } on ApiException {
+      } catch (_) {
+        // Couvre ApiException mais aussi un FormatException de fromJson : un
+        // statut inconnu ne doit pas laisser le timer tourner indéfiniment.
+        if (gen != _generation) return;
         _error = 'Impossible de récupérer le statut de la collecte.';
         _pollTimer?.cancel();
         notifyListeners();
+      } finally {
+        if (gen == _generation) _pollInFlight = false;
       }
     });
   }
 
   void reset() {
+    // Invalide toute réponse en vol ET remet isLoading à false : sans ce
+    // second point, le garde anti double-tap de startCollection bloquerait
+    // toute relance future (isLoading resterait true pour toujours).
+    _generation++;
+    _pollInFlight = false;
     _pollTimer?.cancel();
     _currentJob = null;
     _error = null;
+    _isLoading = false;
     _chainWaitPolls = 0;
     _chainNotified = false;
     notifyListeners();
@@ -143,6 +183,9 @@ class ResearchCollectionProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    // Invalide les réponses en vol : une réponse tardive après dispose()
+    // appelerait notifyListeners() sur un ChangeNotifier détruit.
+    _generation++;
     _pollTimer?.cancel();
     super.dispose();
   }

@@ -15,6 +15,13 @@ __pycache__/
 
 # Virtual environments
 venv/
+# `.venv/` est le nom le plus courant aujourd'hui (uv, poetry, pipenv) et
+# n'est PAS couvert par `venv/` ci-dessus : le motif ignore le point initial.
+# Sans cette ligne, seul le `.gitignore` que `python -m venv` écrit DANS
+# l'environnement protège `backend/app/services/llm_providers/.venv`
+# (9 Mo) — et il disparaît si le venv est recréé autrement (copie, uv,
+# --without-pip), ce qui exposerait tout l'arborescence au commit.
+.venv/
 .env
 .env.*.local
 .env.production

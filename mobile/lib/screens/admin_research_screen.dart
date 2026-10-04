@@ -109,14 +109,16 @@ class _AdminResearchScreenState extends State<AdminResearchScreen> {
                       .textTheme
                       .titleMedium
                       ?.copyWith(fontWeight: FontWeight.bold)),
+              // Le rechargement n'est plus déclenché ici : le catalogue voyageur
+              // se rafraîchit depuis `ResearchProvider.onJobDone` (branché dans
+              // main.dart) et depuis `AdminCategoriesProvider.onChanged`. Ce
+              // bouton ne rafraîchissait que si l'admin y pensez, ce qui laissait
+              // la file de validation fausser dès la fin d'un run.
               IconButton(
                 key: const Key('refresh_categories_button'),
                 tooltip: 'Actualiser',
                 icon: const Icon(Icons.refresh),
-                onPressed: () {
-                  context.read<AdminCategoriesProvider>().load();
-                  context.read<TenantProvider>().loadCategories();
-                },
+                onPressed: () => context.read<AdminCategoriesProvider>().load(),
               ),
             ],
           ),

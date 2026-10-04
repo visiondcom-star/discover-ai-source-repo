@@ -12,7 +12,20 @@ class ResearchProvider extends ChangeNotifier {
   final ResearchApi _api;
   final Duration pollInterval;
 
-  ResearchProvider(this._api, {this.pollInterval = const Duration(seconds: 3)});
+  /// Appelé une fois qu'un job atteint un statut terminal.
+  ///
+  /// C'est le crochet qui permet à l'application de rafraîchir le catalogue
+  /// voyageur sans que l'écran admin ait à s'en charge : la publication d'une
+  /// catégorie est décidée dans `AdminCategoriesProvider.onChanged`, mais un job
+  /// terminé peut aussi créer de nouvelles propositions que l'admin doit voir
+  /// sans represser « Actualiser ».
+  final VoidCallback? onJobDone;
+
+  ResearchProvider(
+    this._api, {
+    this.pollInterval = const Duration(seconds: 3),
+    this.onJobDone,
+  });
 
   ResearchJob? _currentJob;
   ResearchJob? get currentJob => _currentJob;
@@ -45,7 +58,11 @@ class ResearchProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
 
-      if (!job.status.isTerminal) {
+      if (job.status.isTerminal) {
+        // Déjà terminé au lancement : pas de polling, donc le crochet doit
+        // être appelé ici aussi, sinon le catalogue ne serait jamais rafraîchi.
+        onJobDone?.call();
+      } else {
         _startPolling(tenantId: tenantId, jobId: job.id);
       }
     } on ApiException catch (e) {
@@ -68,6 +85,9 @@ class ResearchProvider extends ChangeNotifier {
 
         if (job.status.isTerminal) {
           _pollTimer?.cancel();
+          // Après le polling, pas avant : l'appelant recharge alors un
+          // catalogue déjà à jour, et une seule fois par job.
+          onJobDone?.call();
         }
       } on ApiException {
         _error = 'Impossible de récupérer le statut du job.';

@@ -157,9 +157,15 @@ void main() {
       );
 
       expect(find.byKey(const Key('refresh_categories_button')), findsOneWidget);
+      final callsBeforeRefresh = tenantsApi.getCategoriesCalls;
       await tester.tap(find.byKey(const Key('refresh_categories_button')));
       await tester.pumpAndSettle();
       expect(find.byType(Card), findsWidgets);
+      // Le bouton ne recharge plus le catalogue voyageur : ce rechargement est
+      // désormais porté par `ResearchProvider.onJobDone` (branché dans
+      // main.dart). Voir research_provider_test.dart.
+      expect(tenantsApi.getCategoriesCalls, callsBeforeRefresh,
+          reason: 'l\'écran ne doit plus déclencher loadCategories()');
 
       researchProvider.dispose();
     });

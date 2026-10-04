@@ -60,3 +60,16 @@ RESEARCH_COLLECTION_COOLDOWN_MINUTES = 10
 # research_collection_jobs.status lifecycle.
 RESEARCH_COLLECTION_JOB_STATUSES = ("pending", "processing", "done", "failed")
 
+# Transitions autorisées pour tenant_categories.status.
+#
+# `rejected` est terminal : pas de « resurrect » d'une catégorie que l'admin a
+# écartée (sinon un clic passé l'invaliderait sans trace). Aucune
+# auto-transition non plus : passer active → active ne sert à rien et masquerait
+# une erreur de clic. La létalité de la décision est voulue (Principe 5 :
+# l'IA propose, l'humain tranche).
+CATEGORY_TRANSITIONS = {
+    "proposed": frozenset({"active", "rejected"}),
+    "active": frozenset({"rejected"}),
+    "rejected": frozenset(),
+}
+

@@ -84,9 +84,17 @@ void main() {
     expect(find.byKey(const Key('chat_input')), findsOneWidget);
     expect(find.byKey(const Key('chat_empty')), findsOneWidget);
 
-    // Profil — hosts the explicit logout action.
+    // Profil — héberge les entrées admin et la déconnexion. La carte
+    // « Collecte de documents » a allongé la liste : `logout_button` passe
+    // sous la ligne de flottaison du viewport de test (ListView construit
+    // paresseusement), d'où le scroll avant l'assertion.
     await tester.tap(find.byKey(const Key('tab_profile')));
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+        find.byKey(const Key('admin_collection_button')), 200);
+    expect(find.byKey(const Key('admin_collection_button')), findsOneWidget);
+    await tester.scrollUntilVisible(
+        find.byKey(const Key('logout_button')), 200);
     expect(find.byKey(const Key('logout_button')), findsOneWidget);
 
     // Back to Accueil — state preserved (IndexedStack).

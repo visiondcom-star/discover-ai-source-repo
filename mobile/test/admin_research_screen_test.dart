@@ -1,4 +1,5 @@
 import 'package:discover_ai/models/research_job.dart';
+import 'package:discover_ai/providers/admin_categories_provider.dart';
 import 'package:discover_ai/providers/research_provider.dart';
 import 'package:discover_ai/providers/tenant_provider.dart';
 import 'package:discover_ai/screens/admin_research_screen.dart';
@@ -9,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
+import 'helpers/fake_admin_categories_api.dart';
 import 'helpers/fakes.dart';
 
 ResearchJob _job({
@@ -49,6 +51,9 @@ void main() {
                 value: researchProvider),
             ChangeNotifierProvider<TenantProvider>.value(
                 value: tenantProvider),
+            ChangeNotifierProvider<AdminCategoriesProvider>(
+                create: (_) =>
+                    AdminCategoriesProvider(FakeAdminCategoriesApi())),
           ],
           child: const MaterialApp(home: AdminResearchScreen()),
         ),
@@ -209,6 +214,9 @@ void main() {
                 value: researchProvider),
             ChangeNotifierProvider<TenantProvider>.value(
                 value: tenantProvider),
+            ChangeNotifierProvider<AdminCategoriesProvider>(
+                create: (_) =>
+                    AdminCategoriesProvider(FakeAdminCategoriesApi())),
           ],
           child: const MaterialApp(home: ProfileScreen()),
         ),

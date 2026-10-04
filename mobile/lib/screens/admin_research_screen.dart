@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/research_job.dart';
+import '../models/tenant_category.dart';
+import '../providers/admin_categories_provider.dart';
 import '../providers/research_provider.dart';
 import '../providers/tenant_provider.dart';
 
@@ -9,8 +11,25 @@ import '../providers/tenant_provider.dart';
 /// dynamique par tenant). Lets an admin trigger a manual refresh, watch
 /// the job progress (pending -> processing -> done|failed), and see the
 /// tenant categories once the run completes.
-class AdminResearchScreen extends StatelessWidget {
+class AdminResearchScreen extends StatefulWidget {
   const AdminResearchScreen({super.key});
+
+  @override
+  State<AdminResearchScreen> createState() => _AdminResearchScreenState();
+}
+
+class _AdminResearchScreenState extends State<AdminResearchScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Charge la file de validation dès l'ouverture : sans cet appel, l'écran
+    // resterait vide tant que l'admin n'a pas tapé « Actualiser ». On attend la
+    // fin du premier frame pour ne pas notifier pendant le build initial.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<AdminCategoriesProvider>().load();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -94,13 +113,15 @@ class AdminResearchScreen extends StatelessWidget {
                 key: const Key('refresh_categories_button'),
                 tooltip: 'Actualiser',
                 icon: const Icon(Icons.refresh),
-                onPressed: () =>
-                    context.read<TenantProvider>().loadCategories(),
+                onPressed: () {
+                  context.read<AdminCategoriesProvider>().load();
+                  context.read<TenantProvider>().loadCategories();
+                },
               ),
             ],
           ),
           const SizedBox(height: 8),
-          _CategoriesList(),
+          const _CategoriesList(),
         ],
       ),
     );
@@ -166,40 +187,140 @@ class _StatusRow extends StatelessWidget {
 }
 
 class _CategoriesList extends StatelessWidget {
+  const _CategoriesList();
+
   @override
   Widget build(BuildContext context) {
-    final categories = context.watch<TenantProvider>().categories;
+    final admin = context.watch<AdminCategoriesProvider>();
+    final scheme = Theme.of(context).colorScheme;
 
-    if (categories.isEmpty) {
-      return const Card(
-        margin: EdgeInsets.zero,
-        child: ListTile(
-          enabled: false,
-          leading: Icon(Icons.category_outlined),
-          title: Text('Aucune catégorie pour le moment'),
-        ),
-      );
-    }
+    // proposed d'abord (à traiter), puis active, puis rejected. Trois passes
+    // plutôt qu'un sort() : l'ordre du serveur est conservé dans chaque groupe.
+    final ordered = [
+      for (final s in const ['proposed', 'active', 'rejected'])
+        ...admin.categories.where((c) => c.status == s),
+    ];
 
     return Column(
-      children: categories.map((cat) {
-        final scheme = Theme.of(context).colorScheme;
-        final isProposed = cat.status == 'proposed';
-        return Card(
-          margin: const EdgeInsets.only(bottom: 8),
-          child: ListTile(
-            leading: Icon(
-              isProposed ? Icons.hourglass_top : Icons.check_circle,
-              color: isProposed ? scheme.tertiary : Colors.green,
-            ),
-            title: Text(cat.label),
-            subtitle: Text(cat.parentFamily ?? '—'),
-            trailing: cat.confidence != null
-                ? Text('${(cat.confidence! * 100).round()}%')
-                : null,
+      children: [
+        if (admin.error != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(admin.error!, style: TextStyle(color: scheme.error)),
           ),
-        );
-      }).toList(),
+        if (ordered.isEmpty && !admin.isLoading)
+          const Card(
+            margin: EdgeInsets.zero,
+            child: ListTile(
+              enabled: false,
+              leading: Icon(Icons.category_outlined),
+              title: Text('Aucune catégorie pour le moment'),
+            ),
+          ),
+        for (final cat in ordered)
+          _CategoryTile(category: cat, busy: admin.isUpdating(cat.id)),
+      ],
+    );
+  }
+}
+
+class _CategoryTile extends StatelessWidget {
+  const _CategoryTile({required this.category, required this.busy});
+
+  final TenantCategory category;
+  final bool busy;
+
+  Future<void> _change(BuildContext context, String status) async {
+    if (status == 'rejected') {
+      // D'après le schéma, pas de retour arrière depuis `rejected`.
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Rejeter cette catégorie ?'),
+          content: Text(category.status == 'active'
+              ? 'Elle disparaîtra de l’app pour les voyageurs. '
+                  'Cette action est définitive.'
+              : 'Cette action est définitive.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Confirmer'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !context.mounted) return;
+    }
+    await context.read<AdminCategoriesProvider>().setStatus(category, status);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final id = category.id;
+
+    final Widget? trailing;
+    if (busy) {
+      trailing = const SizedBox(
+        width: 20,
+        height: 20,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      );
+    } else if (category.status == 'proposed') {
+      trailing = Row(mainAxisSize: MainAxisSize.min, children: [
+        IconButton(
+          key: Key('publish_$id'),
+          tooltip: 'Publier',
+          icon: const Icon(Icons.check_circle_outline, color: Colors.green),
+          onPressed: () => _change(context, 'active'),
+        ),
+        IconButton(
+          key: Key('reject_$id'),
+          tooltip: 'Rejeter',
+          icon: Icon(Icons.cancel_outlined, color: scheme.error),
+          onPressed: () => _change(context, 'rejected'),
+        ),
+      ]);
+    } else if (category.status == 'active') {
+      trailing = IconButton(
+        key: Key('retire_$id'),
+        tooltip: 'Retirer',
+        icon: const Icon(Icons.remove_circle_outline),
+        onPressed: () => _change(context, 'rejected'),
+      );
+    } else {
+      trailing = Text('Rejetée', style: TextStyle(color: scheme.outline));
+    }
+
+    final confidence = category.confidence;
+    final subtitle = [
+      category.parentFamily ?? '—',
+      if (confidence != null) '${(confidence * 100).round()}%',
+    ].join(' · ');
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: Icon(
+          switch (category.status) {
+            'proposed' => Icons.hourglass_top,
+            'active' => Icons.check_circle,
+            _ => Icons.block,
+          },
+          color: switch (category.status) {
+            'proposed' => scheme.tertiary,
+            'active' => Colors.green,
+            _ => scheme.outline,
+          },
+        ),
+        title: Text(category.label),
+        subtitle: Text(subtitle),
+        trailing: trailing,
+      ),
     );
   }
 }

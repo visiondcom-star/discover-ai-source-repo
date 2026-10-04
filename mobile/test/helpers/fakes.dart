@@ -395,11 +395,23 @@ class InMemoryTokenStore implements TokenStore {
 }
 
 class FakeTenantsApi implements TenantsApi {
-  FakeTenantsApi({Map<String, dynamic>? tenant, this.fail = false})
-      : tenant = tenant ?? sampleTenantJson();
+  FakeTenantsApi({
+    Map<String, dynamic>? tenant,
+    this.fail = false,
+    this.categorySlugs,
+  }) : tenant = tenant ?? sampleTenantJson();
 
   final bool fail;
   final Map<String, dynamic> tenant;
+
+  /// When non-null, `getTenantCategories` serves exactly these slugs (in this
+  /// order) instead of the default 1:1-with-AppConfig catalog.
+  ///
+  /// Needed to model a category published *after* the app shipped: the default
+  /// catalog mirrors `AppConfig.tripInterestOptions` exactly, so any test using
+  /// it can never tell the compile-time list from the dynamic one — which is
+  /// precisely the distinction the trip form got wrong.
+  final List<String>? categorySlugs;
 
   /// Nombre d'appels à `getTenantCategories`. Permet de vérifier qu'un écran
   /// recharge le catalogue au bon moment (par exemple quand une collecte se
@@ -493,6 +505,23 @@ class FakeTenantsApi implements TenantsApi {
         'Hammams, spas and relaxation.'
       ),
     ];
+    if (categorySlugs != null) {
+      // Same response shape as the real API (TenantCategoryResponse), with
+      // `status: active` since only active categories reach travellers.
+      return [
+        for (final (i, slug) in categorySlugs!.indexed)
+          {
+            'id': 'cat-$slug',
+            'tenant_id': 'tenant-1',
+            'slug': slug,
+            'label': slug,
+            'parent_family': 'nature',
+            'status': 'active',
+            'display_order': i + 1,
+            'ai_generated': true,
+          },
+      ];
+    }
     return [
       for (final (i, (slug, label, icon, family, description))
           in catalog.indexed)
@@ -539,6 +568,11 @@ class FakeResearchApi implements ResearchApi {
   /// Si non-null, force une exception au prochain appel de runResearch().
   ApiException? runResearchError;
 
+  /// Si non-null, `getJobStatus` lève cette exception au lieu de répondre.
+  /// Simule une interruption réseau qui coupe le polling avant tout statut
+  /// final — le cas où aucun rechargement de catalogue n'a de sens.
+  ApiException? getStatusError;
+
   int _statusCallCount = 0;
   int _runResearchCallCount = 0;
 
@@ -583,6 +617,10 @@ class FakeResearchApi implements ResearchApi {
     required String jobId,
   }) async {
     getJobStatusCalls.add({'tenantId': tenantId, 'jobId': jobId});
+
+    if (getStatusError != null) {
+      throw getStatusError!;
+    }
 
     if (statusSequence.isEmpty) {
       throw StateError('FakeResearchApi.statusSequence est vide');

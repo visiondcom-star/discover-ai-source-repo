@@ -17,8 +17,8 @@ class TripFormScreen extends StatefulWidget {
   const TripFormScreen({super.key, this.initialInterests = const <String>{}});
 
   /// Interests pre-selected on open (home travel-type grid shortcut).
-  /// Values outside [AppConfig.tripInterestOptions] are ignored — the
-  /// catalog remains the single source of truth.
+  /// Values that are not in the catalog actually displayed are ignored, so a
+  /// stale or unknown slug cannot reach `generate()`.
   final Set<String> initialInterests;
 
   @override
@@ -26,14 +26,61 @@ class TripFormScreen extends StatefulWidget {
 }
 
 class _TripFormScreenState extends State<TripFormScreen> {
-  /// Anti-invalid-value filter on the pre-selected interests, validated
-  /// against the compile-time AppConfig catalog only. The visible chips
-  /// come from the dynamic tenant catalog (see build()).
-  late final Set<String> _selectedInterests = widget.initialInterests
-      .where(AppConfig.tripInterestOptions.contains)
-      .toSet();
   int _numDays = 3;
   String _budgetLevel = AppConfig.budgetLevels.first;
+
+  /// Slugs the form is actually offering, from the dynamic tenant catalog and
+  /// falling back to the compile-time list while it is still loading.
+  ///
+  /// Single source of truth for both the visible chips and the validation of
+  /// pre-selected interests.
+  List<String> _visibleCatalog(BuildContext context) {
+    final categories = context.watch<TenantProvider?>()?.categories ?? const [];
+    return categories.isNotEmpty
+        ? categories.map((c) => c.slug).toList(growable: false)
+        : AppConfig.tripInterestOptions;
+  }
+
+  /// Anti-invalid-value filter on the pre-selected interests, validated against
+  /// the catalog this form displays.
+  ///
+  /// Validating against [AppConfig.tripInterestOptions] instead was wrong: the
+  /// home travel-type grid hands over a slug read from the *dynamic* catalog, so
+  /// a category published after the app shipped (`oasis_tam`, say) rendered as a
+  /// selectable chip but was silently dropped from the initial selection — the
+  /// shortcut from Accueil appeared to do nothing. Only this form knows which
+  /// catalog it is showing, so the filter has to live here.
+  Set<String> _initialSelection(List<String> catalog) =>
+      widget.initialInterests.where(catalog.contains).toSet();
+
+  /// Interests the user has selected, seeded from [TripFormScreen.initialInterests]
+  /// and kept in sync with the displayed catalog.
+  ///
+  /// Held as state rather than a `late final` field because the catalog is
+  /// fetched: the form is usually built before it has arrived, and a value
+  /// dropped on that first (fallback) pass must be recoverable once the real
+  /// catalog lands. [_syncWithCatalog] re-applies the pending request on every
+  /// build instead of validating once against whatever happened to be loaded.
+  /// Mutable on purpose: the chips add/remove from this set. A `const {}`
+  /// would throw `UnsupportedError` on the first tap.
+  Set<String> _selectedInterests = <String>{};
+
+  /// The selection as requested by the caller, kept until the catalog that will
+  /// display it is known.
+  late Set<String> _requestedInterests = widget.initialInterests.toSet();
+
+  /// Reconciles the requested selection against [catalog] the first time the
+  /// catalog is available, then keeps the user's own toggles authoritative.
+  void _syncWithCatalog(List<String> catalog) {
+    if (_requestedInterests.isEmpty) return;
+    final accepted = _initialSelection(catalog);
+    if (accepted.isEmpty && _requestedInterests.isNotEmpty) {
+      // Catalog still on the compile-time fallback, or nothing matched yet.
+      return;
+    }
+    _requestedInterests = const {};
+    if (_selectedInterests.isEmpty) _selectedInterests = accepted;
+  }
 
   Future<void> _submit() async {
     if (_selectedInterests.isEmpty) {
@@ -67,10 +114,8 @@ class _TripFormScreenState extends State<TripFormScreen> {
   @override
   Widget build(BuildContext context) {
     final trips = context.watch<TripProvider>();
-    final categories = context.watch<TenantProvider?>()?.categories ?? const [];
-    final tripInterestOptions = categories.isNotEmpty
-        ? categories.map((c) => c.slug).toList(growable: false)
-        : AppConfig.tripInterestOptions;
+    final tripInterestOptions = _visibleCatalog(context);
+    _syncWithCatalog(tripInterestOptions);
     return Scaffold(
       appBar: AppBar(title: const Text('Plan a trip')),
       body: SingleChildScrollView(

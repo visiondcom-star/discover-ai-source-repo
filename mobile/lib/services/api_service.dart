@@ -127,6 +127,17 @@ abstract class ResearchCollectionApi {
   });
 }
 
+/// Vue admin du cycle de vie des catégories — miroir de
+/// GET /tenants/categories/all et PATCH /tenants/categories/{id}.
+abstract class AdminCategoriesApi {
+  Future<List<Map<String, dynamic>>> getAllCategories();
+
+  Future<Map<String, dynamic>> updateCategoryStatus({
+    required String categoryId,
+    required String status,
+  });
+}
+
 /// HTTP failure carrying status code and body.
 class ApiException implements Exception {
   ApiException(this.statusCode, this.body);
@@ -154,7 +165,8 @@ class ApiService
         PromotionsApi,
         TenantsApi,
         ResearchApi,
-        ResearchCollectionApi {
+        ResearchCollectionApi,
+        AdminCategoriesApi {
   ApiService._internal()
       : baseUrl = AppConfig.apiBaseUrl,
         tenantSlug = AppConfig.tenantSlug;
@@ -198,6 +210,22 @@ class ApiService
       body: jsonEncode(body),
     );
     debugPrint('[API] POST $path → ${res.statusCode}');
+    return _decode(res);
+  }
+
+  /// PATCH avec corps JSON. Même contrat qu'[ApiService._post] : `_decode`
+  /// lève [ApiException] hors 2xx, ce qui laisse remonter 400/403/404/429 au
+  /// provider. Les chemins utilisés avec PATCH n'ont jamais de slash final :
+  /// FastAPI répondrait 307 et http ne réémettrait pas le corps.
+  Future<dynamic> _patch(String path, Map<String, dynamic> body) async {
+    final url = '$baseUrl$path';
+    debugPrint('[API] PATCH $url body=$body');
+    final res = await http.patch(
+      Uri.parse(url),
+      headers: _headers,
+      body: jsonEncode(body),
+    );
+    debugPrint('[API] PATCH $path → ${res.statusCode}');
     return _decode(res);
   }
 
@@ -366,4 +394,18 @@ class ApiService
   }) async =>
       Map<String, dynamic>.from(await _get(
           '/tenants/$tenantId/research/collection/jobs/$jobId') as Map);
+
+  @override
+  Future<List<Map<String, dynamic>>> getAllCategories() async {
+    final data = await _get('/tenants/categories/all');
+    return (data as List).map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
+  @override
+  Future<Map<String, dynamic>> updateCategoryStatus({
+    required String categoryId,
+    required String status,
+  }) async =>
+      Map<String, dynamic>.from(await _patch(
+          '/tenants/categories/$categoryId', {'status': status}) as Map);
 }

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../config.dart';
 import '../providers/auth_provider.dart';
+import 'admin_collection_screen.dart';
 import 'admin_research_screen.dart';
 
 /// Profil tab — account summary and the explicit logout action.
@@ -80,6 +81,23 @@ class ProfileScreen extends StatelessWidget {
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => const AdminResearchScreen(),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            margin: EdgeInsets.zero,
+            child: ListTile(
+              key: const Key('admin_collection_button'),
+              leading:
+                  Icon(Icons.cloud_download_outlined, color: scheme.primary),
+              title: const Text('Collecte de documents'),
+              subtitle:
+                  const Text('Admin : Wikivoyage / Wikipedia → catégories'),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const AdminCollectionScreen(),
                 ),
               ),
             ),

@@ -401,6 +401,11 @@ class FakeTenantsApi implements TenantsApi {
   final bool fail;
   final Map<String, dynamic> tenant;
 
+  /// Nombre d'appels à `getTenantCategories`. Permet de vérifier qu'un écran
+  /// recharge le catalogue au bon moment (par exemple quand une collecte se
+  /// termine) et pas à chaque notification du provider.
+  int getCategoriesCalls = 0;
+
   @override
   Future<Map<String, dynamic>> getCurrentTenant() async {
     if (fail) {
@@ -417,6 +422,7 @@ class FakeTenantsApi implements TenantsApi {
   /// TenantCategory.fromJson exercises both its nullable paths.
   @override
   Future<List<Map<String, dynamic>>> getTenantCategories() async {
+    getCategoriesCalls++;
     if (fail) {
       throw ApiException(500, '{"detail":"Internal server error"}');
     }
@@ -515,6 +521,7 @@ Map<String, dynamic> sampleTenantJson() => {
       'primary_color': '#006233',
       'secondary_color': '#FFFFFF',
     };
+
 // test/fakes/research_api_fake.dart
 //
 // À fusionner dans le fakes.dart existant du projet (mêmes conventions que

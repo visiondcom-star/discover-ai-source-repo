@@ -22,6 +22,7 @@ from app.schemas import (
     TenantUpdate,
     TenantResponse,
     TenantCategoryCreate,
+    TenantCategoryStatusUpdate,
     TenantCategoryResponse,
     ResearchJobResponse,
     ResearchRunRequest,
@@ -40,6 +41,7 @@ from app.schemas import (
 )
 
 from app.constants import (
+    CATEGORY_TRANSITIONS,
     RESEARCH_COLLECTION_COOLDOWN_MINUTES,
     RESEARCH_MANUAL_REFRESH_COOLDOWN_DAYS,
     RESEARCH_SOURCE_TYPES,
@@ -73,14 +75,24 @@ async def list_tenant_categories(
     x_tenant_slug: str = Header(...),
     db: AsyncSession = Depends(get_db),
 ):
-    """Retourne l'arborescence des catégories touristiques dynamiques pour le tenant actif."""
+    """Retourne l'arborescence des catégories touristiques dynamiques pour le
+    tenant actif.
+
+    Seules les catégories `active` sont renvoyées : c'est ce que consomment le
+    trip planner, les filtres POI et le chat. Une `proposed` n'y apparaît
+    jamais, même sous forme « en attente » (Principe 5 : les propositions LLM
+    n'activent rien seules).
+    """
     result = await db.execute(select(Tenant).where(Tenant.slug == x_tenant_slug))
     tenant = result.scalar_one_or_none()
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
     cat_result = await db.execute(
         select(TenantCategory)
-        .where(TenantCategory.tenant_id == tenant.id)
+        .where(
+            TenantCategory.tenant_id == tenant.id,
+            TenantCategory.status == "active",
+        )
         .order_by(TenantCategory.display_order.asc(), TenantCategory.label.asc())
     )
     return cat_result.scalars().all()
@@ -116,6 +128,90 @@ async def create_tenant_category(
     await db.commit()
     await db.refresh(cat)
     return cat
+
+
+@router.patch("/categories/{category_id}", response_model=TenantCategoryResponse)
+async def update_tenant_category_status(
+    category_id: UUID,
+    data: TenantCategoryStatusUpdate,
+    x_tenant_slug: str = Header(...),
+    db: AsyncSession = Depends(get_db),
+    current_admin = Depends(get_current_admin),
+):
+    """Validation humaine d'une catégorie proposée par le pipeline IA.
+
+    Le pipeline écrit `proposed` mais n'active rien seul (Principe 5) : sans ce
+    endpoint, une catégorie proposée ne serait jamais promue à `active` et
+    resterait invisible pour le trip planner, les filtres POI et le chat — la
+    boucle de validation humaine resterait donc ouverte à jamais.
+
+    Transitions (imposées par `CATEGORY_TRANSITIONS`) :
+    - proposed → active  (publier)
+    - proposed → rejected (rejeter)
+    - active → rejected   (retirer)
+
+    Pas d'auto-transition et pas de « resurrect » : `rejected` est terminal.
+
+    Chemin `/categories/{id}` et non `/{tenant_id}/categories/{id}` : les routes
+    catégorie se résolvent par l'en-tête `X-Tenant-Slug`, comme GET et POST.
+    """
+    result = await db.execute(select(Tenant).where(Tenant.slug == x_tenant_slug))
+    tenant = result.scalar_one_or_none()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
+    if str(tenant.id) != str(current_admin.tenant_id):
+        raise HTTPException(status_code=403, detail="Tenant mismatch")
+
+    category_result = await db.execute(
+        select(TenantCategory).where(TenantCategory.id == category_id)
+    )
+    category = category_result.scalar_one_or_none()
+    # 404 et non 403 : révéler qu'une catégorie appartient à un autre tenant
+    # divulguerait son existence. Vérifiée sur tenant_id, pas seulement via
+    # l'en-tête, pour qu'un slug valide ne suffise pas.
+    if category is None or category.tenant_id != tenant.id:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    allowed = CATEGORY_TRANSITIONS.get(category.status, frozenset())
+    if data.status not in allowed:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Invalid transition {category.status!r} -> {data.status!r}. "
+                f"Allowed: {sorted(allowed) or 'none (status is terminal)'}"
+            ),
+        )
+
+    category.status = data.status
+    db.add(category)
+    await db.commit()
+    await db.refresh(category)
+    return category
+
+
+@router.get("/categories/all", response_model=List[TenantCategoryResponse])
+async def list_all_tenant_categories(
+    x_tenant_slug: str = Header(...),
+    db: AsyncSession = Depends(get_db),
+    current_admin = Depends(get_current_admin),
+):
+    """Vue admin : toutes les catégories du tenant, tous statuts confondus
+    (proposed, active, rejected), pour la file de validation."""
+    result = await db.execute(select(Tenant).where(Tenant.slug == x_tenant_slug))
+    tenant = result.scalar_one_or_none()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
+    if str(tenant.id) != str(current_admin.tenant_id):
+        raise HTTPException(status_code=403, detail="Tenant mismatch")
+
+    cat_result = await db.execute(
+        select(TenantCategory)
+        .where(TenantCategory.tenant_id == tenant.id)
+        .order_by(TenantCategory.display_order.asc(), TenantCategory.label.asc())
+    )
+    return cat_result.scalars().all()
 
 
 @router.get("/", response_model=List[TenantResponse])

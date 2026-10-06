@@ -94,7 +94,8 @@ async def _run_and_wait(client, admin_headers, tenant_id):
     return polled.json()
 
 
-def _candidate(label, doc_id, *, parent="history", mapping=0.95, category=0.95):
+def _candidate(label, doc_id, *, parent="history", mapping=0.95, category=0.95,
+               evidence=None):
     return {
         "label": label,
         "description": f"{label} — proposition extraite des documents de recherche.",
@@ -103,6 +104,7 @@ def _candidate(label, doc_id, *, parent="history", mapping=0.95, category=0.95):
         "category_confidence": category,
         "suggested_icon": "castle",
         "source_document_ids": [str(doc_id)],
+        "evidence_excerpt": evidence,
     }
 
 
@@ -123,9 +125,12 @@ async def test_extraction_success_creates_categories_with_right_status(
     )
     reply = json.dumps(
         [
-            # active : mapping 0.95 >= 0.90, category 0.90 >= 0.85, parent résolu
+            # active : mapping 0.95 >= 0.90, category 0.90 >= 0.85, parent résolu,
+            # citation retrouvée dans le document
+            # (preuve : citation exacte du document ingéré ci-dessus)
             _candidate("Monuments historiques", doc_id, parent="history",
-                       mapping=0.95, category=0.90),
+                       mapping=0.95, category=0.90,
+                       evidence="La Casbah d'Alger est un site classé"),
             # proposed : parent Niveau 1 non résolu (None). mapping 0.70
             # < category 0.92 : confidence doit valoir le plus faible (0.70),
             # pas le category_confidence trompeusement élevé.
@@ -182,6 +187,50 @@ async def test_extraction_success_creates_categories_with_right_status(
         )
     ).scalar_one()
     assert doc.status == "processed"
+
+
+# ----------------- 1b. preuve non vérifiée → jamais d'auto-publication
+
+
+async def test_unverified_evidence_blocks_auto_publication(
+    monkeypatch, client, admin_headers, test_tenant, db_session
+):
+    """Confiances maximales mais preuve absente / fabriquée / non rattachable :
+    la catégorie est créée en ``proposed`` (validation humaine), jamais ``active``.
+    """
+    from sqlalchemy import select
+
+    doc_id = await _ingest(
+        client, admin_headers, test_tenant.id,
+        "Les palmeraies de la vallée abritent des oasis fraîches en plein désert.",
+    )
+    invented_id = uuid.uuid4()
+    real_quote = "des oasis fraîches en plein désert"
+    fabricated = _candidate("Oasis du désert", doc_id, parent="nature",
+                            evidence="Les oasis sont classées au patrimoine mondial")
+    no_evidence = _candidate("Palmeraies", doc_id, parent="nature", evidence=None)
+    # Citation exacte, mais attribuée à un document qui n'existe pas dans le run.
+    wrong_doc = _candidate("Vallée fraîche", invented_id, parent="nature",
+                           evidence=real_quote)
+    too_short = _candidate("Désert", doc_id, parent="nature", evidence="désert")
+    _patch_llm(monkeypatch, reply=json.dumps(
+        [fabricated, no_evidence, wrong_doc, too_short]
+    ))
+
+    job = await _run_and_wait(client, admin_headers, test_tenant.id)
+
+    assert job["status"] == "done"
+    assert job["categories_proposed"] == 4
+    assert job["categories_auto_published"] == 0
+    assert job["categories_pending_review"] == 4
+
+    rows = (
+        await db_session.execute(
+            select(TenantCategory).where(TenantCategory.tenant_id == test_tenant.id)
+        )
+    ).scalars().all()
+    assert len(rows) == 4
+    assert {row.status for row in rows} == {"proposed"}
 
 
 # ------------------------------------------------------- 2. dédup par slug

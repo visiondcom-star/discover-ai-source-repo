@@ -375,8 +375,9 @@ async def _run_research_pipeline(job_id):
     Étapes : documents bruts du tenant (l'Ingestion est déjà couverte par
     l'endpoint dédié) → Extraction LLM (ResearchService) → dédup par slug →
     publication conditionnelle : ``active`` si mapping_confidence >= 0.90 ET
-    category_confidence >= 0.85 ET parent Niveau 1 résolu, sinon ``proposed``
-    (invisible pour l'application tant qu'un humain n'a pas validé).
+    category_confidence >= 0.85 ET parent Niveau 1 résolu ET citation du LLM
+    retrouvée mot pour mot dans un document cité (``verify_evidence``), sinon
+    ``proposed`` (invisible pour l'application tant qu'un humain n'a pas validé).
 
     Échecs différenciés : un dépassement de quota est journalisé avec le
     préfixe "quota_exceeded:" pour que le rate-limit manual_refresh ignore ce
@@ -470,10 +471,17 @@ async def _run_research_pipeline(job_id):
                         continue
                     seen_slugs.add(slug)
 
+                    # Preuve vérifiée par le code, pas crue sur parole : une
+                    # confiance auto-déclarée par le LLM ne suffit pas à publier
+                    # sans citation retrouvée dans un document cité de ce run.
+                    evidence_verified = ResearchService.verify_evidence(
+                        candidate, docs_by_id
+                    )
                     auto_published = (
                         candidate.mapping_confidence >= 0.90
                         and candidate.category_confidence >= 0.85
                         and candidate.parent_level1_id is not None
+                        and evidence_verified
                     )
                     session.add(
                         TenantCategory(

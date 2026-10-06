@@ -176,6 +176,18 @@ class CategoryCandidate(BaseModel):
     category_confidence: float = Field(..., ge=0.0, le=1.0)
     suggested_icon: Optional[str] = None
     source_document_ids: list[UUID] = Field(..., min_length=1)
+    # Citation mot pour mot d'un des documents cités. Le LLM la fournit, le
+    # pipeline la VÉRIFIE (ResearchService.verify_evidence) : une confiance
+    # auto-déclarée ne suffit jamais à publier. Absente → pas d'auto-publication.
+    evidence_excerpt: Optional[str] = Field(None, max_length=300)
+
+    @field_validator("evidence_excerpt")
+    @classmethod
+    def blank_excerpt_is_none(cls, v):
+        if v is None:
+            return None
+        v = v.strip()
+        return v or None
 
     @field_validator("parent_level1_id")
     @classmethod

@@ -56,6 +56,9 @@ backend/.env
 
 # Misc
 *.orig
+# Les fichiers .patch sont des artefacts locaux (intégration, rebases) :
+# ils ne doivent pas être versionnés.
+*.patch
 backend/.venv/
 backend/.coverage
 backend/coverage.xml

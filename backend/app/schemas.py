@@ -6,6 +6,7 @@ from uuid import UUID
 
 
 from app.constants import (
+    BOOKING_MODES_SUPPORTED,
     CATEGORY_STATUSES,
     PARENT_FAMILIES,
     RESEARCH_DOCUMENT_STATUSES,
@@ -311,6 +312,7 @@ class POIBase(BaseModel):
     tags: List[str] = []
     accessibility: List[str] = []
     opening_hours: Dict[str, Any] = {}
+    booking_mode: str = Field(default="request", pattern=_pattern(BOOKING_MODES_SUPPORTED))
 
 
 class POICreate(POIBase):
@@ -333,6 +335,7 @@ class POIUpdate(BaseModel):
     accessibility: Optional[List[str]] = None
     opening_hours: Optional[Dict[str, Any]] = None
     is_active: Optional[bool] = None
+    booking_mode: Optional[str] = Field(None, pattern=_pattern(BOOKING_MODES_SUPPORTED))
 
 
 class POIResponse(POIBase):
@@ -547,6 +550,8 @@ class BookingResponse(BaseModel):
     consent_given: bool
     price: Optional[float]
     currency: str
+    booking_mode: str = "request"
+    respond_by: Optional[datetime] = None
     created_at: datetime
 
 

@@ -73,3 +73,17 @@ CATEGORY_TRANSITIONS = {
     "rejected": frozenset(),
 }
 
+# --- Réservation : modes progressifs ---------------------------------------
+# Liste complète (cible produit) et sous-ensemble réellement géré par le backend.
+# deposit / online_payment exigent un module de paiement : refusés tant qu'il n'existe pas.
+BOOKING_MODES = (
+    "info_only",       # fiche informative, aucune réservation possible
+    "request",         # demande à l'établissement (comportement historique)
+    "manual_confirm",  # l'établissement doit confirmer (SLA de réponse)
+    "pay_on_site",     # réservation sans paiement en ligne
+    "deposit",         # acompte en ligne          (non géré)
+    "online_payment",  # paiement intégral en ligne (non géré)
+)
+BOOKING_MODES_SUPPORTED = ("info_only", "request", "manual_confirm", "pay_on_site")
+BOOKING_CONFIRM_SLA_HOURS = 24   # délai de réponse promis pour manual_confirm
+

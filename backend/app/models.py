@@ -241,6 +241,7 @@ class POI(Base):
     embedding = Column(Vector(1536), nullable=True)  # pgvector, 1536 for text-embedding-3-small
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+    booking_mode = Column(String(20), nullable=False, default="request", server_default="request")
 
     tenant = relationship("Tenant", back_populates="pois")
     trip_items = relationship("TripItem", back_populates="poi")
@@ -340,12 +341,20 @@ class Booking(Base):
     price = Column(Float, nullable=True)
     currency = Column(String(10))  # set from tenant by the booking endpoint; never hardcoded
     booking_data = Column(JSON, default=dict)
+    booking_mode = Column(String(20), nullable=False, default="request", server_default="request")
+    respond_by = Column(DateTime, nullable=True)           # SLA de réponse (manual_confirm)
+    idempotency_key = Column(String(80), nullable=True)
+    request_hash = Column(String(64), nullable=True)       # sha256 de la requête normalisée
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     tenant = relationship("Tenant", back_populates="bookings")
     user = relationship("User", back_populates="bookings")
     poi = relationship("POI", back_populates="bookings")
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "user_id", "idempotency_key", name="uq_bookings_idempotency"),
+    )
 
 
 class Review(Base):

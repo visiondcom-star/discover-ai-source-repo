@@ -1,0 +1,79 @@
+import 'package:discover_ai/providers/booking_provider.dart';
+import 'package:discover_ai/services/api_service.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import '../helpers/fakes.dart';
+
+/// BookingProvider + Idempotency-Key — mirror of the backend 0012 contract.
+void main() {
+  test('the provider forwards the idempotency key to the API', () async {
+    final api = FakeBookingsApi(bookings: []);
+    final provider = BookingProvider(bookingsApi: api);
+
+    await provider.createBooking(
+        poiId: 'p-1', adapterType: 'hotel', idempotencyKey: 'key-0001');
+
+    expect(api.lastIdempotencyKey, 'key-0001');
+    expect(api.idempotencyKeys, ['key-0001']);
+  });
+
+  test('same key + same request twice → one item, one reservation', () async {
+    final api = FakeBookingsApi(bookings: []);
+    final provider = BookingProvider(bookingsApi: api);
+
+    final first = await provider.createBooking(
+        poiId: 'p-1', adapterType: 'hotel', idempotencyKey: 'key-same');
+    final second = await provider.createBooking(
+        poiId: 'p-1', adapterType: 'hotel', idempotencyKey: 'key-same');
+
+    expect(first, isNotNull);
+    expect(second, isNotNull);
+    expect(second!.id, first!.id, reason: 'the replay must return the origin');
+    expect(provider.items, hasLength(1),
+        reason: 'a replay must not duplicate the list item');
+    expect(api.bookings, hasLength(1),
+        reason: 'a replay must not create a second backend reservation');
+  });
+
+  test('same key with a different adapter → 409, items untouched', () async {
+    final api = FakeBookingsApi(bookings: []);
+    final provider = BookingProvider(bookingsApi: api);
+    await provider.createBooking(
+        poiId: 'p-1', adapterType: 'hotel', idempotencyKey: 'key-conflict');
+
+    final failed = await provider.createBooking(
+        poiId: 'p-1', adapterType: 'tour', idempotencyKey: 'key-conflict');
+
+    expect(failed, isNull);
+    expect(provider.actionStatusCode, 409);
+    expect(provider.actionError, isNotNull);
+    expect(provider.items, hasLength(1));
+  });
+
+  test('createError 422 → readable actionError, items untouched', () async {
+    final api = FakeBookingsApi(bookings: [])
+      ..createError = ApiException(
+          422, '{"detail":"This place is information only and cannot be booked"}');
+    final provider = BookingProvider(bookingsApi: api);
+
+    final created = await provider.createBooking(
+        poiId: 'p-1', adapterType: 'hotel', idempotencyKey: 'key-422');
+
+    expect(created, isNull);
+    expect(provider.actionError,
+        bookingErrorMessage(ApiException(422, '{"detail":"…"}')));
+    expect(provider.actionStatusCode, 422);
+    expect(provider.items, isEmpty);
+  });
+
+  test('bookingErrorMessage maps status codes to readable copy', () {
+    expect(bookingErrorMessage(ApiException(409, '{}')),
+        contains('informations différentes'));
+    expect(bookingErrorMessage(ApiException(422, '{}')),
+        contains('pas disponible'));
+    expect(bookingErrorMessage(ApiException(500, '{}')),
+        contains('Réessayez dans un instant'));
+    expect(bookingErrorMessage(ApiException(null, '{}')),
+        contains('Réessayez dans un instant'));
+  });
+}

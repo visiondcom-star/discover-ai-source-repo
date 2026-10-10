@@ -22,6 +22,7 @@ void main() {
     String? address,
     double? rating,
     bool verified = false,
+    String bookingMode = 'request',
   }) =>
       POI(
         id: 'poi-1',
@@ -40,6 +41,7 @@ void main() {
         isVerified: verified,
         averageRating: rating,
         reviewCount: rating == null ? 0 : 12,
+        bookingMode: bookingMode,
       );
 
   Widget wrap(POI poi) => MultiProvider(
@@ -110,5 +112,35 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(TripFormScreen), findsOneWidget);
+  });
+
+  testWidgets('info_only POI hides the Book button and shows the notice',
+      (tester) async {
+    await tester.pumpWidget(wrap(poi(bookingMode: 'info_only')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('poi_detail_book_button')), findsNothing);
+    expect(find.byKey(const Key('poi_detail_info_only')), findsOneWidget);
+    expect(find.byKey(const Key('poi_detail_booking_soon')), findsNothing);
+  });
+
+  testWidgets('unsupported mode POI hides Book and shows "coming soon"',
+      (tester) async {
+    await tester.pumpWidget(wrap(poi(bookingMode: 'deposit')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('poi_detail_book_button')), findsNothing);
+    expect(find.byKey(const Key('poi_detail_booking_soon')), findsOneWidget);
+    expect(find.byKey(const Key('poi_detail_info_only')), findsNothing);
+  });
+
+  testWidgets('default request POI keeps its Book button (non-regression)',
+      (tester) async {
+    await tester.pumpWidget(wrap(poi()));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('poi_detail_book_button')), findsOneWidget);
+    expect(find.byKey(const Key('poi_detail_info_only')), findsNothing);
+    expect(find.byKey(const Key('poi_detail_booking_soon')), findsNothing);
   });
 }

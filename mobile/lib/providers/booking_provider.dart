@@ -3,6 +3,23 @@ import 'package:flutter/foundation.dart';
 import '../models/booking.dart';
 import '../services/api_service.dart';
 
+/// Human-readable message for a failed booking creation. The 409 case can
+/// only happen when an idempotency key was reused with a different payload
+/// (e.g. the user switched adapter mid-retry) — the sheet must be reopened
+/// with a fresh key. 422 covers `info_only` and the not-yet-supported modes
+/// (deposit / online_payment) refused by the backend.
+String bookingErrorMessage(ApiException e) {
+  switch (e.statusCode) {
+    case 409:
+      return "Cette demande a déjà été envoyée avec des informations "
+          "différentes. Rouvrez la fenêtre et réessayez.";
+    case 422:
+      return "La réservation n'est pas disponible pour ce lieu.";
+    default:
+      return "La réservation a échoué. Réessayez dans un instant.";
+  }
+}
+
 /// Booking state, mirroring the backend consent flow exactly:
 /// create → pending → explicit consent (true → confirmed + `EXT-…`
 /// reference, false → cancelled) → optional cancel.
@@ -19,6 +36,7 @@ class BookingProvider extends ChangeNotifier {
   bool _isActing = false;
   String? _error;
   String? _actionError;
+  int? _actionStatusCode;
 
   List<Booking> get items => _items;
 
@@ -29,6 +47,11 @@ class BookingProvider extends ChangeNotifier {
   bool get isActing => _isActing;
   String? get error => _error;
   String? get actionError => _actionError;
+
+  /// HTTP status of the last failed action (ApiException only) — lets the
+  /// booking sheet decide whether an idempotency key is still valid
+  /// (409/422 → discard it) or must be kept for the retry (network/5xx).
+  int? get actionStatusCode => _actionStatusCode;
 
   Future<void> loadBookings() async {
     _isLoading = true;
@@ -61,13 +84,20 @@ class BookingProvider extends ChangeNotifier {
 
   /// Creates a PENDING booking (201). Never confirms it — the caller must
   /// walk the user through [giveConsent] next (principle 5).
+  ///
+  /// [idempotencyKey] is forwarded to the backend's `Idempotency-Key`
+  /// header: the same key + same body replays the original booking (200)
+  /// instead of creating a duplicate. On a replay, the existing item is
+  /// replaced in place rather than inserted twice.
   Future<Booking?> createBooking({
     required String poiId,
     required String adapterType,
     Map<String, dynamic> bookingData = const {},
+    String? idempotencyKey,
   }) async {
     _isActing = true;
     _actionError = null;
+    _actionStatusCode = null;
     notifyListeners();
     Booking? created;
     try {
@@ -75,9 +105,17 @@ class BookingProvider extends ChangeNotifier {
         poiId: poiId,
         adapterType: adapterType,
         bookingData: bookingData,
+        idempotencyKey: idempotencyKey,
       );
       created = Booking.fromJson(json);
-      _items = [created, ..._items];
+      // Idempotent replay: same id already known → replace, never duplicate.
+      final known = _items.any((b) => b.id == created!.id);
+      _items = known
+          ? [for (final b in _items) if (b.id == created.id) created else b]
+          : [created, ..._items];
+    } on ApiException catch (e) {
+      _actionStatusCode = e.statusCode;
+      _actionError = bookingErrorMessage(e);
     } catch (e) {
       _actionError = e.toString();
     }

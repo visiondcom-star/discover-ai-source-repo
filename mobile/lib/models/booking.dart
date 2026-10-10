@@ -13,6 +13,8 @@ class Booking {
     required this.consentGiven,
     this.price,
     required this.currency,
+    this.bookingMode = 'request',
+    this.respondBy,
     this.createdAt,
   });
 
@@ -35,6 +37,15 @@ class Booking {
   /// Never populated by the current backend — rendered only when present.
   final double? price;
   final String currency;
+
+  /// Booking mode frozen at creation time from the POI — mirror of the
+  /// backend `booking_mode` (defaults to 'request' for pre-0012 payloads).
+  final String bookingMode;
+
+  /// Answer SLA set by the backend for `manual_confirm` bookings only
+  /// (ISO 8601, nullable) — mirror of the backend `respond_by`.
+  final DateTime? respondBy;
+
   final DateTime? createdAt;
 
   factory Booking.fromJson(Map<String, dynamic> json) => Booking(
@@ -48,6 +59,10 @@ class Booking {
         consentGiven: json['consent_given'] as bool? ?? false,
         price: (json['price'] as num?)?.toDouble(),
         currency: json['currency'] as String? ?? '',
+        bookingMode: (json['booking_mode'] as String?) ?? 'request',
+        respondBy: json['respond_by'] == null
+            ? null
+            : DateTime.tryParse(json['respond_by'] as String),
         createdAt: json['created_at'] == null
             ? null
             : DateTime.parse(json['created_at'] as String),

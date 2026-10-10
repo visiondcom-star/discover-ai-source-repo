@@ -24,6 +24,7 @@ class POI {
     this.isActive = true,
     this.averageRating,
     this.reviewCount = 0,
+    this.bookingMode = 'request',
     this.createdAt,
     this.updatedAt,
   }) : categories = categories ?? (category != null ? [category] : const []);
@@ -54,6 +55,28 @@ class POI {
   /// Rating aggregate maintained by the backend review flow.
   final double? averageRating;
   final int reviewCount;
+
+  /// How (and whether) this place can be booked — mirror of the backend
+  /// `booking_mode` (schemas.py: info_only | request | manual_confirm |
+  /// pay_on_site | deposit | online_payment). Defaults to 'request' so a
+  /// backend (or fixture) that predates the field keeps behaving as before.
+  final String bookingMode;
+
+  /// Modes this app knows how to book with — mobile mirror of the backend's
+  /// BOOKING_MODES_SUPPORTED. 'deposit'/'online_payment' need a payment
+  /// module and stay unsupported until then.
+  static const Set<String> bookableModes = {
+    'request',
+    'manual_confirm',
+    'pay_on_site',
+  };
+
+  /// True when a booking can be created from this POI's detail screen.
+  bool get isBookable => bookableModes.contains(bookingMode);
+
+  /// Information-only places: the Book CTA is replaced by a plain notice.
+  bool get isInfoOnly => bookingMode == 'info_only';
+
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -84,6 +107,7 @@ class POI {
         isActive: json['is_active'] as bool? ?? true,
         averageRating: (json['average_rating'] as num?)?.toDouble(),
         reviewCount: json['review_count'] as int? ?? 0,
+        bookingMode: (json['booking_mode'] as String?) ?? 'request',
         createdAt: json['created_at'] == null
             ? null
             : DateTime.parse(json['created_at'] as String),
@@ -114,6 +138,7 @@ class POI {
         'is_active': isActive,
         'average_rating': averageRating,
         'review_count': reviewCount,
+        'booking_mode': bookingMode,
         if (createdAt != null) 'created_at': createdAt!.toIso8601String(),
         if (updatedAt != null) 'updated_at': updatedAt!.toIso8601String(),
       };

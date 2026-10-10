@@ -5,6 +5,7 @@ import '../models/booking.dart';
 import '../models/poi.dart';
 import '../providers/booking_provider.dart';
 import '../providers/poi_provider.dart';
+import '../utils/idempotency.dart';
 
 /// Réservations tab — real consent-flow UI on the backend Booking-Agent
 /// (architecture principle n°5): a booking is created PENDING, then consent
@@ -171,6 +172,16 @@ class _BookingCard extends StatelessWidget {
             if (booking.price != null)
               Text('${booking.price} ${booking.currency}',
                   style: Theme.of(context).textTheme.bodySmall),
+            if (pending && booking.respondBy != null)
+              Text(
+                'Réponse attendue avant le '
+                '${booking.respondBy!.day}/${booking.respondBy!.month}/${booking.respondBy!.year}',
+                key: Key('booking_respond_by_${booking.id}'),
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: scheme.onSurfaceVariant),
+              ),
             if (booking.externalId != null) ...[
               const SizedBox(height: 4),
               Text(booking.externalId!,
@@ -264,7 +275,12 @@ Future<void> showConsentDialog(BuildContext context, Booking booking) {
 /// backend advertises (GET /bookings/adapters/available — no invented
 /// fallback), creates a PENDING booking, then walks the user through the
 /// explicit consent dialog (principle 5).
+///
+/// Guard: a POI that is not bookable (info_only / unsupported mode) has no
+/// Book button on its detail screen — this check is defence in depth, so the
+/// sheet can never be opened for such a place even by a stale widget tree.
 Future<void> showBookingSheet(BuildContext context, POI poi) {
+  if (!poi.isBookable) return Future<void>.value();
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -291,6 +307,13 @@ class _BookingSheetState extends State<_BookingSheet> {
 
   String? _selected;
   bool _loading = false;
+
+  /// One key per logical attempt (mobile mirror of the backend contract):
+  /// generated lazily on the first "Create" tap and reused verbatim on any
+  /// network/5xx retry so the backend replays instead of duplicating. Cleared
+  /// when the payload legitimately changes (adapter switch) or the backend
+  /// rejects the key (409/422) — a fresh key then starts a fresh attempt.
+  String? _idempotencyKey;
 
   @override
   void initState() {
@@ -367,7 +390,14 @@ class _BookingSheetState extends State<_BookingSheet> {
                     key: Key('booking_adapter_$type'),
                     label: Text(_adapterLabels[type] ?? type),
                     selected: _selected == type,
-                    onSelected: (_) => setState(() => _selected = type),
+                    onSelected: (_) => setState(() {
+                      if (_selected != type) {
+                        // Different payload → the old key would be a 409 on
+                        // the backend: start a new logical attempt.
+                        _idempotencyKey = null;
+                      }
+                      _selected = type;
+                    }),
                   ),
               ],
             ),
@@ -393,11 +423,26 @@ class _BookingSheetState extends State<_BookingSheet> {
   /// sheet, then closes the sheet once the consent step is resolved.
   Future<void> _create() async {
     final provider = context.read<BookingProvider>();
+    // Lazy: generated on first tap, reused on retry (network/5xx keeps the
+    // key so the backend replays — no duplicate on a flaky connection).
+    _idempotencyKey ??= newIdempotencyKey();
     final created = await provider.createBooking(
       poiId: widget.poi.id,
       adapterType: _selected!,
+      idempotencyKey: _idempotencyKey,
     );
-    if (!mounted || created == null) return;
+    if (!mounted) return;
+    if (created == null) {
+      final status = provider.actionStatusCode;
+      if (status == 409 || status == 422) {
+        // The key itself was refused: it can never succeed as-is.
+        setState(() => _idempotencyKey = null);
+      }
+      // Network/5xx: the key is kept — the retry replays the same request.
+      return;
+    }
+    // Success: the attempt is over; the next sheet starts with a fresh key.
+    _idempotencyKey = null;
     await showConsentDialog(context, created);
     if (mounted) Navigator.of(context).pop();
   }

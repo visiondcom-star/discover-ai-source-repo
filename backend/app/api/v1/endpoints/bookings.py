@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from app.constants import BOOKING_CONFIRM_SLA_HOURS, BOOKING_MODES_SUPPORTED
 from app.database import get_db
+from app.services.booking_lifecycle import expire_overdue_requests
 from app.models import Booking, POI, Tenant, utcnow
 from app.schemas import BookingCreate, BookingResponse, ConsentRequest
 from app.core.tenant import get_tenant_from_header
@@ -148,6 +149,7 @@ async def list_bookings(
     status_filter: str = None,
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)
+    await expire_overdue_requests(db, tenant.id)
     query = select(Booking).where(
         and_(Booking.user_id == current_user.id, Booking.tenant_id == tenant.id)
     )
@@ -167,6 +169,7 @@ async def get_booking(
     current_user = Depends(get_current_user),
 ):
     tenant = await get_tenant_from_header(x_tenant_slug)
+    await expire_overdue_requests(db, tenant.id)
     result = await db.execute(
         select(Booking).where(
             and_(
@@ -205,11 +208,20 @@ async def give_consent(
         raise HTTPException(status_code=404, detail="Booking not found")
 
     if data.consent:
-        booking.consent_given = True
-        booking.consent_timestamp = utcnow()
-        booking.status = "confirmed"
-        # Here you would call the actual adapter
-        booking.external_id = f"EXT-{booking_id[:8]}"
+        if (booking.booking_mode or "request") == "manual_confirm":
+            # manual_confirm : le voyageur demande, le partenaire décide.
+            if booking.status != "pending":
+                raise HTTPException(status_code=409, detail="Booking cannot be requested in its current state")
+            booking.consent_given = True
+            booking.consent_timestamp = utcnow()
+            booking.status = "requested"
+            # Pas d'external_id ici : il sera posé par le partenaire à la confirmation.
+        else:
+            # Autres modes : flux historique inchangé (confirmation immédiate).
+            booking.consent_given = True
+            booking.consent_timestamp = utcnow()
+            booking.status = "confirmed"
+            booking.external_id = f"EXT-{booking_id[:8]}"
     else:
         booking.status = "cancelled"
 
@@ -242,6 +254,17 @@ async def cancel_booking(
     if booking.status == "confirmed" and booking.consent_given:
         # Would trigger adapter cancellation here
         pass
+
+    # La modale mobile interdit l'annulation tant que la demande n'est pas
+    # `requested` (confirmée côté app). Aligner le backend : on ne peut annuler
+    # que pending / requested / expired. Les statuts terminaux (confirmed,
+    # cancelled) ou inconnus sont refusés en 409 — un état déjà tranché n'est
+    # pas « annulable » (idempotence par la clarté, pas par le silence).
+    if booking.status not in ("pending", "requested", "expired"):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot cancel a booking in status '{booking.status}'",
+        )
 
     booking.status = "cancelled"
     await db.commit()

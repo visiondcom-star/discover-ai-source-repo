@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/booking.dart';
+import '../models/booking_details.dart';
 import '../models/poi.dart';
 import '../providers/booking_provider.dart';
 import '../providers/poi_provider.dart';
@@ -142,8 +143,8 @@ class BookingStatusStyle {
 
 BookingStatusStyle styleFor(Booking booking, ColorScheme scheme) {
   if (booking.isPending) {
-    return BookingStatusStyle('En attente de consentement',
-        scheme.secondaryContainer);
+    return BookingStatusStyle(
+        'En attente de consentement', scheme.secondaryContainer);
   }
   if (booking.isAwaitingPartner) {
     return BookingStatusStyle(
@@ -398,6 +399,31 @@ class _BookingSheetState extends State<_BookingSheet> {
   String? _selected;
   bool _loading = false;
 
+  /// Traveller details (date, people, notes) sent as `booking_data`. The date
+  /// is mandatory; until one is picked, "Créer la réservation" stays disabled.
+  DateTime? _date;
+  int _guests = BookingDetails.kMinGuests;
+  late final TextEditingController _notes = TextEditingController()
+    ..addListener(_onDetailsChanged);
+
+  @override
+  void dispose() {
+    _notes.dispose();
+    super.dispose();
+  }
+
+  /// Any change to the details changes the request body: the previous
+  /// idempotency key would be a 409 server-side, so a new attempt must mint a
+  /// fresh one. Mirrors the adapter-switch rule.
+  void _onDetailsChanged() {
+    if (_idempotencyKey != null) setState(() => _idempotencyKey = null);
+  }
+
+  /// Builds the details to send, or null while the mandatory date is missing.
+  BookingDetails? get _details => _date == null
+      ? null
+      : BookingDetails(date: _date!, guests: _guests, notes: _notes.text);
+
   /// One key per logical attempt (mobile mirror of the backend contract):
   /// generated lazily on the first "Create" tap and reused verbatim on any
   /// network/5xx retry so the backend replays instead of duplicating. Cleared
@@ -439,74 +465,117 @@ class _BookingSheetState extends State<_BookingSheet> {
         top: 16,
         bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
       ),
-      child: Column(
-        key: const Key('booking_sheet'),
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Réserver — ${widget.poi.name}',
-              style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 4),
-          Text(
-            'La réservation est créée en attente : elle ne devient ferme '
-            'qu’après votre confirmation explicite.',
-            style: soft,
-          ),
-          const SizedBox(height: 12),
-          if (_loading && adapters.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (!_loading && adapters.isEmpty && provider.error != null) ...[
-            Text('Impossible de charger les prestataires',
-                style: TextStyle(color: scheme.error)),
-            TextButton(
-              onPressed: _loadAdapters,
-              child: const Text('Réessayer'),
+      child: SingleChildScrollView(
+        child: Column(
+          key: const Key('booking_sheet'),
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Réserver — ${widget.poi.name}',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Text(
+              'La réservation est créée en attente : elle ne devient ferme '
+              'qu’après votre confirmation explicite.',
+              style: soft,
             ),
-          ] else if (!_loading && adapters.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: Text('Aucun prestataire disponible pour le moment'),
-            )
-          else
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final type in adapters)
-                  ChoiceChip(
-                    key: Key('booking_adapter_$type'),
-                    label: Text(_adapterLabels[type] ?? type),
-                    selected: _selected == type,
-                    onSelected: (_) => setState(() {
-                      if (_selected != type) {
-                        // Different payload → the old key would be a 409 on
-                        // the backend: start a new logical attempt.
-                        _idempotencyKey = null;
-                      }
-                      _selected = type;
-                    }),
-                  ),
-              ],
+            const SizedBox(height: 12),
+            if (_loading && adapters.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (!_loading &&
+                adapters.isEmpty &&
+                provider.error != null) ...[
+              Text('Impossible de charger les prestataires',
+                  style: TextStyle(color: scheme.error)),
+              TextButton(
+                onPressed: _loadAdapters,
+                child: const Text('Réessayer'),
+              ),
+            ] else if (!_loading && adapters.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Text('Aucun prestataire disponible pour le moment'),
+              )
+            else
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final type in adapters)
+                    ChoiceChip(
+                      key: Key('booking_adapter_$type'),
+                      label: Text(_adapterLabels[type] ?? type),
+                      selected: _selected == type,
+                      onSelected: (_) => setState(() {
+                        if (_selected != type) {
+                          // Different payload → the old key would be a 409 on
+                          // the backend: start a new logical attempt.
+                          _idempotencyKey = null;
+                        }
+                        _selected = type;
+                      }),
+                    ),
+                ],
+              ),
+            const SizedBox(height: 16),
+            _DetailsFields(
+              date: _date,
+              guests: _guests,
+              notesController: _notes,
+              onPickDate: _pickDate,
+              onGuestsChanged: _onGuestsChanged,
             ),
-          const SizedBox(height: 16),
-          FilledButton(
-            key: const Key('booking_create_button'),
-            onPressed:
-                (_selected == null || provider.isActing) ? null : _create,
-            child:
-                Text(provider.isActing ? 'Création…' : 'Créer la réservation'),
-          ),
-          if (provider.actionError != null) ...[
+            const SizedBox(height: 16),
+            FilledButton(
+              key: const Key('booking_create_button'),
+              // The date is mandatory: no date, no submission.
+              onPressed:
+                  (_selected == null || _date == null || provider.isActing)
+                      ? null
+                      : _create,
+              child: Text(
+                  provider.isActing ? 'Création…' : 'Créer la réservation'),
+            ),
+            if (provider.actionError != null) ...[
+              const SizedBox(height: 8),
+              Text(provider.actionError!,
+                  style: TextStyle(color: scheme.error)),
+            ],
             const SizedBox(height: 8),
-            Text(provider.actionError!, style: TextStyle(color: scheme.error)),
           ],
-          const SizedBox(height: 8),
-        ],
+        ),
       ),
     );
+  }
+
+  /// A new guest count is a new body: drop any pending idempotency key.
+  void _onGuestsChanged(int value) {
+    setState(() {
+      _guests = value;
+      _idempotencyKey = null;
+    });
+  }
+
+  /// Opens the date picker (bottom bound: today). A picked date is a content
+  /// change, so any pending idempotency key is dropped — a fresh body needs a
+  /// fresh key.
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _date ?? today,
+      firstDate: today,
+      lastDate: DateTime(today.year + 2),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _date = picked;
+      _idempotencyKey = null;
+    });
   }
 
   /// Creates the PENDING booking, opens the explicit consent dialog over the
@@ -519,6 +588,7 @@ class _BookingSheetState extends State<_BookingSheet> {
     final created = await provider.createBooking(
       poiId: widget.poi.id,
       adapterType: _selected!,
+      details: _details,
       idempotencyKey: _idempotencyKey,
     );
     if (!mounted) return;
@@ -535,5 +605,82 @@ class _BookingSheetState extends State<_BookingSheet> {
     _idempotencyKey = null;
     await showConsentDialog(context, created);
     if (mounted) Navigator.of(context).pop();
+  }
+}
+
+/// Date, people and free-text notes collected by the booking sheet and sent
+/// to the partner as `booking_data` (only `date`, `guests`, `notes` — never
+/// personal data, hence the explicit helper line under the notes field).
+///
+/// Bounds and the 500-char ceiling come from [BookingDetails] so the UI and
+/// the validation share one source of truth.
+class _DetailsFields extends StatelessWidget {
+  const _DetailsFields({
+    required this.date,
+    required this.guests,
+    required this.notesController,
+    required this.onPickDate,
+    required this.onGuestsChanged,
+  });
+
+  final DateTime? date;
+  final int guests;
+  final TextEditingController notesController;
+  final VoidCallback onPickDate;
+  final ValueChanged<int> onGuestsChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        OutlinedButton.icon(
+          key: const Key('booking_date_field'),
+          onPressed: onPickDate,
+          icon: const Icon(Icons.calendar_today_outlined),
+          label: Text(
+            date == null ? 'Choisir une date' : 'Date : ${_dateFr(date!)}',
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(children: [
+          Text('Personnes', style: Theme.of(context).textTheme.bodyLarge),
+          const Spacer(),
+          IconButton(
+            key: const Key('booking_guests_minus'),
+            onPressed: guests <= BookingDetails.kMinGuests
+                ? null
+                : () => onGuestsChanged(guests - 1),
+            icon: const Icon(Icons.remove_circle_outline),
+            tooltip: 'Retirer une personne',
+          ),
+          Text('$guests',
+              key: const Key('booking_guests_value'),
+              style: Theme.of(context).textTheme.titleMedium),
+          IconButton(
+            key: const Key('booking_guests_plus'),
+            onPressed: guests >= BookingDetails.kMaxGuests
+                ? null
+                : () => onGuestsChanged(guests + 1),
+            icon: const Icon(Icons.add_circle_outline),
+            tooltip: 'Ajouter une personne',
+          ),
+        ]),
+        const SizedBox(height: 4),
+        TextField(
+          key: const Key('booking_notes_field'),
+          controller: notesController,
+          maxLines: 3,
+          maxLength: BookingDetails.kMaxNotesLength,
+          decoration: InputDecoration(
+            labelText: 'Remarques (facultatif)',
+            helperText: 'Ne saisissez ni email ni numéro de téléphone.',
+            helperStyle: TextStyle(color: scheme.onSurfaceVariant),
+            border: const OutlineInputBorder(),
+          ),
+        ),
+      ],
+    );
   }
 }

@@ -56,6 +56,12 @@ abstract class ChatApi {
 abstract class BookingsApi {
   /// Creates a PENDING booking; mirrors POST /bookings/ (201).
   ///
+  /// [bookingData] is the request's `booking_data` object — the details the
+  /// partner sees (this app only ever sends `date`, `guests` and `notes`,
+  /// never personal data). Null keeps the historical body verbatim: an empty
+  /// `booking_data` object, byte for byte, so the server-side hash of a
+  /// detail-less booking is unchanged.
+  ///
   /// [idempotencyKey] maps to the optional `Idempotency-Key` header: the
   /// backend replays the original booking (200) on same key + same body,
   /// and answers 409 on same key + different body. Omitting it (null)
@@ -63,7 +69,7 @@ abstract class BookingsApi {
   Future<Map<String, dynamic>> createBooking({
     required String poiId,
     required String adapterType,
-    Map<String, dynamic> bookingData,
+    Map<String, dynamic>? bookingData,
     String? idempotencyKey,
   });
 
@@ -315,11 +321,16 @@ class ApiService
     return Map<String, dynamic>.from(result as Map);
   }
 
+  /// [bookingData] defaults to an empty object so a detail-less booking keeps
+  /// the exact body it has always sent (`"booking_data": {}`) — the server
+  /// hashes the whole body for the Idempotency-Key contract, so this must not
+  /// drift. Details are passed through untouched (already built by
+  /// `BookingDetails.toBookingData`).
   @override
   Future<Map<String, dynamic>> createBooking({
     required String poiId,
     required String adapterType,
-    Map<String, dynamic> bookingData = const {},
+    Map<String, dynamic>? bookingData,
     String? idempotencyKey,
   }) async =>
       Map<String, dynamic>.from(await _post(
@@ -327,7 +338,7 @@ class ApiService
         {
           'poi_id': poiId,
           'adapter_type': adapterType,
-          'booking_data': bookingData,
+          'booking_data': bookingData ?? const <String, dynamic>{},
         },
         // Never logged: only the body is debug-printed, headers are not.
         extraHeaders:

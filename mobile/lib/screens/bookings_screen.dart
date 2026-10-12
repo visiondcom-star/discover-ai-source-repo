@@ -406,6 +406,10 @@ class _BookingSheetState extends State<_BookingSheet> {
   late final TextEditingController _notes = TextEditingController()
     ..addListener(_onDetailsChanged);
 
+  /// Last notes text seen by [_onDetailsChanged]. The controller also notifies
+  /// on cursor/selection moves, which do not change the request body.
+  String _lastNotes = '';
+
   @override
   void dispose() {
     _notes.dispose();
@@ -416,6 +420,10 @@ class _BookingSheetState extends State<_BookingSheet> {
   /// idempotency key would be a 409 server-side, so a new attempt must mint a
   /// fresh one. Mirrors the adapter-switch rule.
   void _onDetailsChanged() {
+    // Cursor/selection only: same body, same logical attempt — keep the key so
+    // a retry after a network failure replays instead of duplicating.
+    if (_notes.text == _lastNotes) return;
+    _lastNotes = _notes.text;
     if (_idempotencyKey != null) setState(() => _idempotencyKey = null);
   }
 

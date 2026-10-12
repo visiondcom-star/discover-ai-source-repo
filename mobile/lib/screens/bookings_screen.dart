@@ -26,8 +26,20 @@ class _BookingsScreenState extends State<BookingsScreen> {
     // Post-frame: providers cannot be read while the element tree builds.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      context.read<BookingProvider>().loadBookings();
+      _load();
     });
+  }
+
+  /// Initial load. A 'requested' booking may have been answered by the
+  /// partner since the last visit: trigger one silent refresh (no spinner,
+  /// no periodic polling).
+  Future<void> _load() async {
+    final provider = context.read<BookingProvider>();
+    await provider.loadBookings();
+    if (!mounted) return;
+    if (provider.items.any((b) => b.isAwaitingPartner)) {
+      await provider.loadBookings(silent: true);
+    }
   }
 
   @override
@@ -118,6 +130,45 @@ class _BookingsScreenState extends State<BookingsScreen> {
   }
 }
 
+/// Centralized status presentation (label + color) for the booking card.
+/// Single table per the spec: every status renders through this function,
+/// unknown statuses fall back to the raw text on a neutral background.
+class BookingStatusStyle {
+  const BookingStatusStyle(this.label, this.color);
+
+  final String label;
+  final Color color;
+}
+
+BookingStatusStyle styleFor(Booking booking, ColorScheme scheme) {
+  if (booking.isPending) {
+    return BookingStatusStyle('En attente de consentement',
+        scheme.secondaryContainer);
+  }
+  if (booking.isAwaitingPartner) {
+    return BookingStatusStyle(
+        'En attente du prestataire', scheme.secondaryContainer);
+  }
+  if (booking.isConfirmed) {
+    return BookingStatusStyle(booking.status, scheme.primaryContainer);
+  }
+  if (booking.isDeclined) {
+    return BookingStatusStyle(
+        'Refusée par le prestataire', scheme.errorContainer);
+  }
+  if (booking.isExpired) {
+    return BookingStatusStyle(
+        'Demande expirée', scheme.errorContainer.withAlpha(150));
+  }
+  if (booking.isCancelled) {
+    return BookingStatusStyle(booking.status, scheme.errorContainer);
+  }
+  // Unknown status: render the raw text, never crash.
+  return BookingStatusStyle(booking.status, scheme.secondaryContainer);
+}
+
+String _dateFr(DateTime d) => '${d.day}/${d.month}/${d.year}';
+
 class _BookingCard extends StatelessWidget {
   const _BookingCard({required this.booking, required this.poiName});
 
@@ -128,14 +179,7 @@ class _BookingCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final provider = context.read<BookingProvider>();
-    final pending = booking.status == 'pending';
-    final confirmed = booking.status == 'confirmed';
-    final cancelled = booking.status == 'cancelled';
-    final statusColor = cancelled
-        ? scheme.errorContainer
-        : confirmed
-            ? scheme.primaryContainer
-            : scheme.secondaryContainer;
+    final style = styleFor(booking, scheme);
     return Card(
       key: Key('booking_card_${booking.id}'),
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -156,9 +200,9 @@ class _BookingCard extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                    color: statusColor,
+                    color: style.color,
                     borderRadius: BorderRadius.circular(999)),
-                child: Text(booking.status,
+                child: Text(style.label,
                     style: Theme.of(context).textTheme.labelSmall),
               ),
             ]),
@@ -166,23 +210,53 @@ class _BookingCard extends StatelessWidget {
             Text('Prestataire : ${booking.adapterType}',
                 style: Theme.of(context).textTheme.bodySmall),
             if (booking.createdAt != null)
-              Text(
-                  '${booking.createdAt!.day}/${booking.createdAt!.month}/${booking.createdAt!.year}',
+              Text(_dateFr(booking.createdAt!),
                   style: Theme.of(context).textTheme.bodySmall),
             if (booking.price != null)
               Text('${booking.price} ${booking.currency}',
                   style: Theme.of(context).textTheme.bodySmall),
-            if (pending && booking.respondBy != null)
+            if (booking.isPending && booking.respondBy != null)
               Text(
-                'Réponse attendue avant le '
-                '${booking.respondBy!.day}/${booking.respondBy!.month}/${booking.respondBy!.year}',
+                'Réponse attendue avant le ${_dateFr(booking.respondBy!)}',
                 key: Key('booking_respond_by_${booking.id}'),
                 style: Theme.of(context)
                     .textTheme
                     .bodySmall
                     ?.copyWith(color: scheme.onSurfaceVariant),
               ),
-            if (booking.externalId != null) ...[
+            if (booking.isAwaitingPartner)
+              Text(
+                booking.respondBy != null
+                    ? 'Le prestataire doit confirmer avant le '
+                        '${_dateFr(booking.respondBy!)}'
+                    : 'Le prestataire doit confirmer votre demande',
+                key: Key('booking_awaiting_${booking.id}'),
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: scheme.onSurfaceVariant),
+              ),
+            if (booking.isDeclined &&
+                booking.partnerNote != null &&
+                booking.partnerNote!.isNotEmpty)
+              Text(
+                'Message du prestataire : ${booking.partnerNote}',
+                key: Key('booking_partner_note_${booking.id}'),
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            if (booking.isExpired)
+              Text(
+                "Le prestataire n'a pas répondu à temps. Vous pouvez "
+                'refaire une demande.',
+                key: Key('booking_expired_hint_${booking.id}'),
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: scheme.onSurfaceVariant),
+              ),
+            if (booking.isConfirmed && booking.externalId != null) ...[
               const SizedBox(height: 4),
               Text(booking.externalId!,
                   key: Key('booking_ref_${booking.id}'),
@@ -191,10 +265,10 @@ class _BookingCard extends StatelessWidget {
                       .labelMedium
                       ?.copyWith(color: scheme.primary)),
             ],
-            if ((pending && !booking.consentGiven) || confirmed) ...[
+            if (booking.canGiveConsent || booking.canCancel) ...[
               const SizedBox(height: 12),
               Row(children: [
-                if (pending && !booking.consentGiven) ...[
+                if (booking.canGiveConsent) ...[
                   FilledButton(
                     key: Key('booking_consent_${booking.id}'),
                     onPressed: () => showConsentDialog(context, booking),
@@ -202,13 +276,14 @@ class _BookingCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                 ],
-                TextButton(
-                  key: Key('booking_cancel_${booking.id}'),
-                  onPressed: provider.isActing
-                      ? null
-                      : () => provider.cancelBooking(booking),
-                  child: const Text('Annuler'),
-                ),
+                if (booking.canCancel)
+                  TextButton(
+                    key: Key('booking_cancel_${booking.id}'),
+                    onPressed: provider.isActing
+                        ? null
+                        : () => provider.cancelBooking(booking),
+                    child: const Text('Annuler'),
+                  ),
               ]),
             ],
           ],
@@ -244,9 +319,12 @@ Future<void> showConsentDialog(BuildContext context, Booking booking) {
           if (booking.price != null)
             Text('${booking.price} ${booking.currency}'),
           const SizedBox(height: 12),
-          const Text('En confirmant, le Booking-Agent générera une référence '
-              'externe (EXT-…). Sans confirmation, la réservation reste '
-              'sans effet et sera annulée.'),
+          Text(booking.bookingMode == 'manual_confirm'
+              ? 'Votre demande sera transmise au prestataire, qui doit la '
+                  'confirmer.'
+              : 'En confirmant, le Booking-Agent générera une référence '
+                  'externe (EXT-…). Sans confirmation, la réservation reste '
+                  'sans effet et sera annulée.'),
         ],
       ),
       actions: [
@@ -262,7 +340,19 @@ Future<void> showConsentDialog(BuildContext context, Booking booking) {
           key: const Key('booking_consent_confirm'),
           onPressed: () async {
             Navigator.of(dialogContext).pop();
-            await provider.giveConsent(booking, consent: true);
+            // The server response is used as-is: a manual_confirm consent
+            // comes back as 'requested', never forced to 'confirmed'.
+            final updated = await provider.giveConsent(booking, consent: true);
+            if (updated != null &&
+                updated.isAwaitingPartner &&
+                context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  key: Key('booking_requested_snackbar'),
+                  content: Text('Demande envoyée au prestataire'),
+                ),
+              );
+            }
           },
           child: const Text('Confirmer'),
         ),

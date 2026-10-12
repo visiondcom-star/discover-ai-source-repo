@@ -1,11 +1,12 @@
 """Pydantic schemas for request/response validation."""
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import List, Literal, Optional, Dict, Any
 from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator, model_validator
 from uuid import UUID
 
 
 from app.constants import (
+    BOOKING_MODES_SUPPORTED,
     CATEGORY_STATUSES,
     PARENT_FAMILIES,
     RESEARCH_DOCUMENT_STATUSES,
@@ -311,6 +312,7 @@ class POIBase(BaseModel):
     tags: List[str] = []
     accessibility: List[str] = []
     opening_hours: Dict[str, Any] = {}
+    booking_mode: str = Field(default="request", pattern=_pattern(BOOKING_MODES_SUPPORTED))
 
 
 class POICreate(POIBase):
@@ -333,6 +335,7 @@ class POIUpdate(BaseModel):
     accessibility: Optional[List[str]] = None
     opening_hours: Optional[Dict[str, Any]] = None
     is_active: Optional[bool] = None
+    booking_mode: Optional[str] = Field(None, pattern=_pattern(BOOKING_MODES_SUPPORTED))
 
 
 class POIResponse(POIBase):
@@ -547,6 +550,61 @@ class BookingResponse(BaseModel):
     consent_given: bool
     price: Optional[float]
     currency: str
+    booking_mode: str = "request"
+    respond_by: Optional[datetime] = None
+    # Réponse du prestataire (manual_confirm). Volontairement sur `BookingResponse`
+    # (et pas seulement sur la vue partenaire) : le voyageur doit voir que sa
+    # demande a été traitée, et la note éventuelle du prestataire.
+    partner_note: Optional[str] = None
+    responded_at: Optional[datetime] = None
+    created_at: datetime
+
+
+class PartnerRespond(BaseModel):
+    """Décision d'un partenaire sur une réservation en attente (manual_confirm).
+
+    `confirm` => la réservation passe `confirmed` ; `decline` => `declined`.
+    `note` est facultative (motif du refus, précision sur l'horaire…).
+    """
+
+    decision: Literal["confirm", "decline"]
+    note: Optional[str] = Field(None, max_length=500)
+
+
+class PartnerBookingResponse(BookingResponse):
+    """Vue partenaire d'une réservation : `BookingResponse` plus le nom du POI,
+    le nom du voyageur (jamais son email) et les détails de la demande
+    nécessaires pour décider.
+
+    `details` reprend `booking.booking_data` et n'est servi qu'aux appels
+    partner/admin. Il ne doit contenir AUCUNE donnée sensible (email, téléphone,
+    pièce d'identité) — l'app n'en écrit pas dans `booking_data` ; toute évolution
+    doit préserver cette contrainte. Le voyageur, lui, ne reçoit jamais ce champ
+    (il passe par `BookingResponse`).
+    """
+
+    poi_name: str
+    traveller_name: Optional[str] = None
+    details: dict = {}
+
+
+class POIManagerCreate(BaseModel):
+    """Rattache un utilisateur du tenant à un POI (rôle partenaire).
+
+    `poi_id` vient du chemin (`/pois/{poi_id}/managers`) : seul `user_id`
+    figure dans le corps.
+    """
+
+    user_id: UUID
+
+
+class POIManagerResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    tenant_id: UUID
+    poi_id: UUID
+    user_id: UUID
     created_at: datetime
 
 

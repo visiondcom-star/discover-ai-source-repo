@@ -8,7 +8,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.database import get_db
-from app.models import User, Tenant
+from app.models import User, Tenant, POIManager
 from app.core.security import decode_token
 from app.core.tenant import get_tenant_from_header
 
@@ -153,3 +153,23 @@ async def get_tenant_admin(
     if str(current_admin.tenant_id) != str(tenant_id):
         raise HTTPException(status_code=404, detail="Tenant not found")
     return current_admin
+
+
+async def get_partner_poi_ids(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> set:
+    """POI que l'utilisateur courant est autorisé à traiter en tant que partenaire.
+
+    Un « partenaire » est un utilisateur du tenant rattaché à au moins un POI via
+    `poi_managers`. On renvoie l'ensemble des `poi_id` rattachés à cet utilisateur
+    **dans son tenant** (filtre défense-en-profondeur, même si la table porte déjà
+    tenant_id). Un ensemble vide => aucun périmètre => 403 naturel côté appelant.
+    """
+    rows = await db.execute(
+        select(POIManager.poi_id).where(
+            POIManager.tenant_id == current_user.tenant_id,
+            POIManager.user_id == current_user.id,
+        )
+    )
+    return set(rows.scalars().all())

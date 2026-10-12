@@ -3,6 +3,7 @@ import 'package:discover_ai/providers/booking_provider.dart';
 import 'package:discover_ai/providers/poi_provider.dart';
 import 'package:discover_ai/screens/bookings_screen.dart';
 import 'package:discover_ai/screens/poi_detail_screen.dart';
+import 'package:discover_ai/services/api_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -129,11 +130,95 @@ void main() {
     expect(api.createCalls, 1);
     expect(api.lastCreatedPoiId, 'p-1');
     expect(api.lastCreatedAdapter, 'hotel');
+    expect(api.lastIdempotencyKey, isNotNull,
+        reason: 'every creation attempt must carry an Idempotency-Key');
     expect(find.byKey(const Key('booking_consent_dialog')), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('booking_consent_confirm')));
     await tester.pumpAndSettle();
     expect(provider.items.single.status, 'confirmed');
     expect(provider.items.single.externalId, 'EXT-b-1');
+  });
+
+  testWidgets('a retry in the same sheet reuses the same idempotency key',
+      (tester) async {
+    final api = FakeBookingsApi(bookings: [])
+      ..createError = ApiException(500, '{"detail":"backend unavailable"}');
+    final provider = BookingProvider(bookingsApi: api);
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<BookingProvider>.value(value: provider),
+          ChangeNotifierProvider<POIProvider>.value(value: await loadedPois()),
+        ],
+        child: MaterialApp(home: PoiDetailScreen(poi: _poi(samplePoisJson[0]))),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.byKey(const Key('poi_detail_book_button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('poi_detail_book_button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('booking_adapter_hotel')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('booking_create_button')));
+    await tester.pumpAndSettle();
+    expect(provider.actionError, isNotNull, reason: 'first attempt failed');
+
+    // Network is back — same sheet, same logical attempt.
+    api.createError = null;
+    await tester.tap(find.byKey(const Key('booking_create_button')));
+    await tester.pumpAndSettle();
+
+    expect(api.idempotencyKeys, hasLength(2));
+    expect(api.idempotencyKeys[0], isNotNull);
+    expect(api.idempotencyKeys[1], api.idempotencyKeys[0],
+        reason: 'a retry must reuse the key, never mint a new one');
+    expect(api.bookings, hasLength(1),
+        reason: 'one backend reservation despite two POST attempts');
+    expect(find.byKey(const Key('booking_consent_dialog')), findsOneWidget);
+  });
+
+  testWidgets('switching adapter after a failure starts a new key',
+      (tester) async {
+    final api = FakeBookingsApi(bookings: [])
+      ..createError = ApiException(500, '{"detail":"backend unavailable"}');
+    final provider = BookingProvider(bookingsApi: api);
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<BookingProvider>.value(value: provider),
+          ChangeNotifierProvider<POIProvider>.value(value: await loadedPois()),
+        ],
+        child: MaterialApp(home: PoiDetailScreen(poi: _poi(samplePoisJson[0]))),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.byKey(const Key('poi_detail_book_button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('poi_detail_book_button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('booking_adapter_hotel')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('booking_create_button')));
+    await tester.pumpAndSettle();
+    expect(provider.actionError, isNotNull);
+
+    // Same key + different payload would be a 409: the sheet must mint a
+    // fresh key as soon as the adapter changes.
+    api.createError = null;
+    await tester.tap(find.byKey(const Key('booking_adapter_tour')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('booking_create_button')));
+    await tester.pumpAndSettle();
+
+    expect(api.idempotencyKeys, hasLength(2));
+    expect(api.idempotencyKeys[0], isNotNull);
+    expect(api.idempotencyKeys[1], isNot(api.idempotencyKeys[0]),
+        reason: 'a different payload must start a new logical attempt');
+    expect(api.lastCreatedAdapter, 'tour');
+    expect(find.byKey(const Key('booking_consent_dialog')), findsOneWidget);
   });
 }

@@ -258,15 +258,54 @@ class PoiDetailScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      key: const Key('poi_detail_book_button'),
-                      onPressed: () => showBookingSheet(context, poi),
-                      icon: const Icon(Icons.verified_user_outlined),
-                      label: const Text('Book'),
+                  if (poi.isBookable) ...[
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        key: const Key('poi_detail_book_button'),
+                        onPressed: () => showBookingSheet(context, poi),
+                        icon: const Icon(Icons.verified_user_outlined),
+                        label: const Text('Book'),
+                      ),
                     ),
-                  ),
+                    // Optional companion label for the non-default bookable
+                    // modes — the CTA itself is unchanged.
+                    if (poi.bookingMode != 'request') ...[
+                      const SizedBox(height: 8),
+                      Center(
+                        child: Text(
+                          poi.bookingMode == 'pay_on_site'
+                              ? 'Pay on site'
+                              : 'Confirmation by the provider',
+                          key: Key(
+                              'poi_detail_booking_mode_${poi.bookingMode}'),
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                        ),
+                      ),
+                    ],
+                  ] else if (poi.isInfoOnly) ...[
+                    // info_only: no Book CTA at all — the backend would answer
+                    // 422; show a plain notice instead.
+                    Center(
+                      key: const Key('poi_detail_info_only'),
+                      child: Text(
+                        'Information only — booking not available',
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                      ),
+                    ),
+                  ] else ...[
+                    // deposit / online_payment / unknown: not bookable yet.
+                    Center(
+                      key: const Key('poi_detail_booking_soon'),
+                      child: Text(
+                        'Online booking coming soon',
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 32),
                 ],
               ),

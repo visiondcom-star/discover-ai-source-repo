@@ -55,10 +55,16 @@ abstract class ChatApi {
 /// (backend/app/api/v1/endpoints/bookings.py).
 abstract class BookingsApi {
   /// Creates a PENDING booking; mirrors POST /bookings/ (201).
+  ///
+  /// [idempotencyKey] maps to the optional `Idempotency-Key` header: the
+  /// backend replays the original booking (200) on same key + same body,
+  /// and answers 409 on same key + different body. Omitting it (null)
+  /// keeps the historical create-every-time behaviour.
   Future<Map<String, dynamic>> createBooking({
     required String poiId,
     required String adapterType,
     Map<String, dynamic> bookingData,
+    String? idempotencyKey,
   });
 
   /// Lists the current user's bookings; mirrors GET /bookings/.
@@ -201,12 +207,13 @@ class ApiService
     return _decode(res);
   }
 
-  Future<dynamic> _post(String path, Map<String, dynamic> body) async {
+  Future<dynamic> _post(String path, Map<String, dynamic> body,
+      {Map<String, String>? extraHeaders}) async {
     final url = '$baseUrl$path';
     debugPrint('[API] POST $url body=$body');
     final res = await http.post(
       Uri.parse(url),
-      headers: _headers,
+      headers: {..._headers, if (extraHeaders != null) ...extraHeaders},
       body: jsonEncode(body),
     );
     debugPrint('[API] POST $path → ${res.statusCode}');
@@ -313,12 +320,19 @@ class ApiService
     required String poiId,
     required String adapterType,
     Map<String, dynamic> bookingData = const {},
+    String? idempotencyKey,
   }) async =>
-      Map<String, dynamic>.from(await _post('/bookings/', {
-        'poi_id': poiId,
-        'adapter_type': adapterType,
-        'booking_data': bookingData,
-      }) as Map);
+      Map<String, dynamic>.from(await _post(
+        '/bookings/',
+        {
+          'poi_id': poiId,
+          'adapter_type': adapterType,
+          'booking_data': bookingData,
+        },
+        // Never logged: only the body is debug-printed, headers are not.
+        extraHeaders:
+            idempotencyKey == null ? null : {'Idempotency-Key': idempotencyKey},
+      ) as Map);
 
   @override
   Future<List<Map<String, dynamic>>> listBookings() async {

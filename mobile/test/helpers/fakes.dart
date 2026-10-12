@@ -238,6 +238,8 @@ Map<String, dynamic> sampleBookingJson({
   String status = 'pending',
   bool consentGiven = false,
   String? externalId,
+  String bookingMode = 'request',
+  String? respondBy,
 }) =>
     {
       'id': id,
@@ -250,19 +252,33 @@ Map<String, dynamic> sampleBookingJson({
       'consent_given': consentGiven,
       'price': null,
       'currency': 'DZD',
+      'booking_mode': bookingMode,
+      'respond_by': respondBy,
       'created_at': '2026-08-28T10:00:00Z',
     };
 
 /// Deterministic BookingsApi fake reproducing the backend consent flow:
 /// create → pending, consent true → confirmed + EXT-…, false → cancelled,
 /// cancel → cancelled.
+///
+/// Reproduces the backend's Idempotency-Key contract (endpoint 0012):
+/// same key + same poiId/adapterType replays the stored reservation without
+/// adding a new one; same key + a different payload raises 409.
 class FakeBookingsApi implements BookingsApi {
   FakeBookingsApi(
-      {List<Map<String, dynamic>>? bookings, this.failCreate = false})
+      {List<Map<String, dynamic>>? bookings,
+      this.failCreate = false,
+      this.createError})
       : bookings =
             List<Map<String, dynamic>>.from(bookings ?? [sampleBookingJson()]);
 
   final bool failCreate;
+
+  /// When set, createBooking throws it (before any replay logic) — lets a
+  /// test simulate 422 / 5xx / network failures. Mutable so a test can clear
+  /// it to model a successful retry in the same sheet.
+  ApiException? createError;
+
   final List<Map<String, dynamic>> bookings;
   int createCalls = 0;
   int consentCalls = 0;
@@ -271,6 +287,14 @@ class FakeBookingsApi implements BookingsApi {
   String? lastCreatedAdapter;
   String? lastConsentBookingId;
   bool? lastConsentValue;
+
+  /// Idempotency-Key observability: last value received and full ordered
+  /// history (null entries = no header sent).
+  String? lastIdempotencyKey;
+  final List<String?> idempotencyKeys = [];
+
+  /// Key → stored response, to replay an already-created booking.
+  final Map<String, Map<String, dynamic>> _byKey = {};
 
   static const Map<String, Map<String, dynamic>> _adapters = {
     'hotel': {'name': 'HotelBookingAdapter', 'status': 'active'},
@@ -289,19 +313,43 @@ class FakeBookingsApi implements BookingsApi {
     required String poiId,
     required String adapterType,
     Map<String, dynamic> bookingData = const {},
+    String? idempotencyKey,
   }) async {
     createCalls++;
     lastCreatedPoiId = poiId;
     lastCreatedAdapter = adapterType;
+    lastIdempotencyKey = idempotencyKey;
+    idempotencyKeys.add(idempotencyKey);
+
+    if (createError != null) {
+      throw createError!;
+    }
     if (failCreate) {
       throw ApiException(400, '{"detail":"Invalid adapter type"}');
     }
+
+    // Backend contract: same key already seen…
+    if (idempotencyKey != null && _byKey.containsKey(idempotencyKey)) {
+      final stored = _byKey[idempotencyKey]!;
+      final sameRequest =
+          stored['poi_id'] == poiId && stored['adapter_type'] == adapterType;
+      if (!sameRequest) {
+        throw ApiException(409,
+            '{"detail":"Idempotency-Key already used with a different request"}');
+      }
+      // Replay: same reservation, no new row — the list stays untouched.
+      return Map<String, dynamic>.from(stored);
+    }
+
     final json = sampleBookingJson(
       id: 'b-$createCalls',
       poiId: poiId,
       adapterType: adapterType,
     );
     bookings.add(json);
+    if (idempotencyKey != null) {
+      _byKey[idempotencyKey] = Map<String, dynamic>.from(json);
+    }
     return Map<String, dynamic>.from(json);
   }
 

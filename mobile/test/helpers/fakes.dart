@@ -240,6 +240,8 @@ Map<String, dynamic> sampleBookingJson({
   String? externalId,
   String bookingMode = 'request',
   String? respondBy,
+  String? partnerNote,
+  String? respondedAt,
 }) =>
     {
       'id': id,
@@ -254,6 +256,8 @@ Map<String, dynamic> sampleBookingJson({
       'currency': 'DZD',
       'booking_mode': bookingMode,
       'respond_by': respondBy,
+      'partner_note': partnerNote,
+      'responded_at': respondedAt,
       'created_at': '2026-08-28T10:00:00Z',
     };
 
@@ -366,8 +370,15 @@ class FakeBookingsApi implements BookingsApi {
     final b = _byId(bookingId);
     if (consent) {
       b['consent_given'] = true;
-      b['status'] = 'confirmed';
-      b['external_id'] = 'EXT-$bookingId';
+      if (b['booking_mode'] == 'manual_confirm') {
+        // Backend contract: manual_confirm consent ⇒ 'requested', no
+        // external reference until the partner confirms.
+        b['status'] = 'requested';
+        b.remove('external_id');
+      } else {
+        b['status'] = 'confirmed';
+        b['external_id'] = 'EXT-$bookingId';
+      }
     } else {
       b['status'] = 'cancelled';
     }
@@ -376,10 +387,38 @@ class FakeBookingsApi implements BookingsApi {
 
   @override
   Future<Map<String, dynamic>> cancelBooking(String bookingId) async {
-    cancelCalls++;
     final b = _byId(bookingId);
+    if (b['booking_mode'] == 'manual_confirm' &&
+        (b['status'] == 'declined' ||
+            b['status'] == 'expired' ||
+            b['status'] == 'cancelled')) {
+      // Backend contract: cancel refused once the partner answered.
+      throw ApiException(409, '{"detail":"Booking cannot be cancelled"}');
+    }
+    cancelCalls++;
     b['status'] = 'cancelled';
     return Map<String, dynamic>.from(b);
+  }
+
+  /// Simulates the partner answering 'declined' server-side.
+  void partnerDecline(String id, {String? note}) {
+    final b = _byId(id);
+    b['status'] = 'declined';
+    if (note != null) b['partner_note'] = note;
+    b['responded_at'] = '2026-08-29T12:00:00Z';
+  }
+
+  /// Simulates the partner confirming server-side.
+  void partnerConfirm(String id) {
+    final b = _byId(id);
+    b['status'] = 'confirmed';
+    b['external_id'] = 'EXT-$id';
+    b['responded_at'] = '2026-08-29T12:00:00Z';
+  }
+
+  /// Simulates the backend expiring an unanswered request server-side.
+  void expire(String id) {
+    _byId(id)['status'] = 'expired';
   }
 
   @override

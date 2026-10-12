@@ -12,6 +12,19 @@ import 'helpers/fakes.dart';
 
 POI _poi(Map<String, dynamic> json) => POI.fromJson(json);
 
+/// The booking sheet now requires a date before "Créer la réservation" is
+/// enabled (details patch): the date is an explicit traveller choice, never
+/// pre-filled. These three flows pre-date that rule, so pick today's date
+/// through the real picker to reach the create step.
+Future<void> pickBookingDate(WidgetTester tester) async {
+  await tester.ensureVisible(find.byKey(const Key('booking_date_field')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const Key('booking_date_field')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('OK'));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   Future<POIProvider> loadedPois() async {
     final provider = POIProvider(poisApi: FakePoisApi());
@@ -124,6 +137,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('booking_adapter_hotel')));
     await tester.pumpAndSettle();
+    await pickBookingDate(tester);
     await tester.tap(find.byKey(const Key('booking_create_button')));
     await tester.pumpAndSettle();
 
@@ -162,6 +176,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('booking_adapter_hotel')));
     await tester.pumpAndSettle();
+    await pickBookingDate(tester);
     await tester.tap(find.byKey(const Key('booking_create_button')));
     await tester.pumpAndSettle();
     expect(provider.actionError, isNotNull, reason: 'first attempt failed');
@@ -202,6 +217,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('booking_adapter_hotel')));
     await tester.pumpAndSettle();
+    await pickBookingDate(tester);
     await tester.tap(find.byKey(const Key('booking_create_button')));
     await tester.pumpAndSettle();
     expect(provider.actionError, isNotNull);

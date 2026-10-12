@@ -1,7 +1,7 @@
 """SQLAlchemy ORM models with multi-tenant isolation."""
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, Text, ForeignKey, JSON, ARRAY, UniqueConstraint, Index, Numeric
+from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, Text, ForeignKey, JSON, ARRAY, UniqueConstraint, Index, Numeric, text
 from sqlalchemy.dialects.postgresql import UUID
 from pgvector.sqlalchemy import Vector
 from sqlalchemy.orm import relationship, validates
@@ -204,7 +204,9 @@ class User(Base):
 
     tenant = relationship("Tenant", back_populates="users")
     trips = relationship("Trip", back_populates="user")
-    bookings = relationship("Booking", back_populates="user")
+    # foreign_keys explicite : Booking porte DEUX clés vers users.id (user_id et
+    # responded_by). Sans ça, SQLAlchemy ne peut pas déterminer la jointure.
+    bookings = relationship("Booking", back_populates="user", foreign_keys="[Booking.user_id]")
     reviews = relationship("Review", back_populates="user")
     analytics_events = relationship("AnalyticsEvent", back_populates="user")
     chat_messages = relationship("ChatMessage", back_populates="user")
@@ -345,15 +347,46 @@ class Booking(Base):
     respond_by = Column(DateTime, nullable=True)           # SLA de réponse (manual_confirm)
     idempotency_key = Column(String(80), nullable=True)
     request_hash = Column(String(64), nullable=True)       # sha256 de la requête normalisée
+    partner_note = Column(Text, nullable=True)             # note du partenaire (confirm/decline)
+    responded_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)  # partenaire qui a répondu
+    responded_at = Column(DateTime, nullable=True)         # horodatage de la décision partenaire
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     tenant = relationship("Tenant", back_populates="bookings")
-    user = relationship("User", back_populates="bookings")
+    user = relationship("User", back_populates="bookings", foreign_keys="[Booking.user_id]")
     poi = relationship("POI", back_populates="bookings")
 
     __table_args__ = (
         UniqueConstraint("tenant_id", "user_id", "idempotency_key", name="uq_bookings_idempotency"),
+    )
+
+
+class POIManager(Base):
+    """Rattachement « partenaire » : un utilisateur du tenant gère un POI.
+
+    Table d'association pure (rôle externe) : aucune colonne ajoutée à `users`,
+    le JWT existant reste valide. Un POI peut avoir plusieurs gestionnaires et un
+    utilisateur peut gérer plusieurs POI (relation many-to-many implicite via
+    (tenant_id, user_id) -> (tenant_id, poi_id)).
+
+    Pas de `back_populates` volontairement : ni `User` ni `POI` n'ont besoin de
+    connaître ce rattachement, et on évite de toucher ces deux modèles (moins de
+    risque de régression, pas de chargement eager induit).
+    """
+
+    __tablename__ = "poi_managers"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    poi_id = Column(UUID(as_uuid=True), ForeignKey("pois.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime, nullable=False, server_default=text("now()"))
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "poi_id", "user_id", name="uq_poi_manager"),
+        Index("ix_poi_managers_user", "tenant_id", "user_id"),
+        Index("ix_poi_managers_poi", "tenant_id", "poi_id"),
     )
 
 

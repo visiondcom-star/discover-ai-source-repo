@@ -87,3 +87,11 @@ BOOKING_MODES = (
 BOOKING_MODES_SUPPORTED = ("info_only", "request", "manual_confirm", "pay_on_site")
 BOOKING_CONFIRM_SLA_HOURS = 24   # délai de réponse promis pour manual_confirm
 
+# États du cycle de vie d'une réservation. `status` reste une String(50) :
+# aucune migration d'enum (les ajouts/retraits d'états restent triviaux).
+BOOKING_STATUSES = ("pending", "requested", "confirmed", "declined", "expired", "cancelled")
+# États terminaux : aucune action ultérieure possible (voyageur ou partenaire).
+BOOKING_TERMINAL_STATUSES = ("confirmed", "declined", "expired", "cancelled")
+# Décisions qu'un partenaire peut prendre sur une demande `requested`.
+PARTNER_RESPONSES = ("confirm", "decline")
+

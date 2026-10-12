@@ -53,15 +53,20 @@ class BookingProvider extends ChangeNotifier {
   /// (409/422 → discard it) or must be kept for the retry (network/5xx).
   int? get actionStatusCode => _actionStatusCode;
 
-  Future<void> loadBookings() async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
+  /// [silent] reloads without touching the loading flag / error state —
+  /// used on screen open when a 'requested' booking may have changed
+  /// server-side (single refresh, no polling).
+  Future<void> loadBookings({bool silent = false}) async {
+    if (!silent) {
+      _isLoading = true;
+      _error = null;
+      notifyListeners();
+    }
     try {
       final data = await _api.listBookings();
       _items = data.map(Booking.fromJson).toList();
     } catch (e) {
-      _error = e.toString();
+      if (!silent) _error = e.toString();
     }
     _isLoading = false;
     notifyListeners();

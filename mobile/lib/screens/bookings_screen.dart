@@ -319,9 +319,12 @@ Future<void> showConsentDialog(BuildContext context, Booking booking) {
           if (booking.price != null)
             Text('${booking.price} ${booking.currency}'),
           const SizedBox(height: 12),
-          const Text('En confirmant, le Booking-Agent générera une référence '
-              'externe (EXT-…). Sans confirmation, la réservation reste '
-              'sans effet et sera annulée.'),
+          Text(booking.bookingMode == 'manual_confirm'
+              ? 'Votre demande sera transmise au prestataire, qui doit la '
+                  'confirmer.'
+              : 'En confirmant, le Booking-Agent générera une référence '
+                  'externe (EXT-…). Sans confirmation, la réservation reste '
+                  'sans effet et sera annulée.'),
         ],
       ),
       actions: [
@@ -337,7 +340,19 @@ Future<void> showConsentDialog(BuildContext context, Booking booking) {
           key: const Key('booking_consent_confirm'),
           onPressed: () async {
             Navigator.of(dialogContext).pop();
-            await provider.giveConsent(booking, consent: true);
+            // The server response is used as-is: a manual_confirm consent
+            // comes back as 'requested', never forced to 'confirmed'.
+            final updated = await provider.giveConsent(booking, consent: true);
+            if (updated != null &&
+                updated.isAwaitingPartner &&
+                context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  key: Key('booking_requested_snackbar'),
+                  content: Text('Demande envoyée au prestataire'),
+                ),
+              );
+            }
           },
           child: const Text('Confirmer'),
         ),

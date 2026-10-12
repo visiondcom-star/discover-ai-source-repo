@@ -20,6 +20,17 @@ String bookingErrorMessage(ApiException e) {
   }
 }
 
+/// Human-readable message for a failed cancellation. 409 means the booking
+/// left the cancellable window (backend: cancel refused from declined /
+/// expired / cancelled) — the UI must not offer a retry. Kept separate from
+/// [bookingErrorMessage] so the creation cases (409/422) stay untouched.
+String cancelErrorMessage(ApiException e) {
+  if (e.statusCode == 409) {
+    return 'Cette réservation ne peut plus être annulée.';
+  }
+  return "L'annulation a échoué. Réessayez dans un instant.";
+}
+
 /// Booking state, mirroring the backend consent flow exactly:
 /// create → pending → explicit consent (true → confirmed + `EXT-…`
 /// reference, false → cancelled) → optional cancel.
@@ -154,7 +165,8 @@ class BookingProvider extends ChangeNotifier {
     return updated;
   }
 
-  /// Mirrors POST /bookings/{id}/cancel.
+  /// Mirrors POST /bookings/{id}/cancel. The server response is used as-is
+  /// (a 409 from a non-cancellable booking keeps the current status).
   Future<Booking?> cancelBooking(Booking booking) async {
     _isActing = true;
     _actionError = null;
@@ -163,6 +175,8 @@ class BookingProvider extends ChangeNotifier {
     try {
       final json = await _api.cancelBooking(booking.id);
       updated = Booking.fromJson(json);
+    } on ApiException catch (e) {
+      _actionError = cancelErrorMessage(e);
     } catch (e) {
       _actionError = e.toString();
     }

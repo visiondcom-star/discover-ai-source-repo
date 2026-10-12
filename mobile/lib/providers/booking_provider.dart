@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
 
 import '../models/booking.dart';
+import '../models/booking_details.dart';
 import '../services/api_service.dart';
+import '../utils/idempotency.dart';
 
 /// Human-readable message for a failed booking creation. The 409 case can
 /// only happen when an idempotency key was reused with a different payload
@@ -48,6 +50,13 @@ class BookingProvider extends ChangeNotifier {
   String? _error;
   String? _actionError;
   int? _actionStatusCode;
+
+  /// Idempotency state of the last create attempt: the key sent and the
+  /// content it was bound to. Same signature on the next attempt ⇒ the same
+  /// key is replayed (network retry); a different one ⇒ a fresh key, because
+  /// the backend answers 409 to a reused key with a different body.
+  String? _lastIdempotencyKey;
+  String? _lastCreateSignature;
 
   List<Booking> get items => _items;
 
@@ -101,27 +110,50 @@ class BookingProvider extends ChangeNotifier {
   /// Creates a PENDING booking (201). Never confirms it — the caller must
   /// walk the user through [giveConsent] next (principle 5).
   ///
+  /// [details] is the traveller's date/guests/notes; it becomes the request's
+  /// `booking_data` via `BookingDetails.toBookingData` (only `date`, `guests`
+  /// and `notes`, never personal data). When null the body stays exactly the
+  /// historical one.
+  ///
   /// [idempotencyKey] is forwarded to the backend's `Idempotency-Key`
   /// header: the same key + same body replays the original booking (200)
   /// instead of creating a duplicate. On a replay, the existing item is
   /// replaced in place rather than inserted twice.
+  ///
+  /// Key ownership, in order of precedence:
+  /// 1. an explicit [idempotencyKey] is always sent verbatim;
+  /// 2. otherwise the key is kept across attempts while the *content*
+  ///    (POI + adapter + details) is unchanged — that is the network-retry
+  ///    case, where the backend must replay rather than duplicate;
+  /// 3. any change of content mints a new key, because the server would
+  ///    answer 409 for the same key with a different body;
+  /// 4. the key is dropped after a success, and after a 409/422, which by
+  ///    definition starts a new logical attempt (pre-existing rules).
   Future<Booking?> createBooking({
     required String poiId,
     required String adapterType,
-    Map<String, dynamic> bookingData = const {},
+    BookingDetails? details,
     String? idempotencyKey,
   }) async {
     _isActing = true;
     _actionError = null;
     _actionStatusCode = null;
     notifyListeners();
+    // An explicit key wins; otherwise the key is bound to the content so a
+    // retry with unchanged details replays instead of duplicating.
+    final content = _contentSignature(poiId, adapterType, details);
+    final key = idempotencyKey ??
+        (_lastCreateSignature == content ? _lastIdempotencyKey : null) ??
+        newIdempotencyKey();
+    _lastCreateSignature = content;
+    _lastIdempotencyKey = key;
     Booking? created;
     try {
       final json = await _api.createBooking(
         poiId: poiId,
         adapterType: adapterType,
-        bookingData: bookingData,
-        idempotencyKey: idempotencyKey,
+        bookingData: details?.toBookingData(),
+        idempotencyKey: key,
       );
       created = Booking.fromJson(json);
       // Idempotent replay: same id already known → replace, never duplicate.
@@ -129,11 +161,23 @@ class BookingProvider extends ChangeNotifier {
       _items = known
           ? [for (final b in _items) if (b.id == created.id) created else b]
           : [created, ..._items];
+      // The logical attempt is over: forget the key, a later booking is a
+      // new one even with identical details.
+      _lastIdempotencyKey = null;
+      _lastCreateSignature = null;
     } on ApiException catch (e) {
       _actionStatusCode = e.statusCode;
       _actionError = bookingErrorMessage(e);
+      // 409/422 means the backend rejected this attempt's key or body: the
+      // next try must be a fresh attempt, never the same key again.
+      if (e.statusCode == 409 || e.statusCode == 422) {
+        _lastIdempotencyKey = null;
+        _lastCreateSignature = null;
+      }
     } catch (e) {
       _actionError = e.toString();
+      // Transport failure: keep the key and its signature so the next tap
+      // replays instead of creating a second booking.
     }
     _isActing = false;
     notifyListeners();
@@ -190,5 +234,19 @@ class BookingProvider extends ChangeNotifier {
     }
     notifyListeners();
     return updated;
+  }
+
+  /// Content fingerprint of the last create attempt. Two attempts with the
+  /// same signature are the same logical request (a retry: the server must
+  /// replay); any difference means a different body, which would be answered
+  /// 409 under the previous key — so a new key is minted.
+  String _contentSignature(
+    String poiId,
+    String adapterType,
+    BookingDetails? details,
+  ) {
+    final data = details?.toBookingData() ?? const <String, dynamic>{};
+    final notes = data['notes'];
+    return '$poiId|$adapterType|${data['date']}|${data['guests']}|$notes';
   }
 }

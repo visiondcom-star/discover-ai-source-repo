@@ -242,6 +242,7 @@ Map<String, dynamic> sampleBookingJson({
   String? respondBy,
   String? partnerNote,
   String? respondedAt,
+  Map<String, dynamic>? bookingData,
 }) =>
     {
       'id': id,
@@ -258,6 +259,9 @@ Map<String, dynamic> sampleBookingJson({
       'respond_by': respondBy,
       'partner_note': partnerNote,
       'responded_at': respondedAt,
+      // Only when a booking was created with details: keeps every existing
+      // fixture byte-for-byte identical.
+      if (bookingData != null) 'booking_data': bookingData,
       'created_at': '2026-08-28T10:00:00Z',
     };
 
@@ -289,6 +293,10 @@ class FakeBookingsApi implements BookingsApi {
   int cancelCalls = 0;
   String? lastCreatedPoiId;
   String? lastCreatedAdapter;
+
+  /// Last `booking_data` received by [createBooking] — the traveller's
+  /// details, as sent by the provider. Null when none were provided.
+  Map<String, dynamic>? lastBookingData;
   String? lastConsentBookingId;
   bool? lastConsentValue;
 
@@ -316,12 +324,13 @@ class FakeBookingsApi implements BookingsApi {
   Future<Map<String, dynamic>> createBooking({
     required String poiId,
     required String adapterType,
-    Map<String, dynamic> bookingData = const {},
+    Map<String, dynamic>? bookingData,
     String? idempotencyKey,
   }) async {
     createCalls++;
     lastCreatedPoiId = poiId;
     lastCreatedAdapter = adapterType;
+    lastBookingData = bookingData;
     lastIdempotencyKey = idempotencyKey;
     idempotencyKeys.add(idempotencyKey);
 
@@ -349,6 +358,7 @@ class FakeBookingsApi implements BookingsApi {
       id: 'b-$createCalls',
       poiId: poiId,
       adapterType: adapterType,
+      bookingData: bookingData,
     );
     bookings.add(json);
     if (idempotencyKey != null) {

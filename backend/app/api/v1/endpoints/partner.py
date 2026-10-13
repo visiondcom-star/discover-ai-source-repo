@@ -109,8 +109,20 @@ async def _require_poi_in_tenant(db: AsyncSession, tenant_id, poi_id: str) -> No
         raise HTTPException(status_code=404, detail="POI not found")
 
 
-async def _to_partner_response(db: AsyncSession, booking: Booking) -> PartnerBookingResponse:
-    """Construit la réponse partenaire.
+def _build_partner_response(
+    booking: Booking, poi_name: Optional[str], traveller_name: Optional[str]
+) -> PartnerBookingResponse:
+    """Construit la réponse partenaire de façon SYNCHRONE, noms déjà résolus.
+
+    Séparée de `_to_partner_response` pour casser le N+1 de la liste : la
+    requête unique de `list_partner_bookings` récupère `Booking`, `POI.name` et
+    `User.full_name` d'un coup, puis délègue ici — plus aucune requête par
+    ligne. `get_partner_booking` et `respond_to_booking` passent, eux, par
+    `_to_partner_response` (2 lookups puis cette même construction) : contrat et
+    comportement identiques, seule la liste change de stratégie.
+
+    `poi_name` vaut "" si le POI est absent (outer join) ; `traveller_name`
+    peut rester None (voyageur introuvable) — comme aujourd'hui.
 
     Confidentialité : on n'expose que le NOM du voyageur (jamais l'email, jamais
     le mot de passe). Les détails de la réservation (`details`) sont en revanche
@@ -126,6 +138,27 @@ async def _to_partner_response(db: AsyncSession, booking: Booking) -> PartnerBoo
     **base, partner_note=…, responded_at=…)` lèverait
     « multiple values for keyword argument ».
     """
+    base = BookingResponse.model_validate(booking).model_dump()
+    base.update(
+        poi_name=poi_name or "",
+        traveller_name=traveller_name,
+        partner_note=booking.partner_note,
+        responded_at=booking.responded_at,
+        # Détails utiles à la décision, réservés à la route partenaire/admin.
+        details=_safe_details(booking.booking_data),
+    )
+    return PartnerBookingResponse(**base)
+
+
+async def _to_partner_response(db: AsyncSession, booking: Booking) -> PartnerBookingResponse:
+    """Construit la réponse partenaire via 2 lookups (nom du POI, nom du
+    voyageur), puis délègue la construction à `_build_partner_response`.
+
+    Utilisée par le détail (`get_partner_booking`) et la réponse
+    (`respond_to_booking`) : une seule réservation, le coût des 2 requêtes est
+    négligeable. La liste, elle, doit rester en UNE requête (cf.
+    `list_partner_bookings`).
+    """
     poi_result = await db.execute(select(POI.name).where(POI.id == booking.poi_id))
     poi_name = poi_result.scalar_one_or_none() or ""
 
@@ -134,16 +167,7 @@ async def _to_partner_response(db: AsyncSession, booking: Booking) -> PartnerBoo
     )
     traveller_name = traveller_result.scalar_one_or_none()
 
-    base = BookingResponse.model_validate(booking).model_dump()
-    base.update(
-        poi_name=poi_name,
-        traveller_name=traveller_name,
-        partner_note=booking.partner_note,
-        responded_at=booking.responded_at,
-        # Détails utiles à la décision, réservés à la route partenaire/admin.
-        details=_safe_details(booking.booking_data),
-    )
-    return PartnerBookingResponse(**base)
+    return _build_partner_response(booking, poi_name, traveller_name)
 
 
 # ---- Liste & réponse ---------------------------------------------------------
@@ -172,8 +196,19 @@ async def list_partner_bookings(
     tenant_id = tenant.id
     await expire_overdue_requests(db, tenant_id)
 
+    # UNE requête pour toute la page (fin du N+1) : on joint le POI et le
+    # voyageur, restreints au même tenant que la réservation. Les outer joins
+    # conservent le comportement de `_to_partner_response` : POI absent =>
+    # `poi_name` None (=> ""), voyageur absent => `traveller_name` None. WHERE
+    # (scope + statut), ORDER BY, LIMIT et OFFSET strictement inchangés.
     query = (
-        select(Booking)
+        select(Booking, POI.name, User.full_name)
+        .outerjoin(
+            POI, and_(POI.id == Booking.poi_id, POI.tenant_id == Booking.tenant_id)
+        )
+        .outerjoin(
+            User, and_(User.id == Booking.user_id, User.tenant_id == Booking.tenant_id)
+        )
         .where(_scope_filter(tenant_id, poi_ids, current_user))
         .where(Booking.status == status_filter)
         .order_by(Booking.respond_by.asc().nullslast(), Booking.created_at.asc())
@@ -181,8 +216,11 @@ async def list_partner_bookings(
         .offset(offset)
     )
     result = await db.execute(query)
-    bookings = result.scalars().all()
-    return [await _to_partner_response(db, b) for b in bookings]
+    # Construction synchrone : aucune requête supplémentaire par ligne.
+    return [
+        _build_partner_response(booking, poi_name, traveller_name)
+        for booking, poi_name, traveller_name in result.all()
+    ]
 
 
 @router.get("/bookings/{booking_id}", response_model=PartnerBookingResponse)

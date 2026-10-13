@@ -9,7 +9,7 @@ from app.schemas import UserRegister, UserLogin, Token, UserResponse
 from app.config import get_settings
 from app.core.security import get_password_hash, verify_password, create_access_token
 from app.core.tenant import get_tenant_from_header
-from app.dependencies import get_current_user, generate_csrf_token, require_csrf
+from app.dependencies import get_current_user, generate_csrf_token, require_csrf, get_partner_poi_ids
 
 router = APIRouter()
 
@@ -115,5 +115,16 @@ async def logout(response: Response):
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_me(current_user: User = Depends(get_current_user)):
-    return current_user
+async def get_me(
+    current_user: User = Depends(get_current_user),
+    poi_ids: set = Depends(get_partner_poi_ids),
+):
+    """Profil de l'utilisateur courant.
+
+    `is_partner` reflète le rattachement à au moins un POI du tenant
+    (`poi_managers`), via la dépendance `get_partner_poi_ids` déjà utilisée par
+    les endpoints partenaire — aucune logique de rôle dupliquée. Ce n'est pas un
+    attribut ORM de `User` : on l'injecte à la construction de la réponse.
+    """
+    response = UserResponse.model_validate(current_user)
+    return response.model_copy(update={"is_partner": bool(poi_ids)})

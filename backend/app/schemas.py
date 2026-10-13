@@ -99,6 +99,12 @@ class UserResponse(BaseModel):
     full_name: Optional[str]
     is_active: bool
     is_admin: bool
+    # Rôle « partenaire » : l'utilisateur est rattaché à au moins un POI du
+    # tenant via `poi_managers`. Ce n'est PAS un attribut ORM de `User` — il est
+    # dérivé à la volée (dépendance `get_partner_poi_ids`) et injecté à la
+    # construction de la réponse, uniquement sur `GET /auth/me`. Les autres
+    # réponses UserResponse (register, ...) le laissent à False par défaut.
+    is_partner: bool = False
     preferences: Dict[str, Any]
     created_at: datetime
 

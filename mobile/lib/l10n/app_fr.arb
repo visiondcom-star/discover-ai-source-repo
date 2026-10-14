@@ -1,4 +1,6 @@
 {
   "@@locale": "fr",
-  "appName": "Discover AI"
+  "appName": "Discover AI",
+  "bookingConfirmed": "Demande confirmée",
+  "bookingDeclined": "Demande refusée"
 }

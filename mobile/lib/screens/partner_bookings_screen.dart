@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../models/partner_booking.dart';
 import '../providers/partner_bookings_provider.dart';
+import '../l10n/app_localizations.dart';
 
 /// Espace partenaire — the decision queue for `manual_confirm` bookings.
 ///
@@ -51,14 +52,17 @@ class _PartnerBookingsScreenState extends State<PartnerBookingsScreen> {
               ? 'partner_confirmed_snackbar'
               : 'partner_declined_snackbar'),
           content: Text(
-              decision == 'confirm' ? 'Demande confirmée' : 'Demande refusée'),
+            decision == 'confirm'
+                ? _loc.bookingConfirmed
+                : _loc.bookingDeclined,
+          ),
         ),
       );
     } else if (provider.actionError != null) {
       messenger.showSnackBar(
         SnackBar(
           key: const Key('partner_action_error_snackbar'),
-          content: Text(provider.actionError!),
+          content: Text(_errorText(context, provider.actionError!)),
         ),
       );
     }
@@ -168,6 +172,17 @@ class _PartnerBookingsScreenState extends State<PartnerBookingsScreen> {
       ),
     );
   }
+
+  /// Translates a [PartnerBookingError] into a user-facing string. The provider
+  /// owns the copy (it holds a [PartnerBookingError], not a string), and the
+  /// default locale is French — so the provider's copy is authoritative and
+  /// never touches the widget layer.
+  String _errorText(BuildContext context, PartnerBookingError error) =>
+      partnerBookingErrorMessage(error);
+
+  /// Localizations for the current locale (French by default; English if the
+  /// user changes it).
+  AppLocalizations get _loc => AppLocalizations.of(context)!;
 }
 
 class _PartnerCard extends StatelessWidget {

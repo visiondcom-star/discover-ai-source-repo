@@ -2,6 +2,7 @@ import 'package:discover_ai/providers/auth_provider.dart';
 import 'package:discover_ai/providers/partner_bookings_provider.dart';
 import 'package:discover_ai/screens/partner_bookings_screen.dart';
 import 'package:discover_ai/screens/profile_screen.dart';
+import 'package:discover_ai/l10n/app_localizations.dart';
 import 'package:discover_ai/services/api_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -21,7 +22,11 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider(
         create: (_) => PartnerBookingsProvider(partnerApi: api),
-        child: const MaterialApp(home: PartnerBookingsScreen()),
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const PartnerBookingsScreen(),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -257,7 +262,11 @@ Future<void> pumpProfileWithRole(
   await tester.pumpWidget(
     ChangeNotifierProvider<AuthProvider>.value(
       value: auth,
-      child: const MaterialApp(home: ProfileScreen()),
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: const ProfileScreen(),
+      ),
     ),
   );
   await tester.pumpAndSettle();

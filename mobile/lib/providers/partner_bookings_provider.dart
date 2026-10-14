@@ -3,6 +3,41 @@ import 'package:flutter/foundation.dart';
 import '../models/partner_booking.dart';
 import '../services/api_service.dart';
 
+/// Errors a partner can hit when acting on a booking. Exposed as a typed enum
+/// (no `BuildContext`), so the view layer can translate them without touching
+/// the provider.
+enum PartnerBookingError {
+  /// 409 — the request was already handled or expired server-side.
+  alreadyHandled,
+
+  /// 403 — the caller is not authorized to act on this request.
+  forbidden,
+
+  /// 404 — the request does not exist (stale id).
+  notFound,
+
+  /// Network / unknown — the answer could not reach the server.
+  network,
+}
+
+/// Returns the user-facing message (FR in the default locale) for [error].
+///
+/// The provider owns the copy, so tests can assert it by equality without
+/// touching the widget layer; translation lives in [AppLocalizations] via the
+/// screen.
+String partnerBookingErrorMessage(PartnerBookingError error) {
+  switch (error) {
+    case PartnerBookingError.alreadyHandled:
+      return 'Cette demande a déjà été traitée ou a expiré.';
+    case PartnerBookingError.forbidden:
+      return 'Vous n\'avez pas accès à cette demande.';
+    case PartnerBookingError.notFound:
+      return 'Cette demande n\'existe pas.';
+    case PartnerBookingError.network:
+      return 'Impossible d\'envoyer votre réponse. Vérifiez votre connexion.';
+  }
+}
+
 /// Partner decision queue state (Espace partenaire).
 ///
 /// Loads the `requested` bookings awaiting an answer and lets the partner
@@ -25,13 +60,13 @@ class PartnerBookingsProvider extends ChangeNotifier {
   /// True while a confirm/decline is in flight; the screen disables both
   /// buttons so a double tap cannot send two decisions.
   bool _isActing = false;
-  String? _actionError;
+  PartnerBookingError? _actionError;
 
   List<PartnerBooking> get items => List.unmodifiable(_items);
   bool get isLoading => _isLoading;
   String? get error => _error;
   bool get isActing => _isActing;
-  String? get actionError => _actionError;
+  PartnerBookingError? get actionError => _actionError;
 
   /// Page size the backend serves by default (`GET /partner/bookings`,
   /// `limit=50`). When a full page comes back, more requests may exist beyond
@@ -60,7 +95,7 @@ class PartnerBookingsProvider extends ChangeNotifier {
     } on ApiException catch (e) {
       _error = _loadErrorMessage(e);
     } catch (_) {
-      _error = 'Impossible de charger les demandes. Vérifiez votre connexion.';
+      _error = partnerBookingErrorMessage(PartnerBookingError.network);
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -91,11 +126,10 @@ class PartnerBookingsProvider extends ChangeNotifier {
       // queue. On a replay the booking is already gone — removeWhere is a
       // no-op then, which is exactly right.
       _items = _items.where((b) => b.id != booking.id).toList();
-      _actionError = null;
       return true;
     } on ApiException catch (e) {
       if (e.statusCode == 409) {
-        _actionError = 'Cette demande a déjà été traitée ou a expiré.';
+        _actionError = PartnerBookingError.alreadyHandled;
         // Someone else handled it (or it expired): resync silently so the
         // queue reflects reality, without surfacing a second error.
         await _reloadQuietly();
@@ -104,8 +138,7 @@ class PartnerBookingsProvider extends ChangeNotifier {
       }
       return false;
     } catch (_) {
-      _actionError =
-          'Impossible d\'envoyer votre réponse. Vérifiez votre connexion.';
+      _actionError = PartnerBookingError.network;
       return false;
     } finally {
       _isActing = false;
@@ -131,16 +164,16 @@ class PartnerBookingsProvider extends ChangeNotifier {
     if (e.statusCode == 404) {
       return 'Espace partenaire introuvable.';
     }
-    return 'Impossible de charger les demandes. Vérifiez votre connexion.';
+    return partnerBookingErrorMessage(PartnerBookingError.network);
   }
 
-  String _respondErrorMessage(ApiException e) {
+  PartnerBookingError _respondErrorMessage(ApiException e) {
     if (e.statusCode == 403) {
-      return 'Vous n\'avez pas accès à cette demande.';
+      return PartnerBookingError.forbidden;
     }
     if (e.statusCode == 404) {
-      return 'Cette demande est introuvable.';
+      return PartnerBookingError.notFound;
     }
-    return 'Impossible d\'envoyer votre réponse. Vérifiez votre connexion.';
+    return PartnerBookingError.network;
   }
 }

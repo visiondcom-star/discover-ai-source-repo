@@ -151,8 +151,12 @@ class _PartnerBookingsScreenState extends State<PartnerBookingsScreen> {
       onRefresh: provider.load,
       child: ListView.builder(
         padding: const EdgeInsets.only(top: 8, bottom: 24),
-        itemCount: provider.items.length,
+        // One extra slot for the "50 premières" notice when the page is full.
+        itemCount: provider.items.length + (provider.hasMore ? 1 : 0),
         itemBuilder: (context, index) {
+          if (provider.hasMore && index == provider.items.length) {
+            return const _PartnerLimitNotice();
+          }
           final booking = provider.items[index];
           return _PartnerCard(
             booking: booking,
@@ -279,6 +283,30 @@ class _PartnerCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Discreet footer shown when the queue is at the API page limit (50): more
+/// requests may exist beyond what this screen loads, but pagination is out of
+/// scope for now — we simply say so instead of silently truncating.
+class _PartnerLimitNotice extends StatelessWidget {
+  const _PartnerLimitNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      key: const Key('partner_limit_notice'),
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
+      child: Text(
+        'Seules les 50 premières demandes sont affichées.',
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+              fontStyle: FontStyle.italic,
+            ),
       ),
     );
   }

@@ -54,6 +54,37 @@ void main() {
     expect(find.byKey(const Key('partner_decline_b-1')), findsOneWidget);
   });
 
+  testWidgets('a full 50-item queue shows the limit notice', (tester) async {
+    // The backend serves a default page of 50 (`limit=50`). When the queue is
+    // exactly at that limit the screen must say so, since pagination is out of
+    // scope — it never silently truncates.
+    await pumpScreen(tester, bookings: [
+      for (var i = 0; i < 50; i++) samplePartnerBookingJson(id: 'b-$i'),
+    ]);
+
+    // The notice is the last item of a lazily-built list: scroll it into view.
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('partner_limit_notice')),
+      200,
+    );
+    expect(
+      find.text('Seules les 50 premières demandes sont affichées.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a shorter queue shows no limit notice', (tester) async {
+    await pumpScreen(tester, bookings: [
+      for (var i = 0; i < 49; i++) samplePartnerBookingJson(id: 'b-$i'),
+    ]);
+
+    expect(find.byKey(const Key('partner_limit_notice')), findsNothing);
+    expect(
+      find.text('Seules les 50 premières demandes sont affichées.'),
+      findsNothing,
+    );
+  });
+
   testWidgets('null traveller shows the neutral placeholder', (tester) async {
     await pumpScreen(tester, bookings: [
       samplePartnerBookingJson(id: 'b-1', travellerName: null),

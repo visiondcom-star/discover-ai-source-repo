@@ -33,6 +33,15 @@ class PartnerBookingsProvider extends ChangeNotifier {
   bool get isActing => _isActing;
   String? get actionError => _actionError;
 
+  /// Page size the backend serves by default (`GET /partner/bookings`,
+  /// `limit=50`). When a full page comes back, more requests may exist beyond
+  /// it — pagination is out of scope, so the screen just says so.
+  static const int pageLimit = 50;
+
+  /// True when the queue is at the API page limit, i.e. the display may be
+  /// truncated. Lets the screen show a discreet "50 premières" notice.
+  bool get hasMore => _items.length >= pageLimit;
+
   /// Loads (or reloads) the decision queue.
   ///
   /// A **reload** that fails keeps the queue already on screen — the error is

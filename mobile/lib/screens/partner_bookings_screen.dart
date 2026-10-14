@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart' as intl;
 import 'package:provider/provider.dart';
 
 import '../models/partner_booking.dart';
@@ -68,8 +69,28 @@ class _PartnerBookingsScreenState extends State<PartnerBookingsScreen> {
     }
   }
 
+  /// Reloads the queue after a pull-to-refresh. When the reload fails while a
+  /// queue is already on screen, the provider keeps the list — the failure is
+  /// surfaced here as a discreet SnackBar (key `partner_refresh_error_snackbar`)
+  /// instead of blanking what the partner is working through.
+  Future<void> _refresh() async {
+    final provider = context.read<PartnerBookingsProvider>();
+    await provider.load();
+    if (!mounted) return;
+    final error = provider.error;
+    if (error != null && provider.items.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          key: const Key('partner_refresh_error_snackbar'),
+          content: Text(_loadErrorText(context, error)),
+        ),
+      );
+    }
+  }
+
   Future<void> _openNoteDialog(PartnerBooking booking, String decision) async {
-    final confirmLabel = decision == 'confirm' ? 'Confirmer' : 'Refuser';
+    final confirmLabel =
+        decision == 'confirm' ? _loc.partnerConfirm : _loc.partnerDecline;
     final note = await showDialog<String>(
       context: context,
       builder: (_) => _NoteDialog(
@@ -87,7 +108,7 @@ class _PartnerBookingsScreenState extends State<PartnerBookingsScreen> {
     final scheme = Theme.of(context).colorScheme;
     final provider = context.watch<PartnerBookingsProvider>();
     return Scaffold(
-      appBar: AppBar(title: const Text('Espace partenaire')),
+      appBar: AppBar(title: Text(_loc.partnerTitle)),
       body: _buildBody(context, provider, scheme),
     );
   }
@@ -121,7 +142,7 @@ class _PartnerBookingsScreenState extends State<PartnerBookingsScreen> {
               OutlinedButton(
                 key: const Key('partner_retry'),
                 onPressed: provider.load,
-                child: const Text('Réessayer'),
+                child: Text(_loc.partnerRetry),
               ),
             ],
           ),
@@ -135,12 +156,12 @@ class _PartnerBookingsScreenState extends State<PartnerBookingsScreen> {
             Icon(Icons.inbox_outlined,
                 size: 48, color: scheme.onSurfaceVariant),
             const SizedBox(height: 12),
-            const Text('Aucune demande à traiter'),
+            Text(_loc.partnerEmpty),
             const SizedBox(height: 4),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32),
               child: Text(
-                'Les nouvelles demandes de réservation apparaîtront ici.',
+                _loc.partnerEmptyHint,
                 textAlign: TextAlign.center,
                 style: Theme.of(context)
                     .textTheme
@@ -155,7 +176,7 @@ class _PartnerBookingsScreenState extends State<PartnerBookingsScreen> {
 
     return RefreshIndicator(
       key: const Key('partner_refresh'),
-      onRefresh: provider.load,
+      onRefresh: _refresh,
       child: ListView.builder(
         padding: const EdgeInsets.only(top: 8, bottom: 24),
         // One extra slot for the "50 premières" notice when the page is full.
@@ -234,6 +255,7 @@ class _PartnerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final loc = AppLocalizations.of(context)!;
     final now = DateTime.now();
     final traveller = booking.travellerName;
     final date = booking.dateLabel;
@@ -256,7 +278,7 @@ class _PartnerCard extends StatelessWidget {
             ),
             const SizedBox(height: 2),
             Text(
-              'Voyageur : ${traveller ?? 'Voyageur'}',
+              loc.partnerTraveller(traveller ?? loc.partnerTravellerFallback),
               key: Key('partner_traveller_${booking.id}'),
               style: Theme.of(context).textTheme.bodySmall,
             ),
@@ -267,7 +289,7 @@ class _PartnerCard extends StatelessWidget {
                   Icon(Icons.calendar_today_outlined,
                       size: 14, color: scheme.onSurfaceVariant),
                   const SizedBox(width: 6),
-                  Text('Date : $date',
+                  Text(loc.partnerDate(date),
                       style: Theme.of(context).textTheme.bodySmall),
                 ],
               ),
@@ -279,7 +301,7 @@ class _PartnerCard extends StatelessWidget {
                   Icon(Icons.people_outline,
                       size: 14, color: scheme.onSurfaceVariant),
                   const SizedBox(width: 6),
-                  Text('Personnes : $guests',
+                  Text(loc.partnerGuests(guests),
                       style: Theme.of(context).textTheme.bodySmall),
                 ],
               ),
@@ -297,7 +319,10 @@ class _PartnerCard extends StatelessWidget {
             if (booking.respondBy != null) ...[
               const SizedBox(height: 6),
               Text(
-                'Réponse attendue avant le ${_dateFr(booking.respondBy!)}',
+                loc.partnerRespondBy(
+                  intl.DateFormat.yMMMMd(loc.localeName)
+                      .format(booking.respondBy!),
+                ),
                 key: Key('partner_respond_by_${booking.id}'),
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: (overdue || dueSoon)
@@ -316,7 +341,7 @@ class _PartnerCard extends StatelessWidget {
                   child: OutlinedButton(
                     key: Key('partner_decline_${booking.id}'),
                     onPressed: isActing ? null : onDecline,
-                    child: const Text('Refuser'),
+                    child: Text(loc.partnerDecline),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -324,7 +349,7 @@ class _PartnerCard extends StatelessWidget {
                   child: FilledButton(
                     key: Key('partner_confirm_${booking.id}'),
                     onPressed: isActing ? null : onConfirm,
-                    child: const Text('Confirmer'),
+                    child: Text(loc.partnerConfirm),
                   ),
                 ),
               ],
@@ -345,11 +370,12 @@ class _PartnerLimitNotice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final loc = AppLocalizations.of(context)!;
     return Padding(
       key: const Key('partner_limit_notice'),
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
       child: Text(
-        'Seules les 50 premières demandes sont affichées.',
+        loc.partnerLimitNotice(PartnerBookingsProvider.pageLimit),
         textAlign: TextAlign.center,
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: scheme.onSurfaceVariant,
@@ -383,6 +409,7 @@ class _NoteDialogState extends State<_NoteDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context)!;
     return AlertDialog(
       title: Text(widget.confirmLabel),
       content: TextField(
@@ -390,15 +417,15 @@ class _NoteDialogState extends State<_NoteDialog> {
         controller: _controller,
         maxLines: 3,
         maxLength: 500,
-        decoration: const InputDecoration(
-          labelText: 'Note (facultative)',
-          hintText: 'Précisez un horaire, un motif de refus…',
+        decoration: InputDecoration(
+          labelText: loc.partnerNoteLabel,
+          hintText: loc.partnerNoteHint,
         ),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Annuler'),
+          child: Text(loc.partnerCancel),
         ),
         FilledButton(
           key: const Key('partner_note_confirm'),
@@ -409,5 +436,3 @@ class _NoteDialogState extends State<_NoteDialog> {
     );
   }
 }
-
-String _dateFr(DateTime d) => '${d.day}/${d.month}/${d.year}';

@@ -11,5 +11,60 @@
   "errorActionForbidden": "You do not have access to this request.",
   "errorActionNotFound": "This request does not exist.",
   "errorActionNetwork": "Could not send your response. Check your connection.",
-  "errorActionGeneric": "Something went wrong. Try again."
+  "errorActionGeneric": "Something went wrong. Try again.",
+  "partnerTitle": "Partner space",
+  "partnerRetry": "Retry",
+  "partnerEmpty": "No requests to handle",
+  "partnerEmptyHint": "New booking requests will appear here.",
+  "partnerTraveller": "Traveller: {name}",
+  "@partnerTraveller": {
+    "description": "Label for the traveller on a partner card. {name} is the traveller's name or the fallback.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "partnerTravellerFallback": "Traveller",
+  "partnerDate": "Date: {date}",
+  "@partnerDate": {
+    "description": "Visit date on a partner card. {date} is the raw YYYY-MM-DD string from the backend.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "partnerGuests": "Guests: {guests}",
+  "@partnerGuests": {
+    "description": "Number of people on a partner card. {guests} is the raw count string.",
+    "placeholders": {
+      "guests": {
+        "type": "String"
+      }
+    }
+  },
+  "partnerRespondBy": "Answer required before {date}",
+  "@partnerRespondBy": {
+    "description": "Deadline for the partner to answer. {date} is a locale-formatted date.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "partnerConfirm": "Confirm",
+  "partnerDecline": "Decline",
+  "partnerLimitNotice": "Only the first {count} requests are shown.",
+  "@partnerLimitNotice": {
+    "description": "Shown when the queue hits the API page limit. {count} is the page size.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "partnerNoteLabel": "Note (optional)",
+  "partnerNoteHint": "Add a time, a reason for declining…",
+  "partnerCancel": "Cancel"
 }

@@ -11,5 +11,60 @@
   "errorActionForbidden": "Vous n'avez pas accès à cette demande.",
   "errorActionNotFound": "Cette demande n'existe pas.",
   "errorActionNetwork": "Impossible d'envoyer votre réponse. Vérifiez votre connexion.",
-  "errorActionGeneric": "Une erreur est survenue. Réessayez."
+  "errorActionGeneric": "Une erreur est survenue. Réessayez.",
+  "partnerTitle": "Espace partenaire",
+  "partnerRetry": "Réessayer",
+  "partnerEmpty": "Aucune demande à traiter",
+  "partnerEmptyHint": "Les nouvelles demandes de réservation apparaîtront ici.",
+  "partnerTraveller": "Voyageur : {name}",
+  "@partnerTraveller": {
+    "description": "Label for the traveller on a partner card. {name} is the traveller's name or the fallback.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "partnerTravellerFallback": "Voyageur",
+  "partnerDate": "Date : {date}",
+  "@partnerDate": {
+    "description": "Visit date on a partner card. {date} is the raw YYYY-MM-DD string from the backend.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "partnerGuests": "Personnes : {guests}",
+  "@partnerGuests": {
+    "description": "Number of people on a partner card. {guests} is the raw count string.",
+    "placeholders": {
+      "guests": {
+        "type": "String"
+      }
+    }
+  },
+  "partnerRespondBy": "Réponse attendue avant le {date}",
+  "@partnerRespondBy": {
+    "description": "Deadline for the partner to answer. {date} is a locale-formatted date.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "partnerConfirm": "Confirmer",
+  "partnerDecline": "Refuser",
+  "partnerLimitNotice": "Seules les {count} premières demandes sont affichées.",
+  "@partnerLimitNotice": {
+    "description": "Shown when the queue hits the API page limit. {count} is the page size.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "partnerNoteLabel": "Note (facultative)",
+  "partnerNoteHint": "Précisez un horaire, un motif de refus…",
+  "partnerCancel": "Annuler"
 }

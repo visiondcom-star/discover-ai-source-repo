@@ -12,7 +12,8 @@ import 'helpers/fakes.dart';
 
 /// Widget tests for the Espace partenaire queue and its Profil entry point.
 void main() {
-  /// Boots the partner screen with an injected [FakePartnerApi].
+  /// Boots the partner screen with an injected [FakePartnerApi], in French
+  /// (the tenant default), so migrated UI strings keep their FR assertions.
   Future<FakePartnerApi> pumpScreen(
     WidgetTester tester, {
     List<Map<String, dynamic>>? bookings,
@@ -25,6 +26,7 @@ void main() {
         child: MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('fr'),
           home: const PartnerBookingsScreen(),
         ),
       ),
@@ -238,6 +240,23 @@ void main() {
         find.byKey(const Key('partner_refresh')), const Offset(0, 400), 1000);
     await tester.pumpAndSettle();
     expect(api.listCalls, before + 1);
+  });
+
+  testWidgets('failed refresh keeps the queue and shows an error snackbar',
+      (tester) async {
+    // A reload that fails while a queue is on screen must not blank it: the
+    // list stays and the failure surfaces as `partner_refresh_error_snackbar`.
+    final api = await pumpScreen(tester, bookings: [
+      samplePartnerBookingJson(id: 'b-1'),
+    ]);
+    api.listError = ApiException(null, 'socket down');
+    await tester.fling(
+        find.byKey(const Key('partner_refresh')), const Offset(0, 400), 1000);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('partner_card_b-1')), findsOneWidget);
+    expect(find.byKey(const Key('partner_refresh_error_snackbar')),
+        findsOneWidget);
   });
 
   // ---- Profil entry point -------------------------------------------------

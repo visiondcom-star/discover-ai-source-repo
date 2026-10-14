@@ -28,7 +28,7 @@ class PartnerBooking extends Booking {
     required super.createdAt,
     super.externalId,
     super.price,
-    super.currency = 'DZD',
+    required super.currency,
     super.bookingMode = 'request',
     super.respondBy,
     super.partnerNote,
@@ -103,8 +103,7 @@ class PartnerBooking extends Booking {
   }
 
   /// True when the response deadline has already passed.
-  bool isOverdue(DateTime now) =>
-      respondBy != null && respondBy!.isBefore(now);
+  bool isOverdue(DateTime now) => respondBy != null && respondBy!.isBefore(now);
 
   /// Backward-compatible alias of [isOverdue].
   bool isPastDeadline(DateTime now) => isOverdue(now);

@@ -3,25 +3,22 @@ import 'package:provider/provider.dart';
 
 import '../models/partner_booking.dart';
 import '../providers/partner_bookings_provider.dart';
-import '../services/api_service.dart';
 
 /// Espace partenaire — the decision queue for `manual_confirm` bookings.
 ///
 /// The provider is created **inside the route's builder**
 /// (`ChangeNotifierProvider` on the [MaterialPageRoute]), not at app level:
 /// this way a partner's queue never survives a logout — the next login of a
-/// different user gets a fresh, empty queue. [partnerApi] is injectable for
-/// tests.
+/// different user gets a fresh, empty queue. Tests inject their own
+/// `PartnerBookingsProvider` (holding a `FakePartnerApi`) through the same
+/// seam, so the screen itself takes no API parameter.
 ///
 /// The screen renders exactly the `requested` bookings the backend serves
 /// (date / guests / notes read from `details`, missing keys tolerated) and
 /// lets the partner confirm or decline each one, with an optional note. The
 /// provider owns the data; the screen only displays and forwards decisions.
 class PartnerBookingsScreen extends StatefulWidget {
-  const PartnerBookingsScreen({super.key, this.partnerApi});
-
-  /// Injectable seam for tests; defaults to the real [ApiService].
-  final PartnerApi? partnerApi;
+  const PartnerBookingsScreen({super.key});
 
   @override
   State<PartnerBookingsScreen> createState() => _PartnerBookingsScreenState();
@@ -254,8 +251,9 @@ class _PartnerCard extends StatelessWidget {
                       color: (overdue || dueSoon)
                           ? scheme.error
                           : scheme.onSurfaceVariant,
-                      fontWeight:
-                          (overdue || dueSoon) ? FontWeight.bold : FontWeight.normal,
+                      fontWeight: (overdue || dueSoon)
+                          ? FontWeight.bold
+                          : FontWeight.normal,
                     ),
               ),
             ],
@@ -285,7 +283,6 @@ class _PartnerCard extends StatelessWidget {
     );
   }
 }
-
 
 /// Optional-note dialog for confirm/decline. Returns the typed note ('' when
 /// left empty), or null when dismissed — the caller only acts on a non-null
@@ -338,4 +335,3 @@ class _NoteDialogState extends State<_NoteDialog> {
 }
 
 String _dateFr(DateTime d) => '${d.day}/${d.month}/${d.year}';
-

@@ -21,9 +21,7 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider(
         create: (_) => PartnerBookingsProvider(partnerApi: api),
-        child: MaterialApp(
-          home: PartnerBookingsScreen(partnerApi: api),
-        ),
+        child: const MaterialApp(home: PartnerBookingsScreen()),
       ),
     );
     await tester.pumpAndSettle();
@@ -74,7 +72,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('partner_note_dialog')), findsOneWidget);
 
-    await tester.enterText(find.byKey(const Key('partner_note_field')), 'À 20h');
+    await tester.enterText(
+        find.byKey(const Key('partner_note_field')), 'À 20h');
     await tester.tap(find.byKey(const Key('partner_note_confirm')));
     await tester.pumpAndSettle();
 
@@ -96,7 +95,8 @@ void main() {
     await tester.tap(find.byKey(const Key('partner_decline_b-1')));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byKey(const Key('partner_note_field')), 'Complet');
+    await tester.enterText(
+        find.byKey(const Key('partner_note_field')), 'Complet');
     await tester.tap(find.byKey(const Key('partner_note_confirm')));
     await tester.pumpAndSettle();
 
@@ -132,7 +132,7 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider(
         create: (_) => PartnerBookingsProvider(partnerApi: api),
-        child: MaterialApp(home: PartnerBookingsScreen(partnerApi: api)),
+        child: const MaterialApp(home: PartnerBookingsScreen()),
       ),
     );
     await tester.pumpAndSettle();
@@ -207,8 +207,8 @@ class FakePartnerMeApi implements AuthApi {
       };
 
   @override
-  Future<Map<String, dynamic>> register(
-          String email, String password, {String? fullName}) async =>
+  Future<Map<String, dynamic>> register(String email, String password,
+          {String? fullName}) async =>
       getMe();
 }
 
@@ -231,5 +231,3 @@ Future<void> pumpProfileWithRole(
   );
   await tester.pumpAndSettle();
 }
-
-

@@ -2,5 +2,14 @@
   "@@locale": "en",
   "appName": "Discover AI",
   "bookingConfirmed": "Booking confirmed",
-  "bookingDeclined": "Booking declined"
+  "bookingDeclined": "Booking declined",
+  "errorLoadForbidden": "You do not have access to the partner space.",
+  "errorLoadNotFound": "Partner space not found.",
+  "errorLoadNetwork": "Could not load the requests. Check your connection.",
+  "errorLoadGeneric": "Something went wrong. Try again.",
+  "errorActionAlreadyHandled": "This request was already handled or has expired.",
+  "errorActionForbidden": "You do not have access to this request.",
+  "errorActionNotFound": "This request does not exist.",
+  "errorActionNetwork": "Could not send your response. Check your connection.",
+  "errorActionGeneric": "Something went wrong. Try again."
 }

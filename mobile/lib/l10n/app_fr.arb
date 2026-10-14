@@ -2,5 +2,14 @@
   "@@locale": "fr",
   "appName": "Discover AI",
   "bookingConfirmed": "Demande confirmée",
-  "bookingDeclined": "Demande refusée"
+  "bookingDeclined": "Demande refusée",
+  "errorLoadForbidden": "Vous n'avez pas accès à l'espace partenaire.",
+  "errorLoadNotFound": "Espace partenaire introuvable.",
+  "errorLoadNetwork": "Impossible de charger les demandes. Vérifiez votre connexion.",
+  "errorLoadGeneric": "Une erreur est survenue. Réessayez.",
+  "errorActionAlreadyHandled": "Cette demande a déjà été traitée ou a expiré.",
+  "errorActionForbidden": "Vous n'avez pas accès à cette demande.",
+  "errorActionNotFound": "Cette demande n'existe pas.",
+  "errorActionNetwork": "Impossible d'envoyer votre réponse. Vérifiez votre connexion.",
+  "errorActionGeneric": "Une erreur est survenue. Réessayez."
 }

@@ -33,6 +33,28 @@ void main() {
     return api;
   }
 
+  /// Boots the partner screen pinned to [locale] with a failing [listError],
+  /// to verify the localized error text.
+  Future<void> pumpScreenWithLocale(
+    WidgetTester tester, {
+    required Locale locale,
+    ApiException? listError,
+  }) async {
+    final api = FakePartnerApi(listError: listError);
+    await tester.pumpWidget(
+      ChangeNotifierProvider(
+        create: (_) => PartnerBookingsProvider(partnerApi: api),
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: locale,
+          home: const PartnerBookingsScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
   testWidgets('queue shows name, traveller, date, guests, notes',
       (tester) async {
     await pumpScreen(tester, bookings: [
@@ -168,7 +190,11 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider(
         create: (_) => PartnerBookingsProvider(partnerApi: api),
-        child: const MaterialApp(home: PartnerBookingsScreen()),
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const PartnerBookingsScreen(),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -181,6 +207,26 @@ void main() {
 
     expect(api.listCalls, callsBefore + 1);
     expect(find.byKey(const Key('partner_card_b-1')), findsOneWidget);
+  });
+
+  testWidgets('load error renders the FR text (default locale)',
+      (tester) async {
+    // 403 load → the screen shows the FR message from AppLocalizations.
+    await pumpScreenWithLocale(tester,
+        locale: const Locale('fr'), listError: ApiException(403, '{}'));
+
+    expect(find.text('Vous n\'avez pas accès à l\'espace partenaire.'),
+        findsOneWidget);
+  });
+
+  testWidgets('load error renders the EN text when locale is en',
+      (tester) async {
+    // 403 load → the screen shows the EN message from AppLocalizations.
+    await pumpScreenWithLocale(tester,
+        locale: const Locale('en'), listError: ApiException(403, '{}'));
+
+    expect(find.text('You do not have access to the partner space.'),
+        findsOneWidget);
   });
 
   testWidgets('pull-to-refresh reloads the queue', (tester) async {

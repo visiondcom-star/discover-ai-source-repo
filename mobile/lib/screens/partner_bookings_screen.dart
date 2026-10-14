@@ -62,7 +62,7 @@ class _PartnerBookingsScreenState extends State<PartnerBookingsScreen> {
       messenger.showSnackBar(
         SnackBar(
           key: const Key('partner_action_error_snackbar'),
-          content: Text(_errorText(context, provider.actionError!)),
+          content: Text(_actionErrorText(context, provider.actionError!)),
         ),
       );
     }
@@ -112,7 +112,10 @@ class _PartnerBookingsScreenState extends State<PartnerBookingsScreen> {
               const SizedBox(height: 12),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 32),
-                child: Text(provider.error!, textAlign: TextAlign.center),
+                child: Text(
+                  _loadErrorText(context, provider.error!),
+                  textAlign: TextAlign.center,
+                ),
               ),
               const SizedBox(height: 12),
               OutlinedButton(
@@ -173,12 +176,42 @@ class _PartnerBookingsScreenState extends State<PartnerBookingsScreen> {
     );
   }
 
-  /// Translates a [PartnerBookingError] into a user-facing string. The provider
-  /// owns the copy (it holds a [PartnerBookingError], not a string), and the
-  /// default locale is French — so the provider's copy is authoritative and
-  /// never touches the widget layer.
-  String _errorText(BuildContext context, PartnerBookingError error) =>
-      partnerBookingErrorMessage(error);
+  /// Translates a load-error [PartnerBookingError] code into a user-facing
+  /// string. The provider is locale-agnostic (it holds a code), so the
+  /// translation lives here — never in the provider, which has no
+  /// `BuildContext`.
+  String _loadErrorText(BuildContext context, PartnerBookingError error) {
+    final loc = AppLocalizations.of(context)!;
+    switch (error) {
+      case PartnerBookingError.forbidden:
+        return loc.errorLoadForbidden;
+      case PartnerBookingError.notFound:
+        return loc.errorLoadNotFound;
+      case PartnerBookingError.network:
+        return loc.errorLoadNetwork;
+      case PartnerBookingError.generic:
+      case PartnerBookingError.alreadyHandled:
+        return loc.errorLoadGeneric;
+    }
+  }
+
+  /// Translates an action-error [PartnerBookingError] code into a user-facing
+  /// string (SnackBar after a confirm/decline).
+  String _actionErrorText(BuildContext context, PartnerBookingError error) {
+    final loc = AppLocalizations.of(context)!;
+    switch (error) {
+      case PartnerBookingError.alreadyHandled:
+        return loc.errorActionAlreadyHandled;
+      case PartnerBookingError.forbidden:
+        return loc.errorActionForbidden;
+      case PartnerBookingError.notFound:
+        return loc.errorActionNotFound;
+      case PartnerBookingError.network:
+        return loc.errorActionNetwork;
+      case PartnerBookingError.generic:
+        return loc.errorActionGeneric;
+    }
+  }
 
   /// Localizations for the current locale (French by default; English if the
   /// user changes it).

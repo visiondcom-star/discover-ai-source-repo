@@ -54,7 +54,7 @@ void main() {
     expect(provider.items, isEmpty);
   });
 
-  test('409 → dedicated message and a silent queue reload', () async {
+  test('409 → alreadyHandled code and a silent queue reload', () async {
     final api = FakePartnerApi(bookings: [
       samplePartnerBookingJson(id: 'b-1'),
       samplePartnerBookingJson(id: 'b-2'),
@@ -76,7 +76,7 @@ void main() {
     expect(provider.items.map((b) => b.id), ['b-2']);
   });
 
-  test('403 on respond → dedicated message, no reload', () async {
+  test('403 on respond → forbidden code, no reload', () async {
     final api = FakePartnerApi(bookings: [samplePartnerBookingJson(id: 'b-1')]);
     final provider = PartnerBookingsProvider(partnerApi: api);
     await provider.load();
@@ -89,16 +89,16 @@ void main() {
     expect(api.listCalls, 1, reason: '403 is not a 409: no silent reload');
   });
 
-  test('403 on load → dedicated load message', () async {
+  test('403 on load → forbidden code', () async {
     final api = FakePartnerApi(listError: ApiException(403, '{}'));
     final provider = PartnerBookingsProvider(partnerApi: api);
     await provider.load();
 
     expect(provider.items, isEmpty);
-    expect(provider.error, 'Vous n\'avez pas accès à l\'espace partenaire.');
+    expect(provider.error, PartnerBookingError.forbidden);
   });
 
-  test('404 on respond → dedicated not-found message', () async {
+  test('404 on respond → notFound code', () async {
     final api = FakePartnerApi(bookings: [samplePartnerBookingJson(id: 'b-1')]);
     final provider = PartnerBookingsProvider(partnerApi: api);
     await provider.load();
@@ -111,11 +111,18 @@ void main() {
     expect(api.listCalls, 1, reason: '404 is not a 409: no silent reload');
   });
 
-  test('network failure → generic message', () async {
+  test('network failure → network code', () async {
     final api = FakePartnerApi(listError: ApiException(null, 'socket down'));
     final provider = PartnerBookingsProvider(partnerApi: api);
     await provider.load();
-    expect(provider.error, contains('Vérifiez votre connexion'));
+    expect(provider.error, PartnerBookingError.network);
+  });
+
+  test('server error (5xx) → generic code', () async {
+    final api = FakePartnerApi(listError: ApiException(500, '{}'));
+    final provider = PartnerBookingsProvider(partnerApi: api);
+    await provider.load();
+    expect(provider.error, PartnerBookingError.generic);
   });
 
   test('a failed reload keeps the queue already on screen', () async {

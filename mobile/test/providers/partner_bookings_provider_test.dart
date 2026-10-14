@@ -70,7 +70,8 @@ void main() {
     final ok = await provider.respond(provider.items.first, 'confirm');
 
     expect(ok, isFalse);
-    expect(provider.actionError, 'Cette demande a déjà été traitée ou a expiré.');
+    expect(
+        provider.actionError, 'Cette demande a déjà été traitée ou a expiré.');
     // Reload ran: b-1 is gone from the queue, b-2 remains.
     expect(api.listCalls, 2);
     expect(provider.items.map((b) => b.id), ['b-2']);
@@ -103,6 +104,30 @@ void main() {
     final provider = PartnerBookingsProvider(partnerApi: api);
     await provider.load();
     expect(provider.error, contains('Vérifiez votre connexion'));
+  });
+
+  test('a failed reload keeps the queue already on screen', () async {
+    final api = FakePartnerApi(bookings: [samplePartnerBookingJson(id: 'b-1')]);
+    final provider = PartnerBookingsProvider(partnerApi: api);
+    await provider.load();
+    expect(provider.items, hasLength(1));
+
+    api.listError = ApiException(500, '{}'); // next load fails
+    await provider.load();
+
+    expect(provider.items, hasLength(1),
+        reason: 'a failed refresh must not blank the queue');
+    expect(provider.error, isNotNull, reason: 'the error is still exposed');
+    expect(provider.isLoading, isFalse);
+  });
+
+  test('a failed first load leaves the queue empty', () async {
+    final api = FakePartnerApi(listError: ApiException(500, '{}'));
+    final provider = PartnerBookingsProvider(partnerApi: api);
+    await provider.load();
+
+    expect(provider.items, isEmpty);
+    expect(provider.error, isNotNull);
   });
 
   test('isActing guards against a double tap (one respond, not two)', () async {

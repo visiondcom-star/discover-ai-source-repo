@@ -3,8 +3,10 @@ import 'package:provider/provider.dart';
 
 import '../config.dart';
 import '../providers/auth_provider.dart';
+import '../providers/partner_bookings_provider.dart';
 import 'admin_collection_screen.dart';
 import 'admin_research_screen.dart';
+import 'partner_bookings_screen.dart';
 
 /// Profil tab — account summary and the explicit logout action.
 ///
@@ -103,6 +105,29 @@ class ProfileScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 24),
+          if (user?.canUsePartnerSpace ?? false)
+            Card(
+              margin: EdgeInsets.zero,
+              child: ListTile(
+                key: const Key('partner_space_button'),
+                leading:
+                    Icon(Icons.storefront_outlined, color: scheme.primary),
+                title: const Text('Espace partenaire'),
+                subtitle: const Text('Traiter les demandes de réservation'),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    // Provider created inside the route builder: a partner's
+                    // queue must not survive a logout — the next user gets a
+                    // fresh one.
+                    builder: (_) => ChangeNotifierProvider(
+                      create: (_) => PartnerBookingsProvider(),
+                      child: const PartnerBookingsScreen(),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          const SizedBox(height: 12),
           Card(
             margin: EdgeInsets.zero,
             child: ListTile(

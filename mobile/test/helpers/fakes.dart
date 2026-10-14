@@ -754,3 +754,108 @@ class FakeResearchApi implements ResearchApi {
 ///   ],
 /// );
 /// final provider = ResearchProvider(fake, pollInterval: Duration(milliseconds: 10));
+
+/// Deterministic PartnerApi fake for tests. Records every call (booking id,
+/// decision, note) so a test can assert the provider forwards exactly what the
+/// partner chose. Replays the backend status codes the provider must map:
+/// [respondError] (403/404/409) is thrown by [respondToPartnerBooking];
+/// [listError] (403/404) by [listPartnerBookings].
+class FakePartnerApi implements PartnerApi {
+  FakePartnerApi({
+    List<Map<String, dynamic>>? bookings,
+    this.respondError,
+    this.listError,
+  }) : bookings =
+            List<Map<String, dynamic>>.from(bookings ?? [samplePartnerBookingJson()]);
+
+  /// When set, every [respondToPartnerBooking] throws it (mutable so a test
+  /// can clear it to model a successful retry).
+  ApiException? respondError;
+
+  /// When set, [listPartnerBookings] throws it (e.g. 403 non-partner).
+  ApiException? listError;
+
+  final List<Map<String, dynamic>> bookings;
+
+  int listCalls = 0;
+  int getCalls = 0;
+  int respondCalls = 0;
+
+  String? lastRespondBookingId;
+  String? lastRespondDecision;
+  String? lastRespondNote;
+
+  /// Full ordered history of responds (bookingId → decision, note), so a test
+  /// can assert a double tap never sent two calls.
+  final List<Map<String, String?>> respondHistory = [];
+
+  @override
+  Future<List<Map<String, dynamic>>> listPartnerBookings() async {
+    listCalls++;
+    if (listError != null) throw listError!;
+    return [for (final b in bookings) Map<String, dynamic>.from(b)];
+  }
+
+  @override
+  Future<Map<String, dynamic>> getPartnerBooking(String bookingId) async {
+    getCalls++;
+    return Map<String, dynamic>.from(_byId(bookingId));
+  }
+
+  @override
+  Future<Map<String, dynamic>> respondToPartnerBooking(
+    String bookingId, {
+    required String decision,
+    String? note,
+  }) async {
+    respondCalls++;
+    lastRespondBookingId = bookingId;
+    lastRespondDecision = decision;
+    lastRespondNote = note;
+    respondHistory.add({'id': bookingId, 'decision': decision, 'note': note});
+    if (respondError != null) throw respondError!;
+    final b = _byId(bookingId);
+    b['status'] = decision == 'confirm' ? 'confirmed' : 'declined';
+    if (note != null) b['partner_note'] = note;
+    b['responded_at'] = '2026-08-29T12:00:00Z';
+    return Map<String, dynamic>.from(b);
+  }
+
+  Map<String, dynamic> _byId(String bookingId) => bookings.firstWhere(
+        (b) => b['id'] == bookingId,
+        orElse: () => throw ApiException(404, '{"detail":"Booking not found"}'),
+      );
+}
+
+/// A single `PartnerBookingResponse` JSON — the base booking fields plus the
+/// partner-only `poi_name`, `traveller_name` and whitelisted `details`.
+Map<String, dynamic> samplePartnerBookingJson({
+  String id = 'b-1',
+  String poiId = 'p-1',
+  String adapterType = 'hotel',
+  String status = 'requested',
+  String? respondBy,
+  String poiName = 'Hôtel El Djazaïr',
+  String? travellerName = 'Amine',
+  Map<String, dynamic>? details,
+}) =>
+    {
+      ...sampleBookingJson(
+        id: id,
+        poiId: poiId,
+        adapterType: adapterType,
+        status: status,
+        bookingMode: 'manual_confirm',
+        respondBy: respondBy,
+      ),
+      'poi_name': poiName,
+      'traveller_name': travellerName,
+      'details': details ??
+          <String, dynamic>{
+            'date': '2026-09-15',
+            'guests': 2,
+            'notes': 'Chambre calme si possible.',
+          },
+    };
+
+

@@ -88,6 +88,39 @@ abstract class BookingsApi {
   Future<Map<String, dynamic>> listAdapters();
 }
 
+/// Partner-space seam — the decision queue for `manual_confirm` bookings
+/// (backend/app/api/v1/endpoints/partner.py). A partner (manager of at least
+/// one POI) or an admin lists the requests awaiting an answer, then confirms
+/// or declines them. All paths have **no trailing slash**: FastAPI answers 307
+/// on a trailing slash and the POST body would be lost.
+abstract class PartnerApi {
+  /// Requests awaiting a decision; mirrors
+  /// `GET /partner/bookings?status_filter=requested&limit=50&offset=0`.
+  ///
+  /// Sorted by response deadline (`respond_by`, nulls last) then creation.
+  /// 403 if the caller is neither a partner nor an admin.
+  Future<List<Map<String, dynamic>>> listPartnerBookings();
+
+  /// One booking in the partner's scope; mirrors `GET /partner/bookings/{id}`.
+  /// 404 when out of scope or unknown.
+  Future<Map<String, dynamic>> getPartnerBooking(String bookingId);
+
+  /// Confirms or declines a pending request; mirrors
+  /// `POST /partner/bookings/{id}/respond` with `{decision, note?}`.
+  ///
+  /// [decision] is `"confirm"` or `"decline"`. Replaying the same decision
+  /// returns the booking (200); a conflicting decision, or one on an
+  /// expired/cancelled booking, is a 409. [note] is optional (≤ 500 chars).
+  ///
+  /// Throws an [ApiException] carrying the status code (403/404/409) on
+  /// failure so the provider can map it to the right message.
+  Future<Map<String, dynamic>> respondToPartnerBooking(
+    String bookingId, {
+    required String decision,
+    String? note,
+  });
+}
+
 abstract class PromotionsApi {
   /// Active promotions for the home banner; mirrors GET /promotions/.
   /// The backend already filters by is_active + the starts_at/ends_at
@@ -174,6 +207,7 @@ class ApiService
         TripsApi,
         ChatApi,
         BookingsApi,
+        PartnerApi,
         PromotionsApi,
         TenantsApi,
         ResearchApi,
@@ -433,4 +467,32 @@ class ApiService
   }) async =>
       Map<String, dynamic>.from(await _patch(
           '/tenants/categories/$categoryId', {'status': status}) as Map);
+
+  // ---- Espace partenaire ---------------------------------------------------
+  // Chemins SANS slash final : un slash final ferait répondre FastAPI en 307
+  // et http ne réémettrait pas le corps du POST (décision perdue).
+
+  @override
+  Future<List<Map<String, dynamic>>> listPartnerBookings() async {
+    final data = await _get('/partner/bookings');
+    return (data as List)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+
+  @override
+  Future<Map<String, dynamic>> getPartnerBooking(String bookingId) async =>
+      Map<String, dynamic>.from(
+          await _get('/partner/bookings/$bookingId') as Map);
+
+  @override
+  Future<Map<String, dynamic>> respondToPartnerBooking(
+    String bookingId, {
+    required String decision,
+    String? note,
+  }) async =>
+      Map<String, dynamic>.from(await _post('/partner/bookings/$bookingId/respond', {
+        'decision': decision,
+        if (note != null) 'note': note,
+      }) as Map);
 }

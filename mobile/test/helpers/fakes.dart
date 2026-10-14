@@ -1,4 +1,5 @@
 import 'package:discover_ai/services/api_service.dart';
+import 'package:discover_ai/services/locale_store.dart';
 import 'package:discover_ai/services/secure_storage_service.dart';
 import 'package:discover_ai/models/research_job.dart';
 
@@ -491,6 +492,20 @@ class InMemoryTokenStore implements TokenStore {
   Future<void> writeToken(String value) async => token = value;
 }
 
+/// In-memory LocaleStore for tests, mirroring [InMemoryTokenStore].
+class InMemoryLocaleStore implements LocaleStore {
+  String? localeCode;
+
+  @override
+  Future<void> deleteLocaleCode() async => localeCode = null;
+
+  @override
+  Future<String?> readLocaleCode() async => localeCode;
+
+  @override
+  Future<void> writeLocaleCode(String code) async => localeCode = code;
+}
+
 class FakeTenantsApi implements TenantsApi {
   FakeTenantsApi({
     Map<String, dynamic>? tenant,
@@ -765,8 +780,8 @@ class FakePartnerApi implements PartnerApi {
     List<Map<String, dynamic>>? bookings,
     this.respondError,
     this.listError,
-  }) : bookings =
-            List<Map<String, dynamic>>.from(bookings ?? [samplePartnerBookingJson()]);
+  }) : bookings = List<Map<String, dynamic>>.from(
+            bookings ?? [samplePartnerBookingJson()]);
 
   /// When set, every [respondToPartnerBooking] throws it (mutable so a test
   /// can clear it to model a successful retry).
@@ -857,5 +872,3 @@ Map<String, dynamic> samplePartnerBookingJson({
             'notes': 'Chambre calme si possible.',
           },
     };
-
-

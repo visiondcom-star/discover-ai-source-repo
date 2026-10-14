@@ -33,10 +33,22 @@ class PartnerBookingsProvider extends ChangeNotifier {
   bool get isActing => _isActing;
   String? get actionError => _actionError;
 
+  /// Page size the backend serves by default (`GET /partner/bookings`,
+  /// `limit=50`). When a full page comes back, more requests may exist beyond
+  /// it — pagination is out of scope, so the screen just says so.
+  static const int pageLimit = 50;
+
+  /// True when the queue is at the API page limit, i.e. the display may be
+  /// truncated. Lets the screen show a discreet "50 premières" notice.
+  bool get hasMore => _items.length >= pageLimit;
+
   /// Loads (or reloads) the decision queue.
   ///
-  /// On 403 (neither partner nor admin) or 404 the queue is emptied and a
-  /// dedicated message is shown; any other failure gets a generic message.
+  /// A **reload** that fails keeps the queue already on screen — the error is
+  /// exposed (403/404 get a dedicated message, anything else a generic one)
+  /// but the list is untouched, so a pull-to-refresh on a flaky connection
+  /// never blanks a queue the partner is working through. Only the first load
+  /// starts from (and on failure returns to) an empty list.
   Future<void> load() async {
     _isLoading = true;
     _error = null;
@@ -46,10 +58,8 @@ class PartnerBookingsProvider extends ChangeNotifier {
       _items = raw.map(PartnerBooking.fromPartnerJson).toList();
       _error = null;
     } on ApiException catch (e) {
-      _items = [];
       _error = _loadErrorMessage(e);
     } catch (_) {
-      _items = [];
       _error = 'Impossible de charger les demandes. Vérifiez votre connexion.';
     } finally {
       _isLoading = false;
@@ -85,8 +95,7 @@ class PartnerBookingsProvider extends ChangeNotifier {
       return true;
     } on ApiException catch (e) {
       if (e.statusCode == 409) {
-        _actionError =
-            'Cette demande a déjà été traitée ou a expiré.';
+        _actionError = 'Cette demande a déjà été traitée ou a expiré.';
         // Someone else handled it (or it expired): resync silently so the
         // queue reflects reality, without surfacing a second error.
         await _reloadQuietly();

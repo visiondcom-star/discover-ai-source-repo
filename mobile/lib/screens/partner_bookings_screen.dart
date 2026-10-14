@@ -3,25 +3,22 @@ import 'package:provider/provider.dart';
 
 import '../models/partner_booking.dart';
 import '../providers/partner_bookings_provider.dart';
-import '../services/api_service.dart';
 
 /// Espace partenaire — the decision queue for `manual_confirm` bookings.
 ///
 /// The provider is created **inside the route's builder**
 /// (`ChangeNotifierProvider` on the [MaterialPageRoute]), not at app level:
 /// this way a partner's queue never survives a logout — the next login of a
-/// different user gets a fresh, empty queue. [partnerApi] is injectable for
-/// tests.
+/// different user gets a fresh, empty queue. Tests inject their own
+/// `PartnerBookingsProvider` (holding a `FakePartnerApi`) through the same
+/// seam, so the screen itself takes no API parameter.
 ///
 /// The screen renders exactly the `requested` bookings the backend serves
 /// (date / guests / notes read from `details`, missing keys tolerated) and
 /// lets the partner confirm or decline each one, with an optional note. The
 /// provider owns the data; the screen only displays and forwards decisions.
 class PartnerBookingsScreen extends StatefulWidget {
-  const PartnerBookingsScreen({super.key, this.partnerApi});
-
-  /// Injectable seam for tests; defaults to the real [ApiService].
-  final PartnerApi? partnerApi;
+  const PartnerBookingsScreen({super.key});
 
   @override
   State<PartnerBookingsScreen> createState() => _PartnerBookingsScreenState();
@@ -154,8 +151,12 @@ class _PartnerBookingsScreenState extends State<PartnerBookingsScreen> {
       onRefresh: provider.load,
       child: ListView.builder(
         padding: const EdgeInsets.only(top: 8, bottom: 24),
-        itemCount: provider.items.length,
+        // One extra slot for the "50 premières" notice when the page is full.
+        itemCount: provider.items.length + (provider.hasMore ? 1 : 0),
         itemBuilder: (context, index) {
+          if (provider.hasMore && index == provider.items.length) {
+            return const _PartnerLimitNotice();
+          }
           final booking = provider.items[index];
           return _PartnerCard(
             booking: booking,
@@ -254,8 +255,9 @@ class _PartnerCard extends StatelessWidget {
                       color: (overdue || dueSoon)
                           ? scheme.error
                           : scheme.onSurfaceVariant,
-                      fontWeight:
-                          (overdue || dueSoon) ? FontWeight.bold : FontWeight.normal,
+                      fontWeight: (overdue || dueSoon)
+                          ? FontWeight.bold
+                          : FontWeight.normal,
                     ),
               ),
             ],
@@ -286,6 +288,29 @@ class _PartnerCard extends StatelessWidget {
   }
 }
 
+/// Discreet footer shown when the queue is at the API page limit (50): more
+/// requests may exist beyond what this screen loads, but pagination is out of
+/// scope for now — we simply say so instead of silently truncating.
+class _PartnerLimitNotice extends StatelessWidget {
+  const _PartnerLimitNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      key: const Key('partner_limit_notice'),
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
+      child: Text(
+        'Seules les 50 premières demandes sont affichées.',
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+              fontStyle: FontStyle.italic,
+            ),
+      ),
+    );
+  }
+}
 
 /// Optional-note dialog for confirm/decline. Returns the typed note ('' when
 /// left empty), or null when dismissed — the caller only acts on a non-null
@@ -338,4 +363,3 @@ class _NoteDialogState extends State<_NoteDialog> {
 }
 
 String _dateFr(DateTime d) => '${d.day}/${d.month}/${d.year}';
-

@@ -2,7 +2,9 @@
 
 import 'package:discover_ai/models/research_collection_job.dart';
 import 'package:discover_ai/models/research_job.dart';
+import 'package:discover_ai/l10n/app_localizations.dart';
 import 'package:discover_ai/providers/auth_provider.dart';
+import 'package:discover_ai/providers/locale_provider.dart';
 import 'package:discover_ai/providers/research_collection_provider.dart';
 import 'package:discover_ai/providers/research_provider.dart';
 import 'package:discover_ai/providers/tenant_provider.dart';
@@ -58,7 +60,9 @@ void main() {
       await tester.pumpAndSettle();
       return tenantsApi;
     }
-testWidgets('lance la collecte avec le tenant courant et l’enchaînement '
+
+    testWidgets(
+        'lance la collecte avec le tenant courant et l’enchaînement '
         'activé par défaut', (tester) async {
       final fake = FakeResearchCollectionApi(
         jobsQueue: [_job(ResearchJobStatus.processing)],
@@ -82,8 +86,7 @@ testWidgets('lance la collecte avec le tenant courant et l’enchaînement '
       research.dispose();
     });
 
-    testWidgets('le switch désactivé envoie runPipeline=false',
-        (tester) async {
+    testWidgets('le switch désactivé envoie runPipeline=false', (tester) async {
       final fake = FakeResearchCollectionApi(
         jobsQueue: [_job(ResearchJobStatus.processing)],
         statusSequence: [_job(ResearchJobStatus.processing)],
@@ -123,8 +126,7 @@ testWidgets('lance la collecte avec le tenant courant et l’enchaînement '
       research.dispose();
     });
 
-    testWidgets('une collecte terminée affiche ses compteurs',
-        (tester) async {
+    testWidgets('une collecte terminée affiche ses compteurs', (tester) async {
       final done =
           _job(ResearchJobStatus.done, fetched: 5, newDocs: 3, duplicate: 2);
       final fake = FakeResearchCollectionApi(
@@ -157,8 +159,7 @@ testWidgets('lance la collecte avec le tenant courant et l’enchaînement '
       // l'app : aucun `lib/` ne naviguait vers AdminCollectionScreen.
       final tenants = TenantProvider(tenantsApi: FakeTenantsApi());
       await tenants.loadTenant();
-      final collection = ResearchCollectionProvider(
-          FakeResearchCollectionApi(),
+      final collection = ResearchCollectionProvider(FakeResearchCollectionApi(),
           pollInterval: const Duration(seconds: 30));
       final research = ResearchProvider(FakeResearchApi());
 
@@ -175,8 +176,16 @@ testWidgets('lance la collecte avec le tenant courant et l’enchaînement '
                 value: collection),
             ChangeNotifierProvider<ResearchProvider>.value(value: research),
             ChangeNotifierProvider<TenantProvider>.value(value: tenants),
+            // Profil hosts the language selector, which reads LocaleProvider.
+            ChangeNotifierProvider<LocaleProvider>(
+              create: (_) => LocaleProvider(localeStore: InMemoryLocaleStore()),
+            ),
           ],
-          child: const MaterialApp(home: ProfileScreen()),
+          child: const MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: ProfileScreen(),
+          ),
         ),
       );
       await tester.pumpAndSettle();

@@ -66,5 +66,9 @@
   },
   "partnerNoteLabel": "Note (facultative)",
   "partnerNoteHint": "Précisez un horaire, un motif de refus…",
-  "partnerCancel": "Annuler"
+  "partnerCancel": "Annuler",
+  "languageTitle": "Langue",
+  "languageHint": "Langue de l'interface",
+  "languageFrench": "Français",
+  "languageEnglish": "English"
 }

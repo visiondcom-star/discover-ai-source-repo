@@ -5,10 +5,12 @@ import 'package:provider/provider.dart';
 import 'package:discover_ai/providers/auth_provider.dart';
 import 'package:discover_ai/providers/booking_provider.dart';
 import 'package:discover_ai/providers/chat_provider.dart';
+import 'package:discover_ai/providers/locale_provider.dart';
 import 'package:discover_ai/providers/poi_provider.dart';
 import 'package:discover_ai/providers/promotion_provider.dart';
 import 'package:discover_ai/providers/trip_provider.dart';
 import 'package:discover_ai/providers/tenant_provider.dart';
+import 'package:discover_ai/l10n/app_localizations.dart';
 import 'package:discover_ai/screens/home_shell.dart';
 
 import 'helpers/fakes.dart';
@@ -47,8 +49,17 @@ void main() {
           ChangeNotifierProvider<TenantProvider>(
             create: (_) => TenantProvider(tenantsApi: FakeTenantsApi()),
           ),
+          // Profil hosts the language selector; IndexedStack mounts every tab,
+          // so LocaleProvider must be present or the selector throws.
+          ChangeNotifierProvider<LocaleProvider>(
+            create: (_) => LocaleProvider(localeStore: InMemoryLocaleStore()),
+          ),
         ],
-        child: const MaterialApp(home: HomeShell()),
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: HomeShell(),
+        ),
       );
 
   testWidgets('shell boots on Accueil with the greeting placeholder',

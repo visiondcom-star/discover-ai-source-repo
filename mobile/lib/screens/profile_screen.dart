@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../config.dart';
+import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
+import '../providers/locale_provider.dart';
 import '../providers/partner_bookings_provider.dart';
 import 'admin_collection_screen.dart';
 import 'admin_research_screen.dart';
@@ -72,6 +74,8 @@ class ProfileScreen extends StatelessWidget {
               subtitle: const Text('À venir — prochain incrément'),
             ),
           ),
+          const SizedBox(height: 12),
+          const _LanguageTile(),
           const SizedBox(height: 12),
           Card(
             margin: EdgeInsets.zero,
@@ -144,6 +148,69 @@ class ProfileScreen extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Language selector (FR/EN). Reads [LocaleProvider], writes the persisted
+/// choice on tap — the whole app rebuilds in the new language via
+/// `MaterialApp.locale`.
+class _LanguageTile extends StatelessWidget {
+  const _LanguageTile();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final locale = context.watch<LocaleProvider>();
+    final loc = AppLocalizations.of(context);
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Row(
+          children: [
+            Icon(Icons.translate, color: scheme.primary),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(loc.languageTitle),
+                  Text(
+                    loc.languageHint,
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(color: scheme.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+            SegmentedButton<String>(
+              key: const Key('language_selector'),
+              segments: [
+                ButtonSegment(
+                  value: 'fr',
+                  label: Text(
+                    loc.languageFrench,
+                    key: const Key('language_fr'),
+                  ),
+                ),
+                ButtonSegment(
+                  value: 'en',
+                  label: Text(
+                    loc.languageEnglish,
+                    key: const Key('language_en'),
+                  ),
+                ),
+              ],
+              selected: {locale.localeCode},
+              onSelectionChanged: (codes) =>
+                  context.read<LocaleProvider>().setLocale(codes.first),
+            ),
+          ],
+        ),
       ),
     );
   }

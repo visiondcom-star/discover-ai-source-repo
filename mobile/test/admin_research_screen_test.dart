@@ -1,5 +1,7 @@
 import 'package:discover_ai/models/research_job.dart';
+import 'package:discover_ai/l10n/app_localizations.dart';
 import 'package:discover_ai/providers/admin_categories_provider.dart';
+import 'package:discover_ai/providers/locale_provider.dart';
 import 'package:discover_ai/providers/research_provider.dart';
 import 'package:discover_ai/providers/tenant_provider.dart';
 import 'package:discover_ai/screens/admin_research_screen.dart';
@@ -49,8 +51,7 @@ void main() {
           providers: [
             ChangeNotifierProvider<ResearchProvider>.value(
                 value: researchProvider),
-            ChangeNotifierProvider<TenantProvider>.value(
-                value: tenantProvider),
+            ChangeNotifierProvider<TenantProvider>.value(value: tenantProvider),
             ChangeNotifierProvider<AdminCategoriesProvider>(
                 create: (_) =>
                     AdminCategoriesProvider(FakeAdminCategoriesApi())),
@@ -61,7 +62,8 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('tapping "Lancer la recherche IA" calls runResearch with '
+    testWidgets(
+        'tapping "Lancer la recherche IA" calls runResearch with '
         'the current tenant id and shows the progressing status',
         (tester) async {
       final fake = FakeResearchApi(
@@ -95,8 +97,7 @@ void main() {
     testWidgets('shows the 429 cooldown error message on rate-limit',
         (tester) async {
       final fake = FakeResearchApi(
-        runResearchError:
-            ApiException(429, '{"detail":"cooldown"}'),
+        runResearchError: ApiException(429, '{"detail":"cooldown"}'),
       );
       final researchProvider = ResearchProvider(fake);
 
@@ -117,7 +118,8 @@ void main() {
       researchProvider.dispose();
     });
 
-    testWidgets('once a run is done, shows category counters and the '
+    testWidgets(
+        'once a run is done, shows category counters and the '
         'refresh button reloads TenantProvider.categories', (tester) async {
       final fake = FakeResearchApi(
         jobsQueue: [
@@ -156,7 +158,8 @@ void main() {
         findsOneWidget,
       );
 
-      expect(find.byKey(const Key('refresh_categories_button')), findsOneWidget);
+      expect(
+          find.byKey(const Key('refresh_categories_button')), findsOneWidget);
       final callsBeforeRefresh = tenantsApi.getCategoriesCalls;
       await tester.tap(find.byKey(const Key('refresh_categories_button')));
       await tester.pumpAndSettle();
@@ -218,13 +221,20 @@ void main() {
             ),
             ChangeNotifierProvider<ResearchProvider>.value(
                 value: researchProvider),
-            ChangeNotifierProvider<TenantProvider>.value(
-                value: tenantProvider),
+            ChangeNotifierProvider<TenantProvider>.value(value: tenantProvider),
             ChangeNotifierProvider<AdminCategoriesProvider>(
                 create: (_) =>
                     AdminCategoriesProvider(FakeAdminCategoriesApi())),
+            // Profil hosts the language selector, which reads LocaleProvider.
+            ChangeNotifierProvider<LocaleProvider>(
+              create: (_) => LocaleProvider(localeStore: InMemoryLocaleStore()),
+            ),
           ],
-          child: const MaterialApp(home: ProfileScreen()),
+          child: const MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: ProfileScreen(),
+          ),
         ),
       );
       await tester.pumpAndSettle();

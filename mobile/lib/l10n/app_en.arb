@@ -66,5 +66,9 @@
   },
   "partnerNoteLabel": "Note (optional)",
   "partnerNoteHint": "Add a time, a reason for declining…",
-  "partnerCancel": "Cancel"
+  "partnerCancel": "Cancel",
+  "languageTitle": "Language",
+  "languageHint": "Interface language",
+  "languageFrench": "Français",
+  "languageEnglish": "English"
 }

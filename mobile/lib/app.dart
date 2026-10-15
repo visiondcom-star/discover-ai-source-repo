@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'l10n/app_localizations.dart';
 import 'models/tenant.dart';
 import 'providers/auth_provider.dart';
+import 'providers/locale_provider.dart';
 import 'providers/tenant_provider.dart';
 import 'screens/home_shell.dart';
 import 'screens/login_screen.dart';
@@ -31,25 +32,30 @@ class DiscoverAIApp extends StatelessWidget {
       theme: tenant == null
           ? AppTheme.light()
           : AppTheme.fromTenant(primaryColor: tenant.primaryColor),
-      // i18n FR/EN (chantier i18n, Phase 0). Delegates + locales are additive:
+      // i18n FR/EN (chantier i18n). Delegates + locales are additive:
       // no screen reads AppLocalizations.of(context) yet, so existing tests
-      // are unaffected. The locale follows the tenant's defaultLanguage (the
-      // backend source of truth), falling back to the system locale when it is
-      // missing or outside the supported set (fr, en) — never a crash.
+      // are unaffected. The locale follows the user's persisted choice
+      // (LocaleProvider, first), then the tenant's defaultLanguage as a
+      // hint while nothing is stored, then the system locale. Unsupported
+      // languages never render: the lookup always lands on fr or en.
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      locale: _localeForTenant(tenant),
+      locale: _localeForTenant(tenant, context.watch<LocaleProvider?>()),
       home: const AuthGate(),
     );
   }
 
-  /// Locale for the tenant's `defaultLanguage`, or null to defer to the system
-  /// locale. Null also covers "tenant not loaded yet" and "language we do not
-  /// ship" (e.g. `ar`), so the app never renders an unsupported locale.
-  Locale? _localeForTenant(Tenant? tenant) {
-    final lang = tenant?.defaultLanguage;
-    if (lang == null || lang.isEmpty) return null;
-    final normalized = lang.toLowerCase();
+  /// Locale resolution. Persisted user choice first (LocaleProvider is always
+  /// present in the real app tree via appProviders); then the tenant
+  /// defaultLanguage as a pre-restore hint; then null to defer to the system
+  /// locale. Null also covers "language we do not ship" (e.g. `ar`), so the
+  /// app never renders an unsupported locale.
+  Locale? _localeForTenant(Tenant? tenant, LocaleProvider? localeProvider) {
+    final code = localeProvider == null || localeProvider.isLoading
+        ? tenant?.defaultLanguage
+        : localeProvider.localeCode;
+    if (code == null || code.isEmpty) return null;
+    final normalized = code.toLowerCase();
     final isSupported = AppLocalizations.supportedLocales
         .any((l) => l.languageCode == normalized);
     return isSupported ? Locale(normalized) : null;

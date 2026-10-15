@@ -6,6 +6,16 @@ import '../models/partner_booking.dart';
 import '../providers/partner_bookings_provider.dart';
 import '../l10n/app_localizations.dart';
 
+/// Formats the raw ISO date string from the backend (`YYYY-MM-DD`) using the
+/// current locale's medium-length format. Falls back to the raw string when
+/// the input is not a parseable date — older bookings or migrated data with
+/// a non-ISO format must still render instead of crashing the card.
+String _formatDateForLocale(BuildContext context, String raw, String locale) {
+  final parsed = DateTime.tryParse(raw);
+  if (parsed == null) return raw;
+  return intl.DateFormat.yMMMd(locale).format(parsed);
+}
+
 /// Espace partenaire — the decision queue for `manual_confirm` bookings.
 ///
 /// The provider is created **inside the route's builder**
@@ -45,6 +55,7 @@ class _PartnerBookingsScreenState extends State<PartnerBookingsScreen> {
     final provider = context.read<PartnerBookingsProvider>();
     final ok = await provider.respond(booking, decision, note: note);
     if (!mounted) return;
+    final loc = AppLocalizations.of(context);
     final messenger = ScaffoldMessenger.of(context);
     if (ok) {
       messenger.showSnackBar(
@@ -54,8 +65,8 @@ class _PartnerBookingsScreenState extends State<PartnerBookingsScreen> {
               : 'partner_declined_snackbar'),
           content: Text(
             decision == 'confirm'
-                ? _loc.bookingConfirmed
-                : _loc.bookingDeclined,
+                ? loc.partnerBookingConfirmed
+                : loc.partnerBookingDeclined,
           ),
         ),
       );
@@ -89,8 +100,9 @@ class _PartnerBookingsScreenState extends State<PartnerBookingsScreen> {
   }
 
   Future<void> _openNoteDialog(PartnerBooking booking, String decision) async {
+    final loc = AppLocalizations.of(context);
     final confirmLabel =
-        decision == 'confirm' ? _loc.partnerConfirm : _loc.partnerDecline;
+        decision == 'confirm' ? loc.partnerConfirm : loc.partnerDecline;
     final note = await showDialog<String>(
       context: context,
       builder: (_) => _NoteDialog(
@@ -106,9 +118,10 @@ class _PartnerBookingsScreenState extends State<PartnerBookingsScreen> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final loc = AppLocalizations.of(context);
     final provider = context.watch<PartnerBookingsProvider>();
     return Scaffold(
-      appBar: AppBar(title: Text(_loc.partnerTitle)),
+      appBar: AppBar(title: Text(loc.partnerTitle)),
       body: _buildBody(context, provider, scheme),
     );
   }
@@ -118,6 +131,7 @@ class _PartnerBookingsScreenState extends State<PartnerBookingsScreen> {
     PartnerBookingsProvider provider,
     ColorScheme scheme,
   ) {
+    final loc = AppLocalizations.of(context);
     if (provider.items.isEmpty) {
       if (provider.isLoading) {
         return const Center(child: CircularProgressIndicator());
@@ -142,7 +156,7 @@ class _PartnerBookingsScreenState extends State<PartnerBookingsScreen> {
               OutlinedButton(
                 key: const Key('partner_retry'),
                 onPressed: provider.load,
-                child: Text(_loc.partnerRetry),
+                child: Text(loc.partnerRetry),
               ),
             ],
           ),
@@ -156,12 +170,12 @@ class _PartnerBookingsScreenState extends State<PartnerBookingsScreen> {
             Icon(Icons.inbox_outlined,
                 size: 48, color: scheme.onSurfaceVariant),
             const SizedBox(height: 12),
-            Text(_loc.partnerEmpty),
+            Text(loc.partnerEmpty),
             const SizedBox(height: 4),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32),
               child: Text(
-                _loc.partnerEmptyHint,
+                loc.partnerEmptyHint,
                 textAlign: TextAlign.center,
                 style: Theme.of(context)
                     .textTheme
@@ -202,7 +216,7 @@ class _PartnerBookingsScreenState extends State<PartnerBookingsScreen> {
   /// translation lives here — never in the provider, which has no
   /// `BuildContext`.
   String _loadErrorText(BuildContext context, PartnerBookingError error) {
-    final loc = AppLocalizations.of(context)!;
+    final loc = AppLocalizations.of(context);
     switch (error) {
       case PartnerBookingError.forbidden:
         return loc.errorLoadForbidden;
@@ -219,7 +233,7 @@ class _PartnerBookingsScreenState extends State<PartnerBookingsScreen> {
   /// Translates an action-error [PartnerBookingError] code into a user-facing
   /// string (SnackBar after a confirm/decline).
   String _actionErrorText(BuildContext context, PartnerBookingError error) {
-    final loc = AppLocalizations.of(context)!;
+    final loc = AppLocalizations.of(context);
     switch (error) {
       case PartnerBookingError.alreadyHandled:
         return loc.errorActionAlreadyHandled;
@@ -233,10 +247,6 @@ class _PartnerBookingsScreenState extends State<PartnerBookingsScreen> {
         return loc.errorActionGeneric;
     }
   }
-
-  /// Localizations for the current locale (French by default; English if the
-  /// user changes it).
-  AppLocalizations get _loc => AppLocalizations.of(context)!;
 }
 
 class _PartnerCard extends StatelessWidget {
@@ -255,7 +265,7 @@ class _PartnerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final loc = AppLocalizations.of(context)!;
+    final loc = AppLocalizations.of(context);
     final now = DateTime.now();
     final traveller = booking.travellerName;
     final date = booking.dateLabel;
@@ -289,7 +299,9 @@ class _PartnerCard extends StatelessWidget {
                   Icon(Icons.calendar_today_outlined,
                       size: 14, color: scheme.onSurfaceVariant),
                   const SizedBox(width: 6),
-                  Text(loc.partnerDate(date),
+                  Text(
+                      loc.partnerDate(
+                          _formatDateForLocale(context, date, loc.localeName)),
                       style: Theme.of(context).textTheme.bodySmall),
                 ],
               ),
@@ -320,7 +332,7 @@ class _PartnerCard extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 loc.partnerRespondBy(
-                  intl.DateFormat.yMMMMd(loc.localeName)
+                  intl.DateFormat.yMMMd(loc.localeName)
                       .format(booking.respondBy!),
                 ),
                 key: Key('partner_respond_by_${booking.id}'),
@@ -370,7 +382,7 @@ class _PartnerLimitNotice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final loc = AppLocalizations.of(context)!;
+    final loc = AppLocalizations.of(context);
     return Padding(
       key: const Key('partner_limit_notice'),
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
@@ -409,7 +421,7 @@ class _NoteDialogState extends State<_NoteDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final loc = AppLocalizations.of(context)!;
+    final loc = AppLocalizations.of(context);
     return AlertDialog(
       title: Text(widget.confirmLabel),
       content: TextField(

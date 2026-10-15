@@ -1,8 +1,8 @@
 {
   "@@locale": "en",
   "appName": "Discover AI",
-  "bookingConfirmed": "Booking confirmed",
-  "bookingDeclined": "Booking declined",
+  "partnerBookingConfirmed": "Booking confirmed",
+  "partnerBookingDeclined": "Booking declined",
   "errorLoadForbidden": "You do not have access to the partner space.",
   "errorLoadNotFound": "Partner space not found.",
   "errorLoadNetwork": "Could not load the requests. Check your connection.",

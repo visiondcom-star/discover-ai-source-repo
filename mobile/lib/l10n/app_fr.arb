@@ -1,8 +1,8 @@
 {
   "@@locale": "fr",
   "appName": "Discover AI",
-  "bookingConfirmed": "Demande confirmée",
-  "bookingDeclined": "Demande refusée",
+  "partnerBookingConfirmed": "Demande confirmée",
+  "partnerBookingDeclined": "Demande refusée",
   "errorLoadForbidden": "Vous n'avez pas accès à l'espace partenaire.",
   "errorLoadNotFound": "Espace partenaire introuvable.",
   "errorLoadNetwork": "Impossible de charger les demandes. Vérifiez votre connexion.",

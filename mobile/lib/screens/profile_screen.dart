@@ -63,7 +63,7 @@ class ProfileScreen extends StatelessWidget {
               leading: Icon(Icons.travel_explore, color: scheme.primary),
               title: Text(loc.profileDestination),
               subtitle: Text(loc.profileDestinationHint),
-              trailing: Text(AppConfig.tenantSlug),
+              trailing: const Text(AppConfig.tenantSlug),
             ),
           ),
           const SizedBox(height: 12),

@@ -29,8 +29,8 @@ void main() {
       final store = InMemoryLocaleStore();
 
       // First pump: AuthProvider already authenticated so the screen renders
-      // past the loading splash. LocaleProvider defaults to fr (the seed
-      // tenant language) until the user taps a segment.
+      // past the loading splash. LocaleProvider defaults to fr (the device
+      // fallback while nothing is persisted) until the user taps a segment.
       final first =
           LocaleProvider(localeStore: store, deviceLocaleCode: () => 'fr');
       await first.initialized;
@@ -53,6 +53,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Sanity: rendered in French at first.
+      expect(find.text('Profil'), findsOneWidget);
       expect(find.text('Langue'), findsOneWidget);
       expect(find.text('Interface language'), findsNothing);
 
@@ -63,8 +64,10 @@ void main() {
       expect(first.localeCode, 'en', reason: 'in-memory provider switched');
       expect(store.localeCode, 'en', reason: 'setLocale persisted the choice');
       // Rendered title flipped to the EN translation.
+      expect(find.text('Profile'), findsOneWidget);
       expect(find.text('Language'), findsOneWidget);
       expect(find.text('Langue'), findsNothing);
+      expect(find.text('Profil'), findsNothing);
 
       // 2) A second pump on the same store (simulating an app restart): a
       //    fresh LocaleProvider reads 'en' from the store and exposes it
@@ -92,6 +95,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Still EN — the persisted choice won over the device fallback.
+      expect(find.text('Profile'), findsOneWidget);
       expect(find.text('Language'), findsOneWidget);
       expect(second.localeCode, 'en');
 
@@ -134,6 +138,7 @@ void main() {
 
       expect(provider.localeCode, 'fr');
       expect(store.localeCode, 'fr');
+      expect(find.text('Profil'), findsOneWidget);
       expect(find.text('Langue'), findsOneWidget);
       expect(find.text('Language'), findsNothing);
     },
@@ -152,9 +157,8 @@ class _Harness extends StatelessWidget {
     // Watch LocaleProvider so MaterialApp.locale rebuilds on setLocale —
     // same pattern as DiscoverAIApp in lib/app.dart.
     final localeProvider = context.watch<LocaleProvider>();
-    final locale = localeProvider.isLoading
-        ? null
-        : Locale(localeProvider.localeCode);
+    final locale =
+        localeProvider.isLoading ? null : Locale(localeProvider.localeCode);
     return MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,

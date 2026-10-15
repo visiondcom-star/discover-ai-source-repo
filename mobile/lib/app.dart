@@ -32,9 +32,10 @@ class DiscoverAIApp extends StatelessWidget {
       theme: tenant == null
           ? AppTheme.light()
           : AppTheme.fromTenant(primaryColor: tenant.primaryColor),
-      // i18n FR/EN (chantier i18n). Delegates + locales are additive:
-      // no screen reads AppLocalizations.of(context) yet, so existing tests
-      // are unaffected. The locale follows the user's persisted choice
+      // i18n FR/EN (chantier i18n). Delegates + locales are additive — screens
+      // that have already migrated (Profil, partner space, login, etc.) read
+      // AppLocalizations.of(context), so existing widget tests must wire the
+      // delegates. The locale follows the user's persisted choice
       // (LocaleProvider, first), then the tenant's defaultLanguage as a
       // hint while nothing is stored, then the system locale. Unsupported
       // languages never render: the lookup always lands on fr or en.
@@ -45,11 +46,20 @@ class DiscoverAIApp extends StatelessWidget {
     );
   }
 
-  /// Locale resolution. Persisted user choice first (LocaleProvider is always
-  /// present in the real app tree via appProviders); then the tenant
-  /// defaultLanguage as a pre-restore hint; then null to defer to the system
-  /// locale. Null also covers "language we do not ship" (e.g. `ar`), so the
-  /// app never renders an unsupported locale.
+  /// Locale resolution.
+  ///
+  /// Order, first hit wins:
+  /// 1. The user's persisted choice in [LocaleProvider]. Once the secure
+  ///    store read completes (isLoading flips to false), this is the
+  ///    authoritative source — it survives restarts and explicit switches.
+  /// 2. The tenant's [Tenant.defaultLanguage]. This is only consulted
+  ///    during the brief window where LocaleProvider is still loading the
+  ///    persisted choice (isLoading == true), so the first frame after
+  ///    cold start already renders in the right brand language. After the
+  ///    load completes, step 1 takes over — the tenant never silently
+  ///    flips the user's explicit choice on a tenant switch.
+  /// 3. null — defer to the system locale. Also covers "language we do not
+  ///    ship" (e.g. `ar`), so the app never renders an unsupported locale.
   Locale? _localeForTenant(Tenant? tenant, LocaleProvider? localeProvider) {
     final code = localeProvider == null || localeProvider.isLoading
         ? tenant?.defaultLanguage

@@ -21,14 +21,16 @@ class ProfileScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final user = context.watch<AuthProvider>().user;
     final scheme = Theme.of(context).colorScheme;
+    final loc = AppLocalizations.of(context);
 
     final name = user?.fullName?.trim();
-    final display =
-        (name != null && name.isNotEmpty) ? name : (user?.email ?? 'Compte');
+    final display = (name != null && name.isNotEmpty)
+        ? name
+        : (user?.email ?? loc.profileAccountFallback);
     final initial = display.isNotEmpty ? display[0].toUpperCase() : '?';
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Profil')),
+      appBar: AppBar(title: Text(loc.profileTitle)),
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
@@ -59,9 +61,9 @@ class ProfileScreen extends StatelessWidget {
             margin: EdgeInsets.zero,
             child: ListTile(
               leading: Icon(Icons.travel_explore, color: scheme.primary),
-              title: const Text('Destination'),
-              subtitle: const Text('Marché actif de l’app'),
-              trailing: const Text(AppConfig.tenantSlug),
+              title: Text(loc.profileDestination),
+              subtitle: Text(loc.profileDestinationHint),
+              trailing: Text(AppConfig.tenantSlug),
             ),
           ),
           const SizedBox(height: 12),
@@ -70,8 +72,8 @@ class ProfileScreen extends StatelessWidget {
             child: ListTile(
               enabled: false,
               leading: Icon(Icons.tune, color: scheme.onSurfaceVariant),
-              title: const Text('Préférences'),
-              subtitle: const Text('À venir — prochain incrément'),
+              title: Text(loc.profilePreferences),
+              subtitle: Text(loc.profilePreferencesHint),
             ),
           ),
           const SizedBox(height: 12),
@@ -82,8 +84,8 @@ class ProfileScreen extends StatelessWidget {
             child: ListTile(
               key: const Key('admin_research_button'),
               leading: Icon(Icons.travel_explore, color: scheme.primary),
-              title: const Text('Recherche IA — destination'),
-              subtitle: const Text('Admin : générer les catégories Niveau 2'),
+              title: Text(loc.profileAdminResearch),
+              subtitle: Text(loc.profileAdminResearchHint),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => const AdminResearchScreen(),
@@ -98,9 +100,8 @@ class ProfileScreen extends StatelessWidget {
               key: const Key('admin_collection_button'),
               leading:
                   Icon(Icons.cloud_download_outlined, color: scheme.primary),
-              title: const Text('Collecte de documents'),
-              subtitle:
-                  const Text('Admin : Wikivoyage / Wikipedia → catégories'),
+              title: Text(loc.profileAdminCollection),
+              subtitle: Text(loc.profileAdminCollectionHint),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => const AdminCollectionScreen(),
@@ -118,8 +119,8 @@ class ProfileScreen extends StatelessWidget {
                     key: const Key('partner_space_button'),
                     leading:
                         Icon(Icons.storefront_outlined, color: scheme.primary),
-                    title: const Text('Espace partenaire'),
-                    subtitle: const Text('Traiter les demandes de réservation'),
+                    title: Text(loc.profilePartnerSpace),
+                    subtitle: Text(loc.profilePartnerSpaceHint),
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute(
                         // Provider created inside the route builder: a
@@ -142,8 +143,8 @@ class ProfileScreen extends StatelessWidget {
               key: const Key('logout_button'),
               leading: Icon(Icons.logout, color: scheme.error),
               iconColor: scheme.error,
-              title:
-                  Text('Se déconnecter', style: TextStyle(color: scheme.error)),
+              title: Text(loc.profileLogout,
+                  style: TextStyle(color: scheme.error)),
               onTap: () => context.read<AuthProvider>().logout(),
             ),
           ),

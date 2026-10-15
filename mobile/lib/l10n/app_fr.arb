@@ -70,5 +70,18 @@
   "languageTitle": "Langue",
   "languageHint": "Langue de l'interface",
   "languageFrench": "Français",
-  "languageEnglish": "English"
+  "languageEnglish": "English",
+  "profileTitle": "Profil",
+  "profileAccountFallback": "Compte",
+  "profileDestination": "Destination",
+  "profileDestinationHint": "Marché actif de l'app",
+  "profilePreferences": "Préférences",
+  "profilePreferencesHint": "À venir — prochain incrément",
+  "profileAdminResearch": "Recherche IA — destination",
+  "profileAdminResearchHint": "Admin : générer les catégories Niveau 2",
+  "profileAdminCollection": "Collecte de documents",
+  "profileAdminCollectionHint": "Admin : Wikivoyage / Wikipedia → catégories",
+  "profilePartnerSpace": "Espace partenaire",
+  "profilePartnerSpaceHint": "Traiter les demandes de réservation",
+  "profileLogout": "Se déconnecter"
 }

@@ -1,7 +1,16 @@
 import 'package:discover_ai/l10n/app_localizations.dart';
+import 'package:discover_ai/l10n/app_localizations_en.dart';
 import 'package:discover_ai/providers/auth_provider.dart';
+import 'package:discover_ai/providers/booking_provider.dart';
+import 'package:discover_ai/providers/chat_provider.dart';
+import 'package:discover_ai/providers/locale_provider.dart';
+import 'package:discover_ai/providers/poi_provider.dart';
+import 'package:discover_ai/providers/promotion_provider.dart';
+import 'package:discover_ai/providers/trip_provider.dart';
+import 'package:discover_ai/screens/home_shell.dart';
 import 'package:discover_ai/screens/login_screen.dart';
 import 'package:discover_ai/services/api_service.dart';
+import 'package:discover_ai/providers/tenant_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -112,6 +121,132 @@ void main() {
     expect(ok, isTrue);
     expect(auth.loginError, isNull);
   });
+
+  testWidgets('email and password validators render EN messages', (tester) async {
+    await pumpLogin(tester, locale: const Locale('en'), failStatus: 401);
+
+    // Trigger field-level validation: empty / invalid fields.
+    await tester.enterText(find.byKey(const Key('login_email')), '');
+    await tester.enterText(find.byKey(const Key('login_password')), '');
+    await tester.tap(find.byKey(const Key('login_submit')));
+    await tester.pumpAndSettle();
+
+    // Errors come from AppLocalizationsEn, not hardcoded strings.
+    final en = AppLocalizationsEn();
+    expect(find.text(en.loginEmailInvalid), findsOneWidget);
+    expect(find.text(en.loginPasswordRequired), findsOneWidget);
+
+    // Submit stays enabled: the validation happens on the fields, not the
+    // button click.
+    expect(find.byKey(const Key('login_submit')), findsOneWidget);
+  });
+
+  testWidgets('5 shell tab labels switch to EN after locale switch',
+      (tester) async {
+    final store = InMemoryLocaleStore();
+    final first = LocaleProvider(localeStore: store, deviceLocaleCode: () => 'fr');
+    await first.initialized;
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<LocaleProvider>.value(value: first),
+          ChangeNotifierProvider<AuthProvider>(
+            create: (_) => AuthProvider(
+              api: FakeAuthApi(),
+              tokenStore: InMemoryTokenStore(),
+            )..login('user@discoverai.dz', 'secret'),
+          ),
+          ChangeNotifierProvider<POIProvider>(
+            create: (_) => POIProvider(poisApi: FakePoisApi()),
+          ),
+          ChangeNotifierProvider(create: (_) => TripProvider()),
+          ChangeNotifierProvider(create: (_) => ChatProvider()),
+          ChangeNotifierProvider<BookingProvider>(
+            create: (_) =>
+                BookingProvider(bookingsApi: FakeBookingsApi(bookings: [])),
+          ),
+          ChangeNotifierProvider<PromotionProvider>(
+            create: (_) =>
+                PromotionProvider(promotionsApi: FakePromotionsApi()),
+          ),
+          ChangeNotifierProvider<TenantProvider>(
+            create: (_) => TenantProvider(tenantsApi: FakeTenantsApi()),
+          ),
+        ],
+        child: const _Harness(child: HomeShell()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // All five tab labels are rendered in French at first.
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('tab_home')),
+        matching: find.text('Accueil'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('tab_explore')),
+        matching: find.text('Explorer'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('tab_bookings')),
+        matching: find.text('Réservations'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('tab_assistant')),
+        matching: find.text('Assistant'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('tab_profile')),
+        matching: find.text('Profil'),
+      ),
+      findsOneWidget,
+    );
+
+    // Switch to the Profil tab so the language selector is visible.
+    await tester.tap(find.byKey(const Key('tab_profile')));
+    await tester.pumpAndSettle();
+
+    // Tap EN — the whole shell rebuilds in English, including the tab labels.
+    await tester.tap(find.byKey(const Key('language_en')));
+    await tester.pumpAndSettle();
+
+    expect(first.localeCode, 'en');
+    expect(store.localeCode, 'en');
+    expect(
+      find.descendant(of: find.byKey(const Key('tab_home')), matching: find.text('Home')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: find.byKey(const Key('tab_explore')), matching: find.text('Explore')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: find.byKey(const Key('tab_bookings')), matching: find.text('Bookings')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: find.byKey(const Key('tab_assistant')), matching: find.text('Assistant')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: find.byKey(const Key('tab_profile')), matching: find.text('Profile')),
+      findsOneWidget,
+    );
+  });
 }
 
 /// AuthApi whose `login` always fails with [status]. A null [status] simulates
@@ -134,4 +269,25 @@ class _FailingAuthApi implements AuthApi {
   Future<Map<String, dynamic>> register(String email, String password,
           {String? fullName}) async =>
       throw ApiException(status, '{"detail":"nope"}');
+}
+
+/// Minimal MaterialApp wrapper used by the shell tab label tests.
+/// Equivalent to `pumpLocalized` (commit 1) but without owning a fresh
+/// LocaleProvider — the test owns its own so it can inspect state.
+class _Harness extends StatelessWidget {
+  const _Harness({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    // Watch LocaleProvider so MaterialApp.locale rebuilds on setLocale.
+    final localeProvider = context.watch<LocaleProvider>();
+    final locale = localeProvider.isLoading ? null : Locale(localeProvider.localeCode);
+    return MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: locale,
+      home: child,
+    );
+  }
 }

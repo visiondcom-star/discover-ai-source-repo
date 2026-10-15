@@ -88,7 +88,10 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     } catch (_) {
-      _loginError = AuthError.generic;
+      // Transport-level failure (no HTTP status) — e.g. SocketException,
+      // TimeoutException, DNS resolution error. Don't fall back to generic:
+      // the user's credentials weren't even the problem.
+      _loginError = AuthError.network;
       notifyListeners();
       return false;
     }

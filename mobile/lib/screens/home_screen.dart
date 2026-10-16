@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../config.dart';
+import '../l10n/app_localizations.dart';
 import '../models/user.dart';
 import '../providers/auth_provider.dart';
 import '../providers/promotion_provider.dart';
@@ -59,42 +60,55 @@ class _HomeScreenState extends State<HomeScreen> {
     'nightlife': Icons.nightlife_outlined,
   };
 
-  /// Labels for tourist categories.
-  static const Map<String, String> _typeLabels = {
-    'culture': 'Culture & Médinas',
-    'history': 'Histoire & Antiquité',
-    'nature': 'Nature & Parcs',
-    'desert': 'Sahara & Oasis',
-    'adventure': 'Aventure & Trek',
-    'food': 'Gastronomie',
-    'beaches': 'Plages & Mer',
-    'monuments': 'Monuments & Sites',
-    'crafts': 'Artisanat & Souks',
-    'thermal': 'Thermalisme',
-    'wellness': 'Détente & Hammam',
-  };
-
   /// First name for the greeting: full name if present, else the email
-  /// local part, else a neutral fallback — never a hardcoded market name.
-  static String _firstName(User? user) {
+  /// local part, else [fallback] — never a hardcoded market name.
+  static String _firstName(User? user, String fallback) {
     final name = user?.fullName?.trim();
     if (name != null && name.isNotEmpty) {
       return name.split(RegExp(r'\s+')).first;
     }
     final local = (user?.email ?? '').split('@').first.trim();
-    return local.isEmpty ? 'voyageur' : local;
+    return local.isEmpty ? fallback : local;
   }
 
-  /// Catalog values are lowercase slugs ('food'); display them with their
-  /// tourist label without altering the value sent to the API.
-  static String _typeLabel(String interest) =>
-      _typeLabels[interest] ??
-      (interest.isEmpty
-          ? interest
-          : interest[0].toUpperCase() + interest.substring(1));
+  /// Localized label for a catalog slug. Known slugs map to their
+  /// [AppLocalizations] key; unknown slugs keep the historical fallback
+  /// (capitalised slug), so any tenant catalog renders — the value sent to
+  /// the API is never altered.
+  static String _typeLabel(AppLocalizations loc, String interest) {
+    switch (interest) {
+      case 'culture':
+        return loc.homeTravelTypeCulture;
+      case 'history':
+        return loc.homeTravelTypeHistory;
+      case 'nature':
+        return loc.homeTravelTypeNature;
+      case 'desert':
+        return loc.homeTravelTypeDesert;
+      case 'adventure':
+        return loc.homeTravelTypeAdventure;
+      case 'food':
+        return loc.homeTravelTypeFood;
+      case 'beaches':
+        return loc.homeTravelTypeBeaches;
+      case 'monuments':
+        return loc.homeTravelTypeMonuments;
+      case 'crafts':
+        return loc.homeTravelTypeCrafts;
+      case 'thermal':
+        return loc.homeTravelTypeThermal;
+      case 'wellness':
+        return loc.homeTravelTypeWellness;
+      default:
+        return interest.isEmpty
+            ? interest
+            : interest[0].toUpperCase() + interest.substring(1);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     final user = context.watch<AuthProvider>().user;
     final promotions = context.watch<PromotionProvider>().items;
     final scheme = Theme.of(context).colorScheme;
@@ -109,23 +123,23 @@ class _HomeScreenState extends State<HomeScreen> {
         ? categories.map((c) => c.slug).toList(growable: false)
         : AppConfig.tripInterestOptions;
     return Scaffold(
-      appBar: AppBar(title: const Text('Discover AI')),
+      appBar: AppBar(title: Text(loc.appName)),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
         children: [
           Text(
-            'Bonjour, ${_firstName(user)} 👋',
+            loc.homeGreeting(_firstName(user, loc.homeTravellerFallback)),
             key: const Key('home_greeting'),
             style: text.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 4),
           Text(
-            'Que souhaitez-vous découvrir aujourd’hui ?',
+            loc.homeSubtitle,
             style: text.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
           ),
           const SizedBox(height: 20),
           Text(
-            'Type de voyage',
+            loc.homeTravelTypeTitle,
             style: text.titleMedium?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 12),
@@ -141,7 +155,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 _TravelTypeCard(
                   key: Key('home_type_$interest'),
                   icon: _typeIcons[interest] ?? Icons.local_activity_outlined,
-                  label: _typeLabel(interest),
+                  label: _typeLabel(loc, interest),
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (_) =>
@@ -161,8 +175,8 @@ class _HomeScreenState extends State<HomeScreen> {
             child: ListTile(
               key: const Key('home_plan_trip_button'),
               leading: Icon(Icons.map_outlined, color: scheme.primary),
-              title: const Text('Planifier un voyage'),
-              subtitle: const Text('Générez un itinéraire personnalisé'),
+              title: Text(loc.homePlanTripTitle),
+              subtitle: Text(loc.homePlanTripSubtitle),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const TripFormScreen()),
@@ -175,8 +189,8 @@ class _HomeScreenState extends State<HomeScreen> {
             child: ListTile(
               key: const Key('home_explore_button'),
               leading: Icon(Icons.explore_outlined, color: scheme.primary),
-              title: const Text('Explorer les lieux'),
-              subtitle: const Text('Les incontournables de votre destination'),
+              title: Text(loc.homeExploreTitle),
+              subtitle: Text(loc.homeExploreSubtitle),
               trailing: const Icon(Icons.chevron_right),
               onTap: widget.onExplore,
             ),

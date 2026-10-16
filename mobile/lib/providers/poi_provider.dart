@@ -5,6 +5,19 @@ import 'package:flutter/foundation.dart';
 import '../models/poi.dart';
 import '../services/api_service.dart';
 
+/// Locale-agnostic failure codes for the last POI fetch. The provider has no
+/// `BuildContext`, so it never renders text itself — the screen maps these
+/// to localized strings via `AppLocalizations` (same contract as
+/// [AuthError] / [PartnerBookingError]).
+enum POIError {
+  /// Transport-level failure (no HTTP status): SocketException,
+  /// TimeoutException, DNS resolution error…
+  network,
+
+  /// Any other server error (5xx, unexpected payload shape).
+  generic,
+}
+
 /// POI list state. The API seam is injectable so tests run without network.
 ///
 /// Search contract (Explorer live search): [updateSearch] debounces
@@ -20,14 +33,17 @@ class POIProvider extends ChangeNotifier {
 
   List<POI> _items = [];
   bool _isLoading = false;
-  String? _error;
+  POIError? _error;
   String _searchQuery = '';
   Timer? _debounce;
   int _seq = 0;
 
   List<POI> get items => _items;
   bool get isLoading => _isLoading;
-  String? get error => _error;
+
+  /// Code for the last failed fetch (null on success). The screen turns it
+  /// into a localized message — the provider stays text-free.
+  POIError? get error => _error;
 
   /// Currently active search term (empty when showing the full list).
   String get searchQuery => _searchQuery;
@@ -88,9 +104,14 @@ class POIProvider extends ChangeNotifier {
       _items = (data['items'] as List? ?? [])
           .map((e) => POI.fromJson(Map<String, dynamic>.from(e as Map)))
           .toList();
-    } catch (e) {
+    } on ApiException catch (e) {
       if (seq != _seq) return; // stale failure — discard silently
-      _error = e.toString();
+      _error = e.statusCode == null ? POIError.network : POIError.generic;
+    } catch (_) {
+      if (seq != _seq) return; // stale failure — discard silently
+      // Transport-level failure (no HTTP status): SocketException,
+      // TimeoutException… — never a payload problem.
+      _error = POIError.network;
     }
     if (seq != _seq) return;
     _isLoading = false;

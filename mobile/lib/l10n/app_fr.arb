@@ -96,5 +96,83 @@
   "profileAdminCollectionHint": "Admin : Wikivoyage / Wikipedia → catégories",
   "profilePartnerSpace": "Espace partenaire",
   "profilePartnerSpaceHint": "Traiter les demandes de réservation",
-  "profileLogout": "Se déconnecter"
+  "profileLogout": "Se déconnecter",
+  "homeGreeting": "Bonjour, {name} 👋",
+  "@homeGreeting": {
+    "description": "Personalised greeting on the Accueil tab. {name} is the first name, the email local part, or homeTravellerFallback.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "homeTravellerFallback": "voyageur",
+  "homeSubtitle": "Que souhaitez-vous découvrir aujourd’hui ?",
+  "homeTravelTypeTitle": "Type de voyage",
+  "homePlanTripTitle": "Planifier un voyage",
+  "homePlanTripSubtitle": "Générez un itinéraire personnalisé",
+  "homeExploreTitle": "Explorer les lieux",
+  "homeExploreSubtitle": "Les incontournables de votre destination",
+  "homeTravelTypeCulture": "Culture & Médinas",
+  "homeTravelTypeHistory": "Histoire & Antiquité",
+  "homeTravelTypeNature": "Nature & Parcs",
+  "homeTravelTypeDesert": "Sahara & Oasis",
+  "homeTravelTypeAdventure": "Aventure & Trek",
+  "homeTravelTypeFood": "Gastronomie",
+  "homeTravelTypeBeaches": "Plages & Mer",
+  "homeTravelTypeMonuments": "Monuments & Sites",
+  "homeTravelTypeCrafts": "Artisanat & Souks",
+  "homeTravelTypeThermal": "Thermalisme",
+  "homeTravelTypeWellness": "Détente & Hammam",
+  "poiListShowMap": "Afficher la carte",
+  "poiListPlanTrip": "Planifier un voyage",
+  "poiListSearchHint": "Rechercher des lieux, des villes…",
+  "poiListClearSearch": "Effacer la recherche",
+  "poiListNoResults": "Aucun résultat pour « {query} ».",
+  "@poiListNoResults": {
+    "description": "Empty search state of the Explorer list. {query} is the active search term.",
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "poiListEmpty": "Aucun lieu pour le moment.",
+  "poiListErrorNetwork": "Impossible de charger les lieux. Vérifiez votre connexion.",
+  "poiListErrorGeneric": "Une erreur est survenue. Réessayez.",
+  "poiDetailVerified": "Vérifié",
+  "poiDetailReviews": "{count, plural, =1{({count} avis)} other{({count} avis)}}",
+  "@poiDetailReviews": {
+    "description": "Review counter on the place detail. {count} is the review count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "poiDetailDuration": "Durée",
+  "poiDetailPrice": "Prix",
+  "poiDetailAddress": "Adresse",
+  "poiDurationMinutes": "{minutes} min",
+  "@poiDurationMinutes": {
+    "description": "Duration unit shared by the place card and the place detail. {minutes} is the duration in minutes.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "poiDetailAbout": "À propos",
+  "poiDetailTags": "Tags",
+  "poiDetailAccessibility": "Accessibilité",
+  "poiDetailOpeningHours": "Horaires",
+  "poiDetailPlanVisit": "Planifier une visite",
+  "poiDetailBook": "Réserver",
+  "poiDetailPayOnSite": "Paiement sur place",
+  "poiDetailProviderConfirmation": "Confirmation par le prestataire",
+  "poiDetailInfoOnly": "Information uniquement — réservation indisponible",
+  "poiDetailBookingSoon": "Réservation en ligne bientôt disponible",
+  "poiMapTitle": "Carte",
+  "poiMapEmpty": "Aucun lieu géolocalisé pour le moment.",
+  "poiMapViewDetails": "Voir les détails"
 }

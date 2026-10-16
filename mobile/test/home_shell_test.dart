@@ -11,6 +11,7 @@ import 'package:discover_ai/providers/promotion_provider.dart';
 import 'package:discover_ai/providers/trip_provider.dart';
 import 'package:discover_ai/providers/tenant_provider.dart';
 import 'package:discover_ai/l10n/app_localizations.dart';
+import 'package:discover_ai/screens/home_screen.dart';
 import 'package:discover_ai/screens/home_shell.dart';
 
 import 'helpers/fakes.dart';
@@ -19,7 +20,7 @@ import 'helpers/fakes.dart';
 /// (IndexedStack) and expose the stable `tab_*` Keys used by the
 /// integration suite for navigation.
 void main() {
-  Widget boot() => MultiProvider(
+  Widget boot({Locale locale = const Locale('fr')}) => MultiProvider(
         providers: [
           ChangeNotifierProvider<AuthProvider>(
             create: (_) => AuthProvider(
@@ -55,10 +56,11 @@ void main() {
             create: (_) => LocaleProvider(localeStore: InMemoryLocaleStore()),
           ),
         ],
-        child: const MaterialApp(
+        child: MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
-          home: HomeShell(),
+          locale: locale,
+          home: const HomeShell(),
         ),
       );
 
@@ -140,5 +142,96 @@ void main() {
             )
             .selected,
         isFalse);
+  });
+
+  testWidgets('Accueil renders its FR strings after the i18n migration',
+      (tester) async {
+    // The boot() harness defaults to locale 'fr' — this covers every
+    // migrated Accueil label in its reference language. The ListView only
+    // builds visible items, so the lower cards need a scroll first.
+    await tester.pumpWidget(boot());
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bonjour, voyageur 👋'), findsOneWidget);
+    expect(find.text('Que souhaitez-vous découvrir aujourd’hui ?'),
+        findsOneWidget);
+    expect(find.text('Type de voyage'), findsOneWidget);
+    expect(find.text('Culture & Médinas'), findsOneWidget);
+    // The ListView only builds visible items: drag the Accueil tab's own
+    // Scrollable up until the lower card is constructed, then assert.
+    // The ListTile key propagates to its internal nodes, so match .first.
+    Future<void> revealLowerCards() async {
+      final scrollable = find.descendant(
+        of: find.byType(HomeScreen),
+        matching: find.byType(Scrollable),
+      );
+      for (var i = 0; i < 10; i++) {
+        await tester.drag(scrollable.first, const Offset(0, -300));
+        await tester.pumpAndSettle();
+        if (find
+            .text('Planifier un voyage')
+            .evaluate()
+            .isNotEmpty) {
+          break;
+        }
+      }
+    }
+
+    await revealLowerCards();
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('home_plan_trip_button')).first,
+        matching: find.text('Planifier un voyage'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('home_explore_button')).first,
+        matching: find.text('Explorer les lieux'),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('Accueil renders its EN strings after the i18n migration',
+      (tester) async {
+    await tester.pumpWidget(boot(locale: const Locale('en')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Hello, traveller 👋'), findsOneWidget);
+    expect(find.text('What would you like to discover today?'),
+        findsOneWidget);
+    expect(find.text('Travel type'), findsOneWidget);
+    expect(find.text('Culture & medinas'), findsOneWidget);
+    Future<void> revealLowerCardsEn() async {
+      final scrollable = find.descendant(
+        of: find.byType(HomeScreen),
+        matching: find.byType(Scrollable),
+      );
+      for (var i = 0; i < 10; i++) {
+        await tester.drag(scrollable.first, const Offset(0, -300));
+        await tester.pumpAndSettle();
+        if (find.text('Plan a trip').evaluate().isNotEmpty) {
+          break;
+        }
+      }
+    }
+
+    await revealLowerCardsEn();
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('home_plan_trip_button')).first,
+        matching: find.text('Plan a trip'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('home_explore_button')).first,
+        matching: find.text('Explore places'),
+      ),
+      findsOneWidget,
+    );
   });
 }

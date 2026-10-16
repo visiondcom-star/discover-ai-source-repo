@@ -104,12 +104,14 @@ void main() {
       expect(provider.error, isNull);
     });
 
-    test('API failures surface as an error message', () async {
+    test('API failures surface as a POIError code', () async {
       final provider = POIProvider(poisApi: _ThrowingPoisApi());
       await provider.loadPOIs();
 
       expect(provider.items, isEmpty);
-      expect(provider.error, contains('boom'));
+      expect(provider.error, POIError.generic,
+          reason:
+              'ApiException(500) carries a status code → generic bucket, never raw text');
       expect(provider.isLoading, isFalse);
     });
   });

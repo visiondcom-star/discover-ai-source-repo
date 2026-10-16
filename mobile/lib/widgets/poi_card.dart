@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/poi.dart';
 
 /// Reusable POI card — the mobile equivalent of the web `POICard.tsx`.
@@ -26,6 +27,7 @@ class POICard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: ListTile(
@@ -41,7 +43,8 @@ class POICard extends StatelessWidget {
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('${poi.city} • ${poi.durationMinutes} min'),
+            Text(
+                '${poi.city} • ${loc.poiDurationMinutes(poi.durationMinutes)}'),
             if (poi.categories.isNotEmpty) ...[
               const SizedBox(height: 4),
               Wrap(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
+import 'package:discover_ai/l10n/app_localizations.dart';
 import 'package:discover_ai/models/poi.dart';
 import 'package:discover_ai/providers/auth_provider.dart';
 import 'package:discover_ai/providers/tenant_provider.dart';
@@ -57,7 +58,34 @@ void main() {
             create: (_) => TenantProvider(tenantsApi: FakeTenantsApi()),
           ),
         ],
-        child: MaterialApp(home: PoiDetailScreen(poi: poi)),
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('en'),
+          home: PoiDetailScreen(poi: poi),
+        ),
+      );
+
+  /// Idem wrap(), mais avec la locale FR pour couvrir les chaînes migrées.
+  Widget wrapFr(POI poi) => MultiProvider(
+        providers: [
+          ChangeNotifierProvider<AuthProvider>(
+            create: (_) => AuthProvider(
+              api: FakeAuthApi(),
+              tokenStore: InMemoryTokenStore(),
+            ),
+          ),
+          ChangeNotifierProvider<TripProvider>(create: (_) => TripProvider()),
+          ChangeNotifierProvider<TenantProvider>(
+            create: (_) => TenantProvider(tenantsApi: FakeTenantsApi()),
+          ),
+        ],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('fr'),
+          home: PoiDetailScreen(poi: poi),
+        ),
       );
 
   testWidgets('renders every section the backend provides', (tester) async {
@@ -142,5 +170,38 @@ void main() {
     expect(find.byKey(const Key('poi_detail_book_button')), findsOneWidget);
     expect(find.byKey(const Key('poi_detail_info_only')), findsNothing);
     expect(find.byKey(const Key('poi_detail_booking_soon')), findsNothing);
+  });
+
+  testWidgets('POI détail rend ses chaînes FR après la migration i18n',
+      (tester) async {
+    await tester.pumpWidget(wrapFr(poi(
+      description: 'Une médina classée UNESCO surplombant la baie.',
+      tags: const ['unesco', 'médina'],
+      accessibility: const ['rampe pour fauteuil roulant'],
+      openingHours: const {'Lun-Dim': '09:00-17:00'},
+      address: 'Rue Djamaa el Djedid',
+      rating: 4.5,
+      verified: true,
+    )));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('poi_detail_screen')), findsOneWidget);
+    expect(find.byKey(const Key('poi_detail_name')), findsOneWidget);
+    expect(find.text('Casbah of Algiers'), findsWidgets);
+    expect(find.byKey(const Key('poi_detail_rating')), findsOneWidget);
+    expect(find.text('4.5'), findsOneWidget);
+    expect(find.text('(12 avis)'), findsOneWidget);
+    expect(find.text('Durée'), findsOneWidget);
+    expect(find.text('90 min'), findsOneWidget);
+    expect(find.text('Prix'), findsOneWidget);
+    expect(find.text('free'), findsOneWidget);
+    expect(find.text('Vérifié'), findsOneWidget);
+    expect(find.byKey(const Key('poi_detail_description')), findsOneWidget);
+    expect(find.text('unesco'), findsOneWidget);
+    expect(find.text('rampe pour fauteuil roulant'), findsOneWidget);
+    expect(find.byKey(const Key('poi_detail_hours')), findsOneWidget);
+    expect(find.text('09:00-17:00'), findsOneWidget);
+    expect(find.byKey(const Key('poi_detail_plan_button')), findsOneWidget);
+    expect(find.text('Planifier une visite'), findsOneWidget);
   });
 }

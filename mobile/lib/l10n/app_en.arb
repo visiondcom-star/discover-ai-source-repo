@@ -96,5 +96,83 @@
   "profileAdminCollectionHint": "Admin: Wikivoyage / Wikipedia → categories",
   "profilePartnerSpace": "Partner space",
   "profilePartnerSpaceHint": "Handle booking requests",
-  "profileLogout": "Log out"
+  "profileLogout": "Log out",
+  "homeGreeting": "Hello, {name} 👋",
+  "@homeGreeting": {
+    "description": "Personalised greeting on the Accueil tab. {name} is the first name, the email local part, or homeTravellerFallback.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "homeTravellerFallback": "traveller",
+  "homeSubtitle": "What would you like to discover today?",
+  "homeTravelTypeTitle": "Travel type",
+  "homePlanTripTitle": "Plan a trip",
+  "homePlanTripSubtitle": "Generate a personalised itinerary",
+  "homeExploreTitle": "Explore places",
+  "homeExploreSubtitle": "The highlights of your destination",
+  "homeTravelTypeCulture": "Culture & medinas",
+  "homeTravelTypeHistory": "History & antiquity",
+  "homeTravelTypeNature": "Nature & parks",
+  "homeTravelTypeDesert": "Sahara & oases",
+  "homeTravelTypeAdventure": "Adventure & trek",
+  "homeTravelTypeFood": "Gastronomy",
+  "homeTravelTypeBeaches": "Beaches & sea",
+  "homeTravelTypeMonuments": "Monuments & sites",
+  "homeTravelTypeCrafts": "Crafts & souks",
+  "homeTravelTypeThermal": "Thermalism",
+  "homeTravelTypeWellness": "Relaxation & hammam",
+  "poiListShowMap": "Show map",
+  "poiListPlanTrip": "Plan a trip",
+  "poiListSearchHint": "Search places, cities…",
+  "poiListClearSearch": "Clear search",
+  "poiListNoResults": "No results for “{query}”.",
+  "@poiListNoResults": {
+    "description": "Empty search state of the Explorer list. {query} is the active search term.",
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "poiListEmpty": "No places yet.",
+  "poiListErrorNetwork": "Could not load places. Check your connection.",
+  "poiListErrorGeneric": "Something went wrong. Try again.",
+  "poiDetailVerified": "Verified",
+  "poiDetailReviews": "{count, plural, =1{({count} review)} other{({count} reviews)}}",
+  "@poiDetailReviews": {
+    "description": "Review counter on the place detail. {count} is the review count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "poiDetailDuration": "Duration",
+  "poiDetailPrice": "Price",
+  "poiDetailAddress": "Address",
+  "poiDurationMinutes": "{minutes} min",
+  "@poiDurationMinutes": {
+    "description": "Duration unit shared by the place card and the place detail. {minutes} is the duration in minutes.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "poiDetailAbout": "About",
+  "poiDetailTags": "Tags",
+  "poiDetailAccessibility": "Accessibility",
+  "poiDetailOpeningHours": "Opening hours",
+  "poiDetailPlanVisit": "Plan a visit",
+  "poiDetailBook": "Book",
+  "poiDetailPayOnSite": "Pay on site",
+  "poiDetailProviderConfirmation": "Confirmation by the provider",
+  "poiDetailInfoOnly": "Information only — booking not available",
+  "poiDetailBookingSoon": "Online booking coming soon",
+  "poiMapTitle": "Map",
+  "poiMapEmpty": "No geolocated places yet.",
+  "poiMapViewDetails": "View details"
 }

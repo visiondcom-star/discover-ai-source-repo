@@ -174,5 +174,132 @@
   "poiDetailBookingSoon": "Online booking coming soon",
   "poiMapTitle": "Map",
   "poiMapEmpty": "No geolocated places yet.",
-  "poiMapViewDetails": "View details"
+  "poiMapViewDetails": "View details",
+  "bookingsTitle": "Bookings",
+  "bookingsLoadErrorNetwork": "Could not load your bookings. Check your connection.",
+  "bookingsLoadErrorGeneric": "Could not load your bookings. Try again.",
+  "bookingsRetry": "Retry",
+  "bookingsEmpty": "No bookings yet",
+  "bookingsEmptyHint":
+      "Book a hotel, a table or a visit from a place page — every step asks for your explicit confirmation.",
+  "bookingStatusPendingConsent": "Awaiting your confirmation",
+  "bookingStatusAwaitingPartner": "Awaiting the provider",
+  "bookingStatusDeclined": "Declined by the provider",
+  "bookingStatusExpired": "Request expired",
+  "bookingPartnerLabel": "Provider: {provider}",
+  "bookingPrice": "{price} {currency}",
+  "@bookingPrice": {
+    "description": "Price on the booking card. {price} is the numeric price, {currency} is the currency code.",
+    "placeholders": {
+      "price": {
+        "type": "num"
+      },
+      "currency": {
+        "type": "String"
+      }
+    }
+  },
+  "@bookingPartnerLabel": {
+    "description":
+        "Provider label on the booking card. {provider} is the adapter type (hotel, restaurant…).",
+    "placeholders": {
+      "provider": {
+        "type": "String"
+      }
+    }
+  },
+  "bookingRespondBy": "Answer expected by {date}",
+  "@bookingRespondBy": {
+    "description":
+        "Reply-by deadline on the booking card. {date} is the formatted date (locale-aware).",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "bookingAwaitingConfirmBefore": "The provider must confirm before {date}",
+  "@bookingAwaitingConfirmBefore": {
+    "description":
+        "Deadline text shown while the request is awaiting the partner. {date} is the formatted deadline.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "bookingAwaitingConfirm": "The provider must confirm your request",
+  "bookingAwaitingPartner": "Awaiting the provider",
+  "bookingAwaitingPartnerBy": "Confirmation expected by {date}",
+  "@bookingAwaitingPartnerBy": {
+    "description":
+        "Deadline text shown while awaiting the partner. {date} is the formatted deadline.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "bookingPartnerNote": "Message from the provider: {note}",
+  "@bookingPartnerNote": {
+    "description":
+        "Partner's note on a declined booking. {note} is the backend note.",
+    "placeholders": {
+      "note": {
+        "type": "String"
+      }
+    }
+  },
+  "bookingExpiredHint": "The provider did not answer in time. You can send a new request.",
+  "bookingConfirmAction": "Confirm",
+  "bookingCancelAction": "Cancel",
+  "bookingRefuseAction": "Decline",
+  "bookingConsentTitle": "Confirm the booking",
+  "bookingConsentManualConfirm":
+      "Your request will be sent to the provider, who must confirm it.",
+  "bookingConsentExternalRef":
+      "By confirming, the Booking-Agent generates an external reference (EXT-…). Without confirmation, the booking has no effect and will be cancelled.",
+  "bookingRequestedSnackbar": "Request sent to the provider",
+  "bookingSheetTitle": "Book — {name}",
+  "@bookingSheetTitle": {
+    "description": "Bottom-sheet title for the booking flow. {name} is the POI label.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "bookingSheetPendingHint":
+      "The booking is created as pending: it only becomes firm after your explicit confirmation.",
+  "bookingAdaptersError": "Could not load providers",
+  "bookingAdaptersEmpty": "No provider available right now",
+  "bookingCreateAction": "Create booking",
+  "bookingCreatingAction": "Creating…",
+  "bookingAdapterHotel": "Hotel",
+  "bookingAdapterRestaurant": "Restaurant",
+  "bookingAdapterTour": "Guided tour",
+  "bookingAdapterTransport": "Transport",
+  "bookingDatePick": "Pick a date",
+  "bookingDateLabel": "Date: {date}",
+  "@bookingDateLabel": {
+    "description": "Date field label. {date} is the formatted picked date.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "bookingGuests": "Guests",
+  "bookingRemoveGuest": "Remove a guest",
+  "bookingAddGuest": "Add a guest",
+  "bookingNotesLabel": "Notes (optional)",
+  "bookingNotesHelper": "Do not enter any email address or phone number.",
+  "bookingErrorConflict":
+      "This request was already sent with different details. Reopen the window and try again.",
+  "bookingErrorUnavailable": "Booking is not available for this place.",
+  "bookingErrorNetwork": "Could not send the booking. Check your connection.",
+  "bookingErrorGeneric": "The booking failed. Try again in a moment.",
+  "bookingCancelErrorNotCancellable": "This booking can no longer be cancelled.",
+  "bookingCancelErrorNetwork": "Could not cancel the booking. Check your connection.",
+  "bookingCancelErrorGeneric": "The cancellation failed. Try again in a moment."
 }

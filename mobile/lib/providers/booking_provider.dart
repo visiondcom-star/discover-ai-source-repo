@@ -5,32 +5,89 @@ import '../models/booking_details.dart';
 import '../services/api_service.dart';
 import '../utils/idempotency.dart';
 
-/// Human-readable message for a failed booking creation. The 409 case can
-/// only happen when an idempotency key was reused with a different payload
-/// (e.g. the user switched adapter mid-retry) — the sheet must be reopened
-/// with a fresh key. 422 covers `info_only` and the not-yet-supported modes
-/// (deposit / online_payment) refused by the backend.
-String bookingErrorMessage(ApiException e) {
+/// Locale-agnostic failure codes for the initial listings (bookings list /
+/// adapters). The provider has no `BuildContext`, so it never renders text
+/// itself — the screen maps these to localized strings via
+/// `AppLocalizations` (same contract as [POIError] / [AuthError] /
+/// [PartnerBookingError]).
+enum BookingLoadError {
+  /// Transport-level failure (no HTTP status): SocketException,
+  /// TimeoutException, DNS resolution error…
+  network,
+
+  /// Any other server error (5xx, unexpected payload shape).
+  generic,
+}
+
+/// Locale-agnostic failure codes for the booking actions. The provider has
+/// no `BuildContext`, so it never renders text itself — the screen maps these
+/// to localized strings via `AppLocalizations` (same contract as [POIError] /
+/// [AuthError] / [PartnerBookingError]).
+enum BookingError {
+  /// 409 — an idempotency key was reused with a different payload (e.g. the
+  /// user switched adapter mid-retry). The sheet must mint a fresh key.
+  conflict,
+
+  /// 422 — the place is not bookable (`info_only`) or the mode is not
+  /// supported yet (deposit / online_payment) and was refused by the backend.
+  unavailable,
+
+  /// Transport-level failure (no HTTP status): SocketException,
+  /// TimeoutException, DNS resolution error…
+  network,
+
+  /// Any other server error (5xx, unexpected payload shape).
+  generic,
+}
+
+/// Maps a failed listing call to a locale-agnostic code.
+BookingLoadError _loadErrorCode(Object e) => e is ApiException
+    ? (e.statusCode == null ? BookingLoadError.network : BookingLoadError.generic)
+    : BookingLoadError.network;
+
+/// Maps a failed create/consent call to a locale-agnostic code.
+///
+/// The 409 case can only happen when an idempotency key was reused with a
+/// different payload (e.g. the user switched adapter mid-retry) — the sheet
+/// must be reopened with a fresh key. 422 covers `info_only` and the
+/// not-yet-supported modes (deposit / online_payment) refused by the backend.
+BookingError _bookingErrorCode(ApiException e) {
   switch (e.statusCode) {
     case 409:
-      return "Cette demande a déjà été envoyée avec des informations "
-          "différentes. Rouvrez la fenêtre et réessayez.";
+      return BookingError.conflict;
     case 422:
-      return "La réservation n'est pas disponible pour ce lieu.";
+      return BookingError.unavailable;
     default:
-      return "La réservation a échoué. Réessayez dans un instant.";
+      return e.statusCode == null ? BookingError.network : BookingError.generic;
   }
 }
 
-/// Human-readable message for a failed cancellation. 409 means the booking
-/// left the cancellable window (backend: cancel refused from declined /
-/// expired / cancelled) — the UI must not offer a retry. Kept separate from
-/// [bookingErrorMessage] so the creation cases (409/422) stay untouched.
-String cancelErrorMessage(ApiException e) {
-  if (e.statusCode == 409) {
-    return 'Cette réservation ne peut plus être annulée.';
-  }
-  return "L'annulation a échoué. Réessayez dans un instant.";
+/// Maps a failed cancellation to a locale-agnostic code.
+///
+/// 409 means the booking left the cancellable window (backend: cancel refused
+/// from declined / expired / cancelled) — the UI must not offer a retry.
+BookingCancelError _cancelErrorCode(ApiException e) {
+  if (e.statusCode == 409) return BookingCancelError.notCancellable;
+  return e.statusCode == null
+      ? BookingCancelError.network
+      : BookingCancelError.generic;
+}
+
+/// Locale-agnostic failure codes for a refused cancellation.
+///
+/// Kept separate from [BookingError] so the creation cases (409/422) stay
+/// untouched: a 409 here means the booking left the cancellable window
+/// (backend: cancel refused from declined / expired / cancelled) — the UI
+/// must not offer a retry.
+enum BookingCancelError {
+  /// 409 — the booking can no longer be cancelled.
+  notCancellable,
+
+  /// Transport-level failure (no HTTP status).
+  network,
+
+  /// Any other server error (5xx, unknown).
+  generic,
 }
 
 /// Booking state, mirroring the backend consent flow exactly:
@@ -47,8 +104,9 @@ class BookingProvider extends ChangeNotifier {
   Map<String, Map<String, dynamic>> _adapters = {};
   bool _isLoading = false;
   bool _isActing = false;
-  String? _error;
-  String? _actionError;
+  BookingLoadError? _loadError;
+  BookingError? _actionError;
+  BookingCancelError? _cancelError;
   int? _actionStatusCode;
 
   /// Idempotency state of the last create attempt: the key sent and the
@@ -65,8 +123,18 @@ class BookingProvider extends ChangeNotifier {
   Map<String, Map<String, dynamic>> get adapters => _adapters;
   bool get isLoading => _isLoading;
   bool get isActing => _isActing;
-  String? get error => _error;
-  String? get actionError => _actionError;
+
+  /// Code for the last failed listing (null on success). The screen turns it
+  /// into a localized message — the provider stays text-free.
+  BookingLoadError? get loadError => _loadError;
+
+  /// Code for the last failed create/consent action (null on success). The
+  /// screen turns it into a localized message — the provider stays text-free.
+  BookingError? get actionError => _actionError;
+
+  /// Code for the last failed cancellation (null on success). Kept apart from
+  /// [actionError] so the two flows never share a message.
+  BookingCancelError? get cancelError => _cancelError;
 
   /// HTTP status of the last failed action (ApiException only) — lets the
   /// booking sheet decide whether an idempotency key is still valid
@@ -79,14 +147,14 @@ class BookingProvider extends ChangeNotifier {
   Future<void> loadBookings({bool silent = false}) async {
     if (!silent) {
       _isLoading = true;
-      _error = null;
+      _loadError = null;
       notifyListeners();
     }
     try {
       final data = await _api.listBookings();
       _items = data.map(Booking.fromJson).toList();
     } catch (e) {
-      if (!silent) _error = e.toString();
+      if (!silent) _loadError = _loadErrorCode(e);
     }
     _isLoading = false;
     notifyListeners();
@@ -94,7 +162,7 @@ class BookingProvider extends ChangeNotifier {
 
   /// Mirrors GET /bookings/adapters/available.
   Future<void> loadAdapters() async {
-    _error = null;
+    _loadError = null;
     notifyListeners();
     try {
       final data = await _api.listAdapters();
@@ -102,7 +170,7 @@ class BookingProvider extends ChangeNotifier {
       _adapters = raw.map<String, Map<String, dynamic>>(
           (k, v) => MapEntry(k as String, Map<String, dynamic>.from(v as Map)));
     } catch (e) {
-      _error = e.toString();
+      _loadError = _loadErrorCode(e);
     }
     notifyListeners();
   }
@@ -167,17 +235,17 @@ class BookingProvider extends ChangeNotifier {
       _lastCreateSignature = null;
     } on ApiException catch (e) {
       _actionStatusCode = e.statusCode;
-      _actionError = bookingErrorMessage(e);
+      _actionError = _bookingErrorCode(e);
       // 409/422 means the backend rejected this attempt's key or body: the
       // next try must be a fresh attempt, never the same key again.
       if (e.statusCode == 409 || e.statusCode == 422) {
         _lastIdempotencyKey = null;
         _lastCreateSignature = null;
       }
-    } catch (e) {
-      _actionError = e.toString();
+    } catch (_) {
       // Transport failure: keep the key and its signature so the next tap
       // replays instead of creating a second booking.
+      _actionError = BookingError.network;
     }
     _isActing = false;
     notifyListeners();
@@ -194,8 +262,10 @@ class BookingProvider extends ChangeNotifier {
     try {
       final json = await _api.giveConsent(booking.id, consent: consent);
       updated = Booking.fromJson(json);
-    } catch (e) {
-      _actionError = e.toString();
+    } on ApiException catch (e) {
+      _actionError = _bookingErrorCode(e);
+    } catch (_) {
+      _actionError = BookingError.network;
     }
     _isActing = false;
     final u = updated;
@@ -214,15 +284,16 @@ class BookingProvider extends ChangeNotifier {
   Future<Booking?> cancelBooking(Booking booking) async {
     _isActing = true;
     _actionError = null;
+    _cancelError = null;
     notifyListeners();
     Booking? updated;
     try {
       final json = await _api.cancelBooking(booking.id);
       updated = Booking.fromJson(json);
     } on ApiException catch (e) {
-      _actionError = cancelErrorMessage(e);
-    } catch (e) {
-      _actionError = e.toString();
+      _cancelError = _cancelErrorCode(e);
+    } catch (_) {
+      _cancelError = BookingCancelError.network;
     }
     _isActing = false;
     final u = updated;

@@ -1,3 +1,4 @@
+import 'package:discover_ai/models/booking.dart';
 import 'package:discover_ai/providers/booking_provider.dart';
 import 'package:discover_ai/services/api_service.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -24,26 +25,50 @@ void main() {
         reason: 'the provider must never force confirmed');
   });
 
-  test('cancelErrorMessage maps 409 to the dedicated cancellation copy', () {
-    expect(
-      cancelErrorMessage(
-          ApiException(409, '{"detail":"Booking cannot be cancelled"}')),
-      'Cette réservation ne peut plus être annulée.',
-    );
-    expect(cancelErrorMessage(ApiException(500, '{}')),
-        contains('Réessayez'));
-    expect(cancelErrorMessage(ApiException(null, '{}')),
-        contains('Réessayez'));
+  test('cancel: 409 → notCancellable, 5xx → generic, null → network',
+      () async {
+    // 409 via a declined manual_confirm booking (backend contract)
+    final api409 = FakeBookingsApi(bookings: [
+      sampleBookingJson(bookingMode: 'manual_confirm'),
+    ]);
+    final p409 = BookingProvider(bookingsApi: api409);
+    await p409.loadBookings();
+    api409.partnerDecline(p409.items.single.id);
+    await p409.cancelBooking(p409.items.single);
+    expect(p409.cancelError, BookingCancelError.notCancellable);
+
+    // 500 → generic via cancelError
+    final api500 = FakeBookingsApi(bookings: [])
+      ..cancelError = ApiException(500, '{}');
+    final p500 = BookingProvider(bookingsApi: api500);
+    await p500.cancelBooking(Booking.fromJson(sampleBookingJson()));
+    expect(p500.cancelError, BookingCancelError.generic);
+
+    // null status → network via cancelError
+    final apiNet = FakeBookingsApi(bookings: [])
+      ..cancelError = ApiException(null, '{}');
+    final pNet = BookingProvider(bookingsApi: apiNet);
+    await pNet.cancelBooking(Booking.fromJson(sampleBookingJson()));
+    expect(pNet.cancelError, BookingCancelError.network);
   });
 
-  test('bookingErrorMessage keeps its creation cases untouched', () {
-    expect(bookingErrorMessage(ApiException(409, '{}')),
-        contains('informations différentes'));
-    expect(bookingErrorMessage(ApiException(422, '{}')),
-        contains('pas disponible'));
-    expect(bookingErrorMessage(ApiException(500, '{}')),
-        contains('Réessayez dans un instant'));
-    expect(bookingErrorMessage(ApiException(null, '{}')),
-        contains('Réessayez dans un instant'));
+  test(
+      'create: 409 → conflict, 422 → unavailable, 5xx → generic, null → network',
+      () async {
+    final cases = <int?, BookingError>{
+      409: BookingError.conflict,
+      422: BookingError.unavailable,
+      500: BookingError.generic,
+      null: BookingError.network,
+    };
+    for (final entry in cases.entries) {
+      final api = FakeBookingsApi(bookings: [])
+        ..createError = ApiException(entry.key, '{"detail":"x"}');
+      final provider = BookingProvider(bookingsApi: api);
+      await provider.createBooking(
+          poiId: 'p-1', adapterType: 'hotel', idempotencyKey: 'k');
+      expect(provider.actionError, entry.value,
+          reason: 'statusCode ${entry.key}');
+    }
   });
 }

@@ -44,7 +44,12 @@ void main() {
           ChangeNotifierProvider<BookingProvider>.value(value: bookingProvider),
           ChangeNotifierProvider<POIProvider>.value(value: poiProvider),
         ],
-        child: const MaterialApp(home: BookingsScreen()),
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('en'),
+          home: const BookingsScreen(),
+        ),
       ),
     );
     await tester.pumpAndSettle();

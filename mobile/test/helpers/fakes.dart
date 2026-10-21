@@ -1,4 +1,5 @@
 import 'package:discover_ai/services/api_service.dart';
+import 'package:discover_ai/services/locale_store.dart';
 import 'package:discover_ai/services/secure_storage_service.dart';
 import 'package:discover_ai/models/research_job.dart';
 
@@ -276,7 +277,8 @@ class FakeBookingsApi implements BookingsApi {
   FakeBookingsApi(
       {List<Map<String, dynamic>>? bookings,
       this.failCreate = false,
-      this.createError})
+      this.createError,
+      this.cancelError})
       : bookings =
             List<Map<String, dynamic>>.from(bookings ?? [sampleBookingJson()]);
 
@@ -286,6 +288,10 @@ class FakeBookingsApi implements BookingsApi {
   /// test simulate 422 / 5xx / network failures. Mutable so a test can clear
   /// it to model a successful retry in the same sheet.
   ApiException? createError;
+
+  /// When set, cancelBooking throws it — lets a test simulate 409 / 5xx /
+  /// network cancellation failures.
+  ApiException? cancelError;
 
   final List<Map<String, dynamic>> bookings;
   int createCalls = 0;
@@ -397,6 +403,7 @@ class FakeBookingsApi implements BookingsApi {
 
   @override
   Future<Map<String, dynamic>> cancelBooking(String bookingId) async {
+    if (cancelError != null) throw cancelError!;
     final b = _byId(bookingId);
     if (b['booking_mode'] == 'manual_confirm' &&
         (b['status'] == 'declined' ||
@@ -489,6 +496,20 @@ class InMemoryTokenStore implements TokenStore {
 
   @override
   Future<void> writeToken(String value) async => token = value;
+}
+
+/// In-memory LocaleStore for tests, mirroring [InMemoryTokenStore].
+class InMemoryLocaleStore implements LocaleStore {
+  String? localeCode;
+
+  @override
+  Future<void> deleteLocaleCode() async => localeCode = null;
+
+  @override
+  Future<String?> readLocaleCode() async => localeCode;
+
+  @override
+  Future<void> writeLocaleCode(String code) async => localeCode = code;
 }
 
 class FakeTenantsApi implements TenantsApi {
@@ -765,8 +786,8 @@ class FakePartnerApi implements PartnerApi {
     List<Map<String, dynamic>>? bookings,
     this.respondError,
     this.listError,
-  }) : bookings =
-            List<Map<String, dynamic>>.from(bookings ?? [samplePartnerBookingJson()]);
+  }) : bookings = List<Map<String, dynamic>>.from(
+            bookings ?? [samplePartnerBookingJson()]);
 
   /// When set, every [respondToPartnerBooking] throws it (mutable so a test
   /// can clear it to model a successful retry).
@@ -857,5 +878,3 @@ Map<String, dynamic> samplePartnerBookingJson({
             'notes': 'Chambre calme si possible.',
           },
     };
-
-

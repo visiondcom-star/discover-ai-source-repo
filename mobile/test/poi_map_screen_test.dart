@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
+import 'package:discover_ai/l10n/app_localizations.dart';
 import 'package:discover_ai/providers/poi_provider.dart';
 import 'package:discover_ai/screens/poi_map_screen.dart';
 
@@ -43,7 +44,25 @@ final List<Map<String, dynamic>> mapPoisJson = [
 Widget _wrap(POIProvider pois) {
   return ChangeNotifierProvider<POIProvider>.value(
     value: pois,
-    child: const MaterialApp(home: PoiMapScreen()),
+    child: MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: const Locale('en'),
+      home: const PoiMapScreen(),
+    ),
+  );
+}
+
+/// Idem _wrap(), mais avec la locale FR pour couvrir les chaînes migrées.
+Widget _wrapFr(POIProvider pois) {
+  return ChangeNotifierProvider<POIProvider>.value(
+    value: pois,
+    child: MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: const Locale('fr'),
+      home: const PoiMapScreen(),
+    ),
   );
 }
 
@@ -95,5 +114,14 @@ void main() {
 
     expect(find.byKey(const Key('map_empty')), findsOneWidget);
     expect(find.byType(PoiMapScreen), findsOneWidget);
+  });
+
+  testWidgets('carte rend ses chaînes FR après la migration i18n',
+      (tester) async {
+    await tester.pumpWidget(_wrapFr(_providerWith([])));
+    await tester.pump();
+
+    expect(find.text('Carte'), findsOneWidget);
+    expect(find.text('Aucun lieu géolocalisé pour le moment.'), findsOneWidget);
   });
 }

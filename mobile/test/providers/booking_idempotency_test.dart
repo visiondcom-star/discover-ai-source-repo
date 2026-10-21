@@ -50,7 +50,7 @@ void main() {
     expect(provider.items, hasLength(1));
   });
 
-  test('createError 422 → readable actionError, items untouched', () async {
+  test('createError 422 → unavailable actionError, items untouched', () async {
     final api = FakeBookingsApi(bookings: [])
       ..createError = ApiException(
           422, '{"detail":"This place is information only and cannot be booked"}');
@@ -60,20 +60,26 @@ void main() {
         poiId: 'p-1', adapterType: 'hotel', idempotencyKey: 'key-422');
 
     expect(created, isNull);
-    expect(provider.actionError,
-        bookingErrorMessage(ApiException(422, '{"detail":"…"}')));
+    expect(provider.actionError, BookingError.unavailable);
     expect(provider.actionStatusCode, 422);
     expect(provider.items, isEmpty);
   });
 
-  test('bookingErrorMessage maps status codes to readable copy', () {
-    expect(bookingErrorMessage(ApiException(409, '{}')),
-        contains('informations différentes'));
-    expect(bookingErrorMessage(ApiException(422, '{}')),
-        contains('pas disponible'));
-    expect(bookingErrorMessage(ApiException(500, '{}')),
-        contains('Réessayez dans un instant'));
-    expect(bookingErrorMessage(ApiException(null, '{}')),
-        contains('Réessayez dans un instant'));
+  test('api status codes map to BookingError codes', () async {
+    final cases = <int?, BookingError>{
+      409: BookingError.conflict,
+      422: BookingError.unavailable,
+      500: BookingError.generic,
+      null: BookingError.network,
+    };
+    for (final entry in cases.entries) {
+      final api = FakeBookingsApi(bookings: [])
+        ..createError = ApiException(entry.key, '{"detail":"x"}');
+      final provider = BookingProvider(bookingsApi: api);
+      await provider.createBooking(
+          poiId: 'p-1', adapterType: 'hotel', idempotencyKey: 'k');
+      expect(provider.actionError, entry.value,
+          reason: 'statusCode ${entry.key}');
+    }
   });
 }

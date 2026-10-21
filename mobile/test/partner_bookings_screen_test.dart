@@ -1,17 +1,21 @@
 import 'package:discover_ai/providers/auth_provider.dart';
+import 'package:discover_ai/providers/locale_provider.dart';
 import 'package:discover_ai/providers/partner_bookings_provider.dart';
 import 'package:discover_ai/screens/partner_bookings_screen.dart';
 import 'package:discover_ai/screens/profile_screen.dart';
+import 'package:discover_ai/l10n/app_localizations.dart';
 import 'package:discover_ai/services/api_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/intl.dart' as intl;
 import 'package:provider/provider.dart';
 
 import 'helpers/fakes.dart';
 
 /// Widget tests for the Espace partenaire queue and its Profil entry point.
 void main() {
-  /// Boots the partner screen with an injected [FakePartnerApi].
+  /// Boots the partner screen with an injected [FakePartnerApi], in French
+  /// (the tenant default), so migrated UI strings keep their FR assertions.
   Future<FakePartnerApi> pumpScreen(
     WidgetTester tester, {
     List<Map<String, dynamic>>? bookings,
@@ -21,12 +25,57 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider(
         create: (_) => PartnerBookingsProvider(partnerApi: api),
-        child: const MaterialApp(home: PartnerBookingsScreen()),
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('fr'),
+          home: const PartnerBookingsScreen(),
+        ),
       ),
     );
     await tester.pumpAndSettle();
     return api;
   }
+
+  /// Boots the partner screen pinned to [locale] with a failing [listError],
+  /// to verify the localized error text.
+  Future<void> pumpScreenWithLocale(
+    WidgetTester tester, {
+    required Locale locale,
+    ApiException? listError,
+  }) async {
+    final api = FakePartnerApi(listError: listError);
+    await tester.pumpWidget(
+      ChangeNotifierProvider(
+        create: (_) => PartnerBookingsProvider(partnerApi: api),
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: locale,
+          home: const PartnerBookingsScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('unparseable date falls back to the raw string', (tester) async {
+    // Legacy or migrated records may carry a non-ISO date format. The card
+    // must still render (with the raw text) instead of throwing or hiding.
+    await pumpScreen(tester, bookings: [
+      samplePartnerBookingJson(
+        id: 'b-1',
+        details: <String, dynamic>{
+          'date':
+              '15/09/2026', // dd/MM/yyyy — not ISO, DateTime.tryParse rejects it.
+          'guests': 1,
+        },
+      ),
+    ]);
+
+    expect(find.byKey(const Key('partner_card_b-1')), findsOneWidget);
+    expect(find.textContaining('Date : 15/09/2026'), findsOneWidget);
+  });
 
   testWidgets('queue shows name, traveller, date, guests, notes',
       (tester) async {
@@ -47,7 +96,12 @@ void main() {
     expect(find.byKey(const Key('partner_card_b-1')), findsOneWidget);
     expect(find.text('Dar Azef'), findsOneWidget);
     expect(find.text('Voyageur : Sofia'), findsOneWidget);
-    expect(find.textContaining('Date : 2026-09-15'), findsOneWidget);
+    expect(
+      find.textContaining(
+        'Date : ${intl.DateFormat.yMMMd('fr').format(DateTime(2026, 9, 15))}',
+      ),
+      findsOneWidget,
+    );
     expect(find.textContaining('Personnes : 2'), findsOneWidget);
     expect(find.text('Table près de la fenêtre.'), findsOneWidget);
     expect(find.byKey(const Key('partner_confirm_b-1')), findsOneWidget);
@@ -163,7 +217,11 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider(
         create: (_) => PartnerBookingsProvider(partnerApi: api),
-        child: const MaterialApp(home: PartnerBookingsScreen()),
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const PartnerBookingsScreen(),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -178,6 +236,26 @@ void main() {
     expect(find.byKey(const Key('partner_card_b-1')), findsOneWidget);
   });
 
+  testWidgets('load error renders the FR text (default locale)',
+      (tester) async {
+    // 403 load → the screen shows the FR message from AppLocalizations.
+    await pumpScreenWithLocale(tester,
+        locale: const Locale('fr'), listError: ApiException(403, '{}'));
+
+    expect(find.text('Vous n\'avez pas accès à l\'espace partenaire.'),
+        findsOneWidget);
+  });
+
+  testWidgets('load error renders the EN text when locale is en',
+      (tester) async {
+    // 403 load → the screen shows the EN message from AppLocalizations.
+    await pumpScreenWithLocale(tester,
+        locale: const Locale('en'), listError: ApiException(403, '{}'));
+
+    expect(find.text('You do not have access to the partner space.'),
+        findsOneWidget);
+  });
+
   testWidgets('pull-to-refresh reloads the queue', (tester) async {
     final api = await pumpScreen(tester, bookings: [
       samplePartnerBookingJson(id: 'b-1'),
@@ -189,20 +267,50 @@ void main() {
     expect(api.listCalls, before + 1);
   });
 
+  testWidgets('failed refresh keeps the queue and shows an error snackbar',
+      (tester) async {
+    // A reload that fails while a queue is on screen must not blank it: the
+    // list stays and the failure surfaces as `partner_refresh_error_snackbar`.
+    final api = await pumpScreen(tester, bookings: [
+      samplePartnerBookingJson(id: 'b-1'),
+    ]);
+    api.listError = ApiException(null, 'socket down');
+    await tester.fling(
+        find.byKey(const Key('partner_refresh')), const Offset(0, 400), 1000);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('partner_card_b-1')), findsOneWidget);
+    expect(find.byKey(const Key('partner_refresh_error_snackbar')),
+        findsOneWidget);
+  });
+
   // ---- Profil entry point -------------------------------------------------
 
   testWidgets('partner sees the Espace partenaire entry', (tester) async {
     await pumpProfileWithRole(tester, isAdmin: false, isPartner: true);
+    // The language selector pushes the entry below the fold on small test
+    // viewports; scroll it into view before asserting.
+    await tester.scrollUntilVisible(
+        find.byKey(const Key('partner_space_button')), 200);
     expect(find.byKey(const Key('partner_space_button')), findsOneWidget);
   });
 
   testWidgets('admin (no attachment) also sees the entry', (tester) async {
     await pumpProfileWithRole(tester, isAdmin: true, isPartner: false);
+    await tester.scrollUntilVisible(
+        find.byKey(const Key('partner_space_button')), 200);
     expect(find.byKey(const Key('partner_space_button')), findsOneWidget);
   });
 
   testWidgets('plain traveller does not see the entry', (tester) async {
     await pumpProfileWithRole(tester, isAdmin: false, isPartner: false);
+    // Scroll to the end of Profil; the entry must never appear for a
+    // traveller without partner/admin attachment.
+    await tester.dragUntilVisible(
+      find.byKey(const Key('logout_button')),
+      find.byType(Scrollable),
+      const Offset(0, -200),
+    );
     expect(find.byKey(const Key('partner_space_button')), findsNothing);
   });
 }
@@ -255,9 +363,19 @@ Future<void> pumpProfileWithRole(
   );
   await auth.login('user@discoverai.dz', 'secret');
   await tester.pumpWidget(
-    ChangeNotifierProvider<AuthProvider>.value(
-      value: auth,
-      child: const MaterialApp(home: ProfileScreen()),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider<AuthProvider>.value(value: auth),
+        // Profil hosts the language selector, which reads LocaleProvider.
+        ChangeNotifierProvider<LocaleProvider>(
+          create: (_) => LocaleProvider(localeStore: InMemoryLocaleStore()),
+        ),
+      ],
+      child: const MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: ProfileScreen(),
+      ),
     ),
   );
   await tester.pumpAndSettle();

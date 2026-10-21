@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../l10n/app_localizations.dart';
 import '../providers/poi_provider.dart';
 import '../widgets/poi_card.dart';
 import 'poi_detail_screen.dart';
@@ -45,16 +46,17 @@ class _POIListScreenState extends State<POIListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     final pois = context.watch<POIProvider>();
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Discover AI'),
+        title: Text(loc.appName),
         actions: [
           IconButton(
             key: const Key('toggle_map_button'),
             icon: const Icon(Icons.map_outlined),
-            tooltip: 'Show map',
+            tooltip: loc.poiListShowMap,
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const PoiMapScreen()),
             ),
@@ -64,7 +66,7 @@ class _POIListScreenState extends State<POIListScreen> {
       floatingActionButton: FloatingActionButton.extended(
         key: const Key('plan_trip_fab'),
         icon: const Icon(Icons.map_outlined),
-        label: const Text('Plan a trip'),
+        label: Text(loc.poiListPlanTrip),
         onPressed: () => Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const TripFormScreen()),
         ),
@@ -87,19 +89,19 @@ class _POIListScreenState extends State<POIListScreen> {
               },
               decoration: InputDecoration(
                 prefixIcon: const Icon(Icons.search),
-                hintText: 'Search places, cities…',
+                hintText: loc.poiListSearchHint,
                 isDense: true,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
-                suffixIcon: ValueListenableBuilder<TextEditingValue>(
+                        suffixIcon: ValueListenableBuilder<TextEditingValue>(
                   valueListenable: _searchController,
                   builder: (_, value, __) => value.text.isEmpty
                       ? const SizedBox.shrink()
                       : IconButton(
                           key: const Key('poi_search_clear'),
                           icon: const Icon(Icons.clear),
-                          tooltip: 'Clear search',
+                          tooltip: loc.poiListClearSearch,
                           onPressed: () {
                             _searchController.clear();
                             context.read<POIProvider>().updateSearch('');
@@ -123,17 +125,33 @@ class _POIListScreenState extends State<POIListScreen> {
     );
   }
 
+  /// Translates the provider's locale-agnostic [POIError] into a
+  /// user-facing string. The provider has no `BuildContext`, so the mapping
+  /// lives here — the same contract as AuthError on the login screen. The
+  /// `null` case is unreachable in the error branch (only rendered when
+  /// `pois.error != null`) but keeps the switch exhaustive.
+  String _errorText(AppLocalizations loc, POIError? error) {
+    switch (error) {
+      case POIError.network:
+        return loc.poiListErrorNetwork;
+      case POIError.generic:
+      case null:
+        return loc.poiListErrorGeneric;
+    }
+  }
+
   Widget _buildBody(POIProvider pois) {
     if (pois.isLoading && pois.items.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
     if (pois.error != null && pois.items.isEmpty) {
+      final loc = AppLocalizations.of(context);
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
           Padding(
             padding: const EdgeInsets.all(24),
-            child: Center(child: Text('Error: ${pois.error}')),
+            child: Center(child: Text(_errorText(loc, pois.error))),
           ),
         ],
       );
@@ -141,6 +159,7 @@ class _POIListScreenState extends State<POIListScreen> {
     // Distinguish "the tenant has no places at all" from "nothing matches
     // this search" — different empty states, different guidance.
     if (pois.items.isEmpty && pois.searchQuery.isNotEmpty) {
+      final loc = AppLocalizations.of(context);
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
@@ -151,7 +170,7 @@ class _POIListScreenState extends State<POIListScreen> {
                 const Icon(Icons.search_off, size: 48, color: Colors.grey),
                 const SizedBox(height: 12),
                 Text(
-                  'No results for “${pois.searchQuery}”.',
+                  loc.poiListNoResults(pois.searchQuery),
                   key: const Key('poi_search_empty'),
                 ),
               ],
@@ -161,16 +180,17 @@ class _POIListScreenState extends State<POIListScreen> {
       );
     }
     if (pois.items.isEmpty) {
+      final loc = AppLocalizations.of(context);
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        children: const [
-          SizedBox(height: 160),
+        children: [
+          const SizedBox(height: 160),
           Center(
             child: Column(
               children: [
-                Icon(Icons.explore_off, size: 48, color: Colors.grey),
-                SizedBox(height: 12),
-                Text('No places yet.', key: Key('poi_empty')),
+                const Icon(Icons.explore_off, size: 48, color: Colors.grey),
+                const SizedBox(height: 12),
+                Text(loc.poiListEmpty, key: const Key('poi_empty')),
               ],
             ),
           ),

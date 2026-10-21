@@ -1,0 +1,13 @@
+# gen-l10n — infrastructure i18n FR/EN (chantier i18n).
+#
+# Les chaînes vivent dans lib/l10n/*.arb et sont générées en AppLocalizations
+# (lib/l10n/app_localizations.dart) par `flutter gen-l10n`, lancé
+# automatiquement au build. Le template est le FR : c'est la langue par défaut
+# du tenant (Tenant.defaultLanguage) et la langue des écrans récents — elle est
+# donc toujours complète, l'EN complète les clés manquantes.
+arb-dir: lib/l10n
+template-arb-file: app_fr.arb
+output-localization-file: app_localizations.dart
+output-class: AppLocalizations
+output-dir: lib/l10n
+nullable-getter: false

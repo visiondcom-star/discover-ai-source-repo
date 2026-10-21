@@ -1,0 +1,305 @@
+{
+  "@@locale": "en",
+  "appName": "Discover AI",
+  "loginEmailLabel": "Email",
+  "loginPasswordLabel": "Password",
+  "loginEmailInvalid": "Enter a valid email",
+  "loginPasswordRequired": "Enter your password",
+  "loginSubmit": "Sign in",
+  "loginErrorInvalidCredentials": "Invalid email or password.",
+  "loginErrorNetwork": "Connection failed. Check your network.",
+  "loginErrorGeneric": "Something went wrong. Try again.",
+  "shellTabHome": "Home",
+  "shellTabExplore": "Explore",
+  "shellTabBookings": "Bookings",
+  "shellTabAssistant": "Assistant",
+  "shellTabProfile": "Profile",
+  "partnerBookingConfirmed": "Booking confirmed",
+  "partnerBookingDeclined": "Booking declined",
+  "errorLoadForbidden": "You do not have access to the partner space.",
+  "errorLoadNotFound": "Partner space not found.",
+  "errorLoadNetwork": "Could not load the requests. Check your connection.",
+  "errorLoadGeneric": "Something went wrong. Try again.",
+  "errorActionAlreadyHandled": "This request was already handled or has expired.",
+  "errorActionForbidden": "You do not have access to this request.",
+  "errorActionNotFound": "This request does not exist.",
+  "errorActionNetwork": "Could not send your response. Check your connection.",
+  "errorActionGeneric": "Something went wrong. Try again.",
+  "partnerTitle": "Partner space",
+  "partnerRetry": "Retry",
+  "partnerEmpty": "No requests to handle",
+  "partnerEmptyHint": "New booking requests will appear here.",
+  "partnerTraveller": "Traveller: {name}",
+  "@partnerTraveller": {
+    "description": "Label for the traveller on a partner card. {name} is the traveller's name or the fallback.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "partnerTravellerFallback": "Traveller",
+  "partnerDate": "Date: {date}",
+  "@partnerDate": {
+    "description": "Visit date on a partner card. {date} is the raw YYYY-MM-DD string from the backend.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "partnerGuests": "Guests: {guests}",
+  "@partnerGuests": {
+    "description": "Number of people on a partner card. {guests} is the raw count string.",
+    "placeholders": {
+      "guests": {
+        "type": "String"
+      }
+    }
+  },
+  "partnerRespondBy": "Answer required before {date}",
+  "@partnerRespondBy": {
+    "description": "Deadline for the partner to answer. {date} is a locale-formatted date.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "partnerConfirm": "Confirm",
+  "partnerDecline": "Decline",
+  "partnerLimitNotice": "Only the first {count} requests are shown.",
+  "@partnerLimitNotice": {
+    "description": "Shown when the queue hits the API page limit. {count} is the page size.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "partnerNoteLabel": "Note (optional)",
+  "partnerNoteHint": "Add a time, a reason for declining…",
+  "partnerCancel": "Cancel",
+  "languageTitle": "Language",
+  "languageHint": "Interface language",
+  "languageFrench": "Français",
+  "languageEnglish": "English",
+  "profileTitle": "Profile",
+  "profileAccountFallback": "Account",
+  "profileDestination": "Destination",
+  "profileDestinationHint": "Current market for the app",
+  "profilePreferences": "Preferences",
+  "profilePreferencesHint": "Coming soon — next increment",
+  "profileAdminResearch": "AI research — destination",
+  "profileAdminResearchHint": "Admin: generate Level 2 categories",
+  "profileAdminCollection": "Document collection",
+  "profileAdminCollectionHint": "Admin: Wikivoyage / Wikipedia → categories",
+  "profilePartnerSpace": "Partner space",
+  "profilePartnerSpaceHint": "Handle booking requests",
+  "profileLogout": "Log out",
+  "homeGreeting": "Hello, {name} 👋",
+  "@homeGreeting": {
+    "description": "Personalised greeting on the Accueil tab. {name} is the first name, the email local part, or homeTravellerFallback.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "homeTravellerFallback": "traveller",
+  "homeSubtitle": "What would you like to discover today?",
+  "homeTravelTypeTitle": "Travel type",
+  "homePlanTripTitle": "Plan a trip",
+  "homePlanTripSubtitle": "Generate a personalised itinerary",
+  "homeExploreTitle": "Explore places",
+  "homeExploreSubtitle": "The highlights of your destination",
+  "homeTravelTypeCulture": "Culture & medinas",
+  "homeTravelTypeHistory": "History & antiquity",
+  "homeTravelTypeNature": "Nature & parks",
+  "homeTravelTypeDesert": "Sahara & oases",
+  "homeTravelTypeAdventure": "Adventure & trek",
+  "homeTravelTypeFood": "Gastronomy",
+  "homeTravelTypeBeaches": "Beaches & sea",
+  "homeTravelTypeMonuments": "Monuments & sites",
+  "homeTravelTypeCrafts": "Crafts & souks",
+  "homeTravelTypeThermal": "Thermalism",
+  "homeTravelTypeWellness": "Relaxation & hammam",
+  "poiListShowMap": "Show map",
+  "poiListPlanTrip": "Plan a trip",
+  "poiListSearchHint": "Search places, cities…",
+  "poiListClearSearch": "Clear search",
+  "poiListNoResults": "No results for “{query}”.",
+  "@poiListNoResults": {
+    "description": "Empty search state of the Explorer list. {query} is the active search term.",
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "poiListEmpty": "No places yet.",
+  "poiListErrorNetwork": "Could not load places. Check your connection.",
+  "poiListErrorGeneric": "Something went wrong. Try again.",
+  "poiDetailVerified": "Verified",
+  "poiDetailReviews": "{count, plural, =1{({count} review)} other{({count} reviews)}}",
+  "@poiDetailReviews": {
+    "description": "Review counter on the place detail. {count} is the review count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "poiDetailDuration": "Duration",
+  "poiDetailPrice": "Price",
+  "poiDetailAddress": "Address",
+  "poiDurationMinutes": "{minutes} min",
+  "@poiDurationMinutes": {
+    "description": "Duration unit shared by the place card and the place detail. {minutes} is the duration in minutes.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "poiDetailAbout": "About",
+  "poiDetailTags": "Tags",
+  "poiDetailAccessibility": "Accessibility",
+  "poiDetailOpeningHours": "Opening hours",
+  "poiDetailPlanVisit": "Plan a visit",
+  "poiDetailBook": "Book",
+  "poiDetailPayOnSite": "Pay on site",
+  "poiDetailProviderConfirmation": "Confirmation by the provider",
+  "poiDetailInfoOnly": "Information only — booking not available",
+  "poiDetailBookingSoon": "Online booking coming soon",
+  "poiMapTitle": "Map",
+  "poiMapEmpty": "No geolocated places yet.",
+  "poiMapViewDetails": "View details",
+  "bookingsTitle": "Bookings",
+  "bookingsLoadErrorNetwork": "Could not load your bookings. Check your connection.",
+  "bookingsLoadErrorGeneric": "Could not load your bookings. Try again.",
+  "bookingsRetry": "Retry",
+  "bookingsEmpty": "No bookings yet",
+  "bookingsEmptyHint":
+      "Book a hotel, a table or a visit from a place page — every step asks for your explicit confirmation.",
+  "bookingStatusPendingConsent": "Awaiting your confirmation",
+  "bookingStatusAwaitingPartner": "Awaiting the provider",
+  "bookingStatusDeclined": "Declined by the provider",
+  "bookingStatusExpired": "Request expired",
+  "bookingPartnerLabel": "Provider: {provider}",
+  "bookingPrice": "{price} {currency}",
+  "@bookingPrice": {
+    "description": "Price on the booking card. {price} is the numeric price, {currency} is the currency code.",
+    "placeholders": {
+      "price": {
+        "type": "num"
+      },
+      "currency": {
+        "type": "String"
+      }
+    }
+  },
+  "@bookingPartnerLabel": {
+    "description":
+        "Provider label on the booking card. {provider} is the adapter type (hotel, restaurant…).",
+    "placeholders": {
+      "provider": {
+        "type": "String"
+      }
+    }
+  },
+  "bookingRespondBy": "Answer expected by {date}",
+  "@bookingRespondBy": {
+    "description":
+        "Reply-by deadline on the booking card. {date} is the formatted date (locale-aware).",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "bookingAwaitingConfirmBefore": "The provider must confirm before {date}",
+  "@bookingAwaitingConfirmBefore": {
+    "description":
+        "Deadline text shown while the request is awaiting the partner. {date} is the formatted deadline.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "bookingAwaitingConfirm": "The provider must confirm your request",
+  "bookingAwaitingPartner": "Awaiting the provider",
+  "bookingAwaitingPartnerBy": "Confirmation expected by {date}",
+  "@bookingAwaitingPartnerBy": {
+    "description":
+        "Deadline text shown while awaiting the partner. {date} is the formatted deadline.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "bookingPartnerNote": "Message from the provider: {note}",
+  "@bookingPartnerNote": {
+    "description":
+        "Partner's note on a declined booking. {note} is the backend note.",
+    "placeholders": {
+      "note": {
+        "type": "String"
+      }
+    }
+  },
+  "bookingExpiredHint": "The provider did not answer in time. You can send a new request.",
+  "bookingConfirmAction": "Confirm",
+  "bookingCancelAction": "Cancel",
+  "bookingRefuseAction": "Decline",
+  "bookingConsentTitle": "Confirm the booking",
+  "bookingConsentManualConfirm":
+      "Your request will be sent to the provider, who must confirm it.",
+  "bookingConsentExternalRef":
+      "By confirming, the Booking-Agent generates an external reference (EXT-…). Without confirmation, the booking has no effect and will be cancelled.",
+  "bookingRequestedSnackbar": "Request sent to the provider",
+  "bookingSheetTitle": "Book — {name}",
+  "@bookingSheetTitle": {
+    "description": "Bottom-sheet title for the booking flow. {name} is the POI label.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "bookingSheetPendingHint":
+      "The booking is created as pending: it only becomes firm after your explicit confirmation.",
+  "bookingAdaptersError": "Could not load providers",
+  "bookingAdaptersEmpty": "No provider available right now",
+  "bookingCreateAction": "Create booking",
+  "bookingCreatingAction": "Creating…",
+  "bookingAdapterHotel": "Hotel",
+  "bookingAdapterRestaurant": "Restaurant",
+  "bookingAdapterTour": "Guided tour",
+  "bookingAdapterTransport": "Transport",
+  "bookingDatePick": "Pick a date",
+  "bookingDateLabel": "Date: {date}",
+  "@bookingDateLabel": {
+    "description": "Date field label. {date} is the formatted picked date.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "bookingGuests": "Guests",
+  "bookingRemoveGuest": "Remove a guest",
+  "bookingAddGuest": "Add a guest",
+  "bookingNotesLabel": "Notes (optional)",
+  "bookingNotesHelper": "Do not enter any email address or phone number.",
+  "bookingErrorConflict":
+      "This request was already sent with different details. Reopen the window and try again.",
+  "bookingErrorUnavailable": "Booking is not available for this place.",
+  "bookingErrorNetwork": "Could not send the booking. Check your connection.",
+  "bookingErrorGeneric": "The booking failed. Try again in a moment.",
+  "bookingCancelErrorNotCancellable": "This booking can no longer be cancelled.",
+  "bookingCancelErrorNetwork": "Could not cancel the booking. Check your connection.",
+  "bookingCancelErrorGeneric": "The cancellation failed. Try again in a moment."
+}

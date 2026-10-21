@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/poi.dart';
 import '../providers/poi_provider.dart';
 import 'poi_detail_screen.dart';
@@ -19,16 +20,17 @@ class PoiMapScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     final pois = context.watch<POIProvider>();
     final geolocated = pois.items
         .where((p) => p.latitude != null && p.longitude != null)
         .toList();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Map')),
+      appBar: AppBar(title: Text(loc.poiMapTitle)),
       body: geolocated.isEmpty
-          ? const Center(
-              child: Text('No geolocated places yet.', key: Key('map_empty')),
+          ? Center(
+              child: Text(loc.poiMapEmpty, key: const Key('map_empty')),
             )
           : _PoiMapView(pois: geolocated),
     );
@@ -42,6 +44,7 @@ class _PoiMapView extends StatelessWidget {
 
   /// Mobile equivalent of the web Leaflet Popup: name + city (plus category).
   void _showPoiSheet(BuildContext context, POI poi) {
+    final loc = AppLocalizations.of(context);
     showModalBottomSheet<void>(
       context: context,
       builder: (sheetContext) => SafeArea(
@@ -94,7 +97,7 @@ class _PoiMapView extends StatelessWidget {
               TextButton.icon(
                 key: Key('poi_sheet_details_${poi.id}'),
                 icon: const Icon(Icons.info_outline),
-                label: const Text('View details'),
+                label: Text(loc.poiMapViewDetails),
                 onPressed: () {
                   Navigator.of(sheetContext).pop();
                   Navigator.of(context).push(

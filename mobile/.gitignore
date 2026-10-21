@@ -46,3 +46,9 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Generated localizations (chantier i18n). Regenerated from lib/l10n/*.arb by
+# `flutter gen-l10n` on every `flutter pub get` / build (l10n.yaml + pubspec
+# `generate: true`). Only the .arb sources and l10n.yaml are tracked.
+lib/l10n/app_localizations*.dart
+

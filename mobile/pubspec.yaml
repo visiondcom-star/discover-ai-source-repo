@@ -11,6 +11,11 @@ dependencies:
     sdk: flutter
   http: ^1.2.0
   provider: ^6.1.1
+  # i18n FR/EN (chantier i18n). flutter_localizations + intl ; chaînes dans
+  # lib/l10n/*.arb, générées en AppLocalizations par gen-l10n (l10n.yaml).
+  flutter_localizations:
+    sdk: flutter
+  intl: any
   # JWT storage: iOS Keychain / Android Keystore. Never SharedPreferences.
   flutter_secure_storage: ^9.2.2
   # Map: flutter_map 8.3.1 is the latest stable; requires Dart >=3.6 /
@@ -31,6 +36,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  # gen-l10n : régénère AppLocalizations (lib/l10n/*.arb) au `pub get`/build.
+  generate: true
   # Poppins — brand typeface from the "Discover AI" UX blueprint
   # (weights used by the design system: Medium 500, SemiBold 600, Bold 700).
   # Bundled as assets (no runtime fetch, deterministic tests). License: OFL,

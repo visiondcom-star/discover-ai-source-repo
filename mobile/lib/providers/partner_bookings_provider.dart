@@ -3,6 +3,26 @@ import 'package:flutter/foundation.dart';
 import '../models/partner_booking.dart';
 import '../services/api_service.dart';
 
+/// Error codes a partner can hit when loading or acting on the queue. Exposed
+/// as a typed enum (no `BuildContext`, no French copy), so the view layer
+/// translates them via [AppLocalizations].
+enum PartnerBookingError {
+  /// 409 — the request was already handled or expired server-side.
+  alreadyHandled,
+
+  /// 403 — the caller is not authorized.
+  forbidden,
+
+  /// 404 — the resource does not exist (stale id).
+  notFound,
+
+  /// Network / timeout — the server could not be reached.
+  network,
+
+  /// Any other server error (5xx, unknown).
+  generic,
+}
+
 /// Partner decision queue state (Espace partenaire).
 ///
 /// Loads the `requested` bookings awaiting an answer and lets the partner
@@ -20,18 +40,18 @@ class PartnerBookingsProvider extends ChangeNotifier {
 
   List<PartnerBooking> _items = [];
   bool _isLoading = false;
-  String? _error;
+  PartnerBookingError? _error;
 
   /// True while a confirm/decline is in flight; the screen disables both
   /// buttons so a double tap cannot send two decisions.
   bool _isActing = false;
-  String? _actionError;
+  PartnerBookingError? _actionError;
 
   List<PartnerBooking> get items => List.unmodifiable(_items);
   bool get isLoading => _isLoading;
-  String? get error => _error;
+  PartnerBookingError? get error => _error;
   bool get isActing => _isActing;
-  String? get actionError => _actionError;
+  PartnerBookingError? get actionError => _actionError;
 
   /// Page size the backend serves by default (`GET /partner/bookings`,
   /// `limit=50`). When a full page comes back, more requests may exist beyond
@@ -58,9 +78,9 @@ class PartnerBookingsProvider extends ChangeNotifier {
       _items = raw.map(PartnerBooking.fromPartnerJson).toList();
       _error = null;
     } on ApiException catch (e) {
-      _error = _loadErrorMessage(e);
+      _error = _errorCode(e);
     } catch (_) {
-      _error = 'Impossible de charger les demandes. Vérifiez votre connexion.';
+      _error = PartnerBookingError.network;
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -91,21 +111,19 @@ class PartnerBookingsProvider extends ChangeNotifier {
       // queue. On a replay the booking is already gone — removeWhere is a
       // no-op then, which is exactly right.
       _items = _items.where((b) => b.id != booking.id).toList();
-      _actionError = null;
       return true;
     } on ApiException catch (e) {
       if (e.statusCode == 409) {
-        _actionError = 'Cette demande a déjà été traitée ou a expiré.';
+        _actionError = PartnerBookingError.alreadyHandled;
         // Someone else handled it (or it expired): resync silently so the
         // queue reflects reality, without surfacing a second error.
         await _reloadQuietly();
       } else {
-        _actionError = _respondErrorMessage(e);
+        _actionError = _errorCode(e);
       }
       return false;
     } catch (_) {
-      _actionError =
-          'Impossible d\'envoyer votre réponse. Vérifiez votre connexion.';
+      _actionError = PartnerBookingError.network;
       return false;
     } finally {
       _isActing = false;
@@ -124,23 +142,20 @@ class PartnerBookingsProvider extends ChangeNotifier {
     }
   }
 
-  String _loadErrorMessage(ApiException e) {
-    if (e.statusCode == 403) {
-      return 'Vous n\'avez pas accès à l\'espace partenaire.';
+  /// Maps an [ApiException] to a [PartnerBookingError] code. The screen
+  /// translates the code — the provider never holds French copy.
+  PartnerBookingError _errorCode(ApiException e) {
+    switch (e.statusCode) {
+      case 403:
+        return PartnerBookingError.forbidden;
+      case 404:
+        return PartnerBookingError.notFound;
+      case 409:
+        return PartnerBookingError.alreadyHandled;
+      case null:
+        return PartnerBookingError.network;
+      default:
+        return PartnerBookingError.generic;
     }
-    if (e.statusCode == 404) {
-      return 'Espace partenaire introuvable.';
-    }
-    return 'Impossible de charger les demandes. Vérifiez votre connexion.';
-  }
-
-  String _respondErrorMessage(ApiException e) {
-    if (e.statusCode == 403) {
-      return 'Vous n\'avez pas accès à cette demande.';
-    }
-    if (e.statusCode == 404) {
-      return 'Cette demande est introuvable.';
-    }
-    return 'Impossible d\'envoyer votre réponse. Vérifiez votre connexion.';
   }
 }

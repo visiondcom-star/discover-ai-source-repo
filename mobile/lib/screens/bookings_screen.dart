@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart' as intl;
 import 'package:provider/provider.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/booking.dart';
 import '../models/booking_details.dart';
 import '../models/poi.dart';
@@ -8,7 +10,7 @@ import '../providers/booking_provider.dart';
 import '../providers/poi_provider.dart';
 import '../utils/idempotency.dart';
 
-/// Réservations tab — real consent-flow UI on the backend Booking-Agent
+/// Booking tab — real consent-flow UI on the backend Booking-Agent
 /// (architecture principle n°5): a booking is created PENDING, then consent
 /// is EXPLICIT (recap dialog) — confirmed + `EXT-…` reference on accept,
 /// cancelled on refusal. No auto-confirmation, ever; only backend-provided
@@ -49,7 +51,7 @@ class _BookingsScreenState extends State<BookingsScreen> {
     final bookings = context.watch<BookingProvider>();
     final pois = context.watch<POIProvider>().items;
     return Scaffold(
-      appBar: AppBar(title: const Text('Réservations')),
+      appBar: AppBar(title: Text(AppLocalizations.of(context).bookingsTitle)),
       body: _buildBody(context, bookings, pois, scheme),
     );
   }
@@ -64,7 +66,8 @@ class _BookingsScreenState extends State<BookingsScreen> {
       if (bookings.isLoading) {
         return const Center(child: CircularProgressIndicator());
       }
-      if (bookings.error != null) {
+      final loc = AppLocalizations.of(context);
+      if (bookings.loadError != null) {
         return Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -72,11 +75,15 @@ class _BookingsScreenState extends State<BookingsScreen> {
               Icon(Icons.cloud_off_outlined,
                   size: 48, color: scheme.onSurfaceVariant),
               const SizedBox(height: 12),
-              const Text('Impossible de charger les réservations'),
+              Text(
+                bookings.loadError == BookingLoadError.network
+                    ? loc.bookingsLoadErrorNetwork
+                    : loc.bookingsLoadErrorGeneric,
+                style: Theme.of(context).textTheme.bodyLarge),
               const SizedBox(height: 12),
               OutlinedButton(
                 onPressed: bookings.loadBookings,
-                child: const Text('Réessayer'),
+                child: Text(loc.bookingsRetry),
               ),
             ],
           ),
@@ -90,14 +97,12 @@ class _BookingsScreenState extends State<BookingsScreen> {
             Icon(Icons.calendar_month_outlined,
                 size: 48, color: scheme.onSurfaceVariant),
             const SizedBox(height: 12),
-            const Text('Aucune réservation pour le moment'),
+            Text(loc.bookingsEmpty),
             const SizedBox(height: 4),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32),
               child: Text(
-                'Réservez un hôtel, une table ou une visite depuis la fiche '
-                'd’un lieu — chaque étape demandera votre confirmation '
-                'explicite.',
+                loc.bookingsEmptyHint,
                 textAlign: TextAlign.center,
                 style: Theme.of(context)
                     .textTheme
@@ -141,25 +146,25 @@ class BookingStatusStyle {
   final Color color;
 }
 
-BookingStatusStyle styleFor(Booking booking, ColorScheme scheme) {
+BookingStatusStyle styleFor(
+  Booking booking,
+  ColorScheme scheme,
+  AppLocalizations loc,
+) {
   if (booking.isPending) {
-    return BookingStatusStyle(
-        'En attente de consentement', scheme.secondaryContainer);
+    return BookingStatusStyle(loc.bookingStatusPendingConsent, scheme.secondaryContainer);
   }
   if (booking.isAwaitingPartner) {
-    return BookingStatusStyle(
-        'En attente du prestataire', scheme.secondaryContainer);
+    return BookingStatusStyle(loc.bookingStatusAwaitingPartner, scheme.secondaryContainer);
   }
   if (booking.isConfirmed) {
     return BookingStatusStyle(booking.status, scheme.primaryContainer);
   }
   if (booking.isDeclined) {
-    return BookingStatusStyle(
-        'Refusée par le prestataire', scheme.errorContainer);
+    return BookingStatusStyle(loc.bookingStatusDeclined, scheme.errorContainer);
   }
   if (booking.isExpired) {
-    return BookingStatusStyle(
-        'Demande expirée', scheme.errorContainer.withAlpha(150));
+    return BookingStatusStyle(loc.bookingStatusExpired, scheme.errorContainer.withAlpha(150));
   }
   if (booking.isCancelled) {
     return BookingStatusStyle(booking.status, scheme.errorContainer);
@@ -168,7 +173,18 @@ BookingStatusStyle styleFor(Booking booking, ColorScheme scheme) {
   return BookingStatusStyle(booking.status, scheme.secondaryContainer);
 }
 
-String _dateFr(DateTime d) => '${d.day}/${d.month}/${d.year}';
+/// Formats [d] with the active locale's medium-long date format
+/// (e.g. « 2 nov. 2026 » in FR, « Nov 2, 2026 » in EN). Unknown values fall
+/// back to the raw ISO day/month/year shape so a malformed date never
+/// crashes the card.
+String formatDate(BuildContext context, DateTime d) {
+  final loc = AppLocalizations.of(context);
+  try {
+    return intl.DateFormat.yMMMd(loc.localeName).format(d);
+  } catch (_) {
+    return '${d.day}/${d.month}/${d.year}';
+  }
+}
 
 class _BookingCard extends StatelessWidget {
   const _BookingCard({required this.booking, required this.poiName});
@@ -180,7 +196,8 @@ class _BookingCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final provider = context.read<BookingProvider>();
-    final style = styleFor(booking, scheme);
+    final loc = AppLocalizations.of(context);
+    final style = styleFor(booking, scheme, loc);
     return Card(
       key: Key('booking_card_${booking.id}'),
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -208,17 +225,20 @@ class _BookingCard extends StatelessWidget {
               ),
             ]),
             const SizedBox(height: 8),
-            Text('Prestataire : ${booking.adapterType}',
+            Text(loc.bookingPartnerLabel(booking.adapterType),
                 style: Theme.of(context).textTheme.bodySmall),
             if (booking.createdAt != null)
-              Text(_dateFr(booking.createdAt!),
+              Text(formatDate(context, booking.createdAt!),
                   style: Theme.of(context).textTheme.bodySmall),
             if (booking.price != null)
-              Text('${booking.price} ${booking.currency}',
-                  style: Theme.of(context).textTheme.bodySmall),
+              Text(
+                loc.bookingPrice(booking.price!, booking.currency),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
             if (booking.isPending && booking.respondBy != null)
               Text(
-                'Réponse attendue avant le ${_dateFr(booking.respondBy!)}',
+                loc.bookingRespondBy(
+                    formatDate(context, booking.respondBy!)),
                 key: Key('booking_respond_by_${booking.id}'),
                 style: Theme.of(context)
                     .textTheme
@@ -228,9 +248,9 @@ class _BookingCard extends StatelessWidget {
             if (booking.isAwaitingPartner)
               Text(
                 booking.respondBy != null
-                    ? 'Le prestataire doit confirmer avant le '
-                        '${_dateFr(booking.respondBy!)}'
-                    : 'Le prestataire doit confirmer votre demande',
+                    ? loc.bookingAwaitingPartnerBy(
+                        formatDate(context, booking.respondBy!))
+                    : loc.bookingAwaitingPartner,
                 key: Key('booking_awaiting_${booking.id}'),
                 style: Theme.of(context)
                     .textTheme
@@ -241,7 +261,7 @@ class _BookingCard extends StatelessWidget {
                 booking.partnerNote != null &&
                 booking.partnerNote!.isNotEmpty)
               Text(
-                'Message du prestataire : ${booking.partnerNote}',
+                loc.bookingPartnerNote(booking.partnerNote!),
                 key: Key('booking_partner_note_${booking.id}'),
                 maxLines: 4,
                 overflow: TextOverflow.ellipsis,
@@ -249,8 +269,7 @@ class _BookingCard extends StatelessWidget {
               ),
             if (booking.isExpired)
               Text(
-                "Le prestataire n'a pas répondu à temps. Vous pouvez "
-                'refaire une demande.',
+                loc.bookingExpiredHint,
                 key: Key('booking_expired_hint_${booking.id}'),
                 style: Theme.of(context)
                     .textTheme
@@ -273,7 +292,7 @@ class _BookingCard extends StatelessWidget {
                   FilledButton(
                     key: Key('booking_consent_${booking.id}'),
                     onPressed: () => showConsentDialog(context, booking),
-                    child: const Text('Confirmer'),
+                    child: Text(loc.bookingConfirmAction),
                   ),
                   const SizedBox(width: 8),
                 ],
@@ -282,8 +301,21 @@ class _BookingCard extends StatelessWidget {
                     key: Key('booking_cancel_${booking.id}'),
                     onPressed: provider.isActing
                         ? null
-                        : () => provider.cancelBooking(booking),
-                    child: const Text('Annuler'),
+                        : () async {
+                            await provider.cancelBooking(booking);
+                            if (provider.cancelError != null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  key: const Key(
+                                      'booking_cancel_error_snackbar'),
+                                  content: Text(
+                                      _cancelErrorMessage(
+                                          loc, provider.cancelError!)),
+                                ),
+                              );
+                            }
+                          },
+                    child: Text(loc.bookingCancelAction),
                   ),
               ]),
             ],
@@ -297,6 +329,7 @@ class _BookingCard extends StatelessWidget {
 /// Explicit consent step (principle 5): recap → confirm (true → confirmed +
 /// `EXT-…`) or refuse (false → cancelled). No auto-confirmation, ever.
 Future<void> showConsentDialog(BuildContext context, Booking booking) {
+  final loc = AppLocalizations.of(context);
   final provider = context.read<BookingProvider>();
   var poiName = booking.poiId;
   for (final p in context.read<POIProvider>().items) {
@@ -309,23 +342,20 @@ Future<void> showConsentDialog(BuildContext context, Booking booking) {
     context: context,
     builder: (dialogContext) => AlertDialog(
       key: const Key('booking_consent_dialog'),
-      title: const Text('Confirmer la réservation'),
+      title: Text(loc.bookingConsentTitle),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(poiName, style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 4),
-          Text('Prestataire : ${booking.adapterType}'),
+          Text(loc.bookingPartnerLabel(booking.adapterType)),
           if (booking.price != null)
-            Text('${booking.price} ${booking.currency}'),
+            Text(loc.bookingPrice(booking.price!, booking.currency)),
           const SizedBox(height: 12),
           Text(booking.bookingMode == 'manual_confirm'
-              ? 'Votre demande sera transmise au prestataire, qui doit la '
-                  'confirmer.'
-              : 'En confirmant, le Booking-Agent générera une référence '
-                  'externe (EXT-…). Sans confirmation, la réservation reste '
-                  'sans effet et sera annulée.'),
+              ? loc.bookingConsentManualConfirm
+              : loc.bookingConsentExternalRef),
         ],
       ),
       actions: [
@@ -335,7 +365,7 @@ Future<void> showConsentDialog(BuildContext context, Booking booking) {
             Navigator.of(dialogContext).pop();
             await provider.giveConsent(booking, consent: false);
           },
-          child: const Text('Refuser'),
+          child: Text(loc.bookingRefuseAction),
         ),
         FilledButton(
           key: const Key('booking_consent_confirm'),
@@ -348,14 +378,14 @@ Future<void> showConsentDialog(BuildContext context, Booking booking) {
                 updated.isAwaitingPartner &&
                 context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  key: Key('booking_requested_snackbar'),
-                  content: Text('Demande envoyée au prestataire'),
+                SnackBar(
+                  key: const Key('booking_requested_snackbar'),
+                  content: Text(loc.bookingRequestedSnackbar),
                 ),
               );
             }
           },
-          child: const Text('Confirmer'),
+          child: Text(loc.bookingConfirmAction),
         ),
       ],
     ),
@@ -389,13 +419,6 @@ class _BookingSheet extends StatefulWidget {
 }
 
 class _BookingSheetState extends State<_BookingSheet> {
-  static const _adapterLabels = {
-    'hotel': 'Hôtel',
-    'restaurant': 'Restaurant',
-    'tour': 'Visite guidée',
-    'transport': 'Transport',
-  };
-
   String? _selected;
   bool _loading = false;
 
@@ -432,6 +455,22 @@ class _BookingSheetState extends State<_BookingSheet> {
       ? null
       : BookingDetails(date: _date!, guests: _guests, notes: _notes.text);
 
+  /// Localized label for an adapter type, from the ARB (never hardcoded).
+  String _adapterLabel(AppLocalizations loc, String type) {
+    switch (type) {
+      case 'hotel':
+        return loc.bookingAdapterHotel;
+      case 'restaurant':
+        return loc.bookingAdapterRestaurant;
+      case 'tour':
+        return loc.bookingAdapterTour;
+      case 'transport':
+        return loc.bookingAdapterTransport;
+      default:
+        return type;
+    }
+  }
+
   /// One key per logical attempt (mobile mirror of the backend contract):
   /// generated lazily on the first "Create" tap and reused verbatim on any
   /// network/5xx retry so the backend replays instead of duplicating. Cleared
@@ -460,6 +499,7 @@ class _BookingSheetState extends State<_BookingSheet> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final provider = context.watch<BookingProvider>();
+    final loc = AppLocalizations.of(context);
     final adapters = provider.adapters.keys.toList()..sort();
     final soft = Theme.of(context)
         .textTheme
@@ -479,12 +519,11 @@ class _BookingSheetState extends State<_BookingSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Réserver — ${widget.poi.name}',
+            Text(loc.bookingSheetTitle(widget.poi.name),
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 4),
             Text(
-              'La réservation est créée en attente : elle ne devient ferme '
-              'qu’après votre confirmation explicite.',
+              loc.bookingSheetPendingHint,
               style: soft,
             ),
             const SizedBox(height: 12),
@@ -495,17 +534,17 @@ class _BookingSheetState extends State<_BookingSheet> {
               )
             else if (!_loading &&
                 adapters.isEmpty &&
-                provider.error != null) ...[
-              Text('Impossible de charger les prestataires',
+                provider.loadError != null) ...[
+              Text(loc.bookingAdaptersError,
                   style: TextStyle(color: scheme.error)),
               TextButton(
                 onPressed: _loadAdapters,
-                child: const Text('Réessayer'),
+                child: Text(loc.bookingsRetry),
               ),
             ] else if (!_loading && adapters.isEmpty)
-              const Padding(
+              Padding(
                 padding: EdgeInsets.symmetric(vertical: 24),
-                child: Text('Aucun prestataire disponible pour le moment'),
+                child: Text(loc.bookingAdaptersEmpty),
               )
             else
               Wrap(
@@ -515,7 +554,7 @@ class _BookingSheetState extends State<_BookingSheet> {
                   for (final type in adapters)
                     ChoiceChip(
                       key: Key('booking_adapter_$type'),
-                      label: Text(_adapterLabels[type] ?? type),
+                      label: Text(_adapterLabel(loc, type)),
                       selected: _selected == type,
                       onSelected: (_) => setState(() {
                         if (_selected != type) {
@@ -545,14 +584,13 @@ class _BookingSheetState extends State<_BookingSheet> {
                       ? null
                       : _create,
               child: Text(
-                  provider.isActing ? 'Création…' : 'Créer la réservation'),
+                  provider.isActing ? loc.bookingCreatingAction : loc.bookingCreateAction),
             ),
             if (provider.actionError != null) ...[
               const SizedBox(height: 8),
-              Text(provider.actionError!,
-                  style: TextStyle(color: scheme.error)),
+              Text(_actionErrorMessage(loc, provider.actionError!)),
+              const SizedBox(height: 8),
             ],
-            const SizedBox(height: 8),
           ],
         ),
       ),
@@ -614,6 +652,33 @@ class _BookingSheetState extends State<_BookingSheet> {
     await showConsentDialog(context, created);
     if (mounted) Navigator.of(context).pop();
   }
+
+  /// Maps a typed [BookingError] to its localized user-facing message.
+  String _actionErrorMessage(AppLocalizations loc, BookingError error) {
+    switch (error) {
+      case BookingError.conflict:
+        return loc.bookingErrorConflict;
+      case BookingError.unavailable:
+        return loc.bookingErrorUnavailable;
+      case BookingError.network:
+        return loc.bookingErrorNetwork;
+      case BookingError.generic:
+        return loc.bookingErrorGeneric;
+    }
+  }
+
+}
+
+/// Maps a typed [BookingCancelError] to its localized user-facing message.
+String _cancelErrorMessage(AppLocalizations loc, BookingCancelError error) {
+  switch (error) {
+    case BookingCancelError.notCancellable:
+      return loc.bookingCancelErrorNotCancellable;
+    case BookingCancelError.network:
+      return loc.bookingCancelErrorNetwork;
+    case BookingCancelError.generic:
+      return loc.bookingCancelErrorGeneric;
+  }
 }
 
 /// Date, people and free-text notes collected by the booking sheet and sent
@@ -640,6 +705,7 @@ class _DetailsFields extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final loc = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -648,12 +714,14 @@ class _DetailsFields extends StatelessWidget {
           onPressed: onPickDate,
           icon: const Icon(Icons.calendar_today_outlined),
           label: Text(
-            date == null ? 'Choisir une date' : 'Date : ${_dateFr(date!)}',
+            date == null
+                ? loc.bookingDatePick
+                : loc.bookingDateLabel(formatDate(context, date!)),
           ),
         ),
         const SizedBox(height: 8),
         Row(children: [
-          Text('Personnes', style: Theme.of(context).textTheme.bodyLarge),
+          Text(loc.bookingGuests, style: Theme.of(context).textTheme.bodyLarge),
           const Spacer(),
           IconButton(
             key: const Key('booking_guests_minus'),
@@ -661,7 +729,7 @@ class _DetailsFields extends StatelessWidget {
                 ? null
                 : () => onGuestsChanged(guests - 1),
             icon: const Icon(Icons.remove_circle_outline),
-            tooltip: 'Retirer une personne',
+            tooltip: loc.bookingRemoveGuest,
           ),
           Text('$guests',
               key: const Key('booking_guests_value'),
@@ -672,7 +740,7 @@ class _DetailsFields extends StatelessWidget {
                 ? null
                 : () => onGuestsChanged(guests + 1),
             icon: const Icon(Icons.add_circle_outline),
-            tooltip: 'Ajouter une personne',
+            tooltip: loc.bookingAddGuest,
           ),
         ]),
         const SizedBox(height: 4),
@@ -682,8 +750,8 @@ class _DetailsFields extends StatelessWidget {
           maxLines: 3,
           maxLength: BookingDetails.kMaxNotesLength,
           decoration: InputDecoration(
-            labelText: 'Remarques (facultatif)',
-            helperText: 'Ne saisissez ni email ni numéro de téléphone.',
+            labelText: loc.bookingNotesLabel,
+            helperText: loc.bookingNotesHelper,
             helperStyle: TextStyle(color: scheme.onSurfaceVariant),
             border: const OutlineInputBorder(),
           ),

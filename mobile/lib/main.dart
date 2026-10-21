@@ -9,6 +9,7 @@ import 'providers/admin_categories_provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/booking_provider.dart';
 import 'providers/chat_provider.dart';
+import 'providers/locale_provider.dart';
 import 'providers/poi_provider.dart';
 import 'providers/promotion_provider.dart';
 import 'providers/research_collection_provider.dart';
@@ -28,6 +29,9 @@ import 'services/api_service.dart';
 /// d'écran passaient, puisqu'ils injectent leur propre provider.
 List<SingleChildWidget> appProviders() => [
       ChangeNotifierProvider(create: (_) => AuthProvider()),
+      // LocaleProvider early: DiscoverAIApp watches it for `MaterialApp.locale`
+      // — it must sit above, not beside, the app widget.
+      ChangeNotifierProvider(create: (_) => LocaleProvider()),
       ChangeNotifierProvider(
         create: (_) => TenantProvider()
           ..loadTenant()

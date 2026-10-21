@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:discover_ai/l10n/app_localizations.dart';
 import 'package:discover_ai/providers/poi_provider.dart';
 import 'package:discover_ai/screens/poi_list_screen.dart';
 import 'package:discover_ai/services/api_service.dart';
@@ -7,6 +8,8 @@ import 'package:fake_async/fake_async.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+
+import 'helpers/fakes.dart';
 
 /// PoisApi whose responses are held back until the test releases them.
 /// Lets tests resolve fetches OUT OF ORDER and prove the provider's
@@ -134,7 +137,8 @@ void main() {
       api.fail(0, ApiException(500, '{"detail":"boom"}'));
       await fetch;
 
-      expect(provider.error, contains('boom'));
+      // Provider contract: locale-agnostic code (screen owns the text).
+      expect(provider.error, POIError.generic);
       expect(provider.items, isEmpty);
       expect(provider.isLoading, isFalse);
     });
@@ -145,10 +149,31 @@ void main() {
       await tester.pumpWidget(
         ChangeNotifierProvider<POIProvider>.value(
           value: provider,
-          child: const MaterialApp(home: POIListScreen()),
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            locale: const Locale('en'),
+            home: const POIListScreen(),
+          ),
         ),
       );
       await tester.pump(); // post-frame callback → initial loadPOIs()
+    }
+
+    /// Idem pumpExplorer(), mais avec la locale FR.
+    Future<void> pumpExplorerFr(WidgetTester tester, POIProvider provider) async {
+      await tester.pumpWidget(
+        ChangeNotifierProvider<POIProvider>.value(
+          value: provider,
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            locale: const Locale('fr'),
+            home: const POIListScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
     }
 
     testWidgets('typing fires one debounced request and renders the results',
@@ -197,6 +222,15 @@ void main() {
       expect(api.searchArgs, [null, 'casbah', null],
           reason: 'clear resets immediately, no debounce');
       expect(provider.searchQuery, isEmpty);
+    });
+
+    testWidgets('Explorer rend ses chaînes FR après la migration i18n',
+        (tester) async {
+      final provider = POIProvider(poisApi: FakePoisApi(itemsJson: []));
+      await pumpExplorerFr(tester, provider);
+
+      expect(find.text('Rechercher des lieux, des villes…'), findsOneWidget);
+      expect(find.text('Aucun lieu pour le moment.'), findsOneWidget);
     });
   });
 }

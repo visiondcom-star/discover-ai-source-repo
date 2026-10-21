@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/poi.dart';
 import 'bookings_screen.dart';
 import 'trip_form_screen.dart';
@@ -32,6 +33,7 @@ class PoiDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final icon = _categoryIcons[poi.category] ?? Icons.place;
     final hasDescription =
@@ -97,9 +99,9 @@ class PoiDetailScreen extends StatelessWidget {
                           label: Text(category),
                         ),
                       if (poi.isVerified)
-                        const Chip(
-                          avatar: Icon(Icons.verified, size: 16),
-                          label: Text('Verified'),
+                        Chip(
+                          avatar: const Icon(Icons.verified, size: 16),
+                          label: Text(loc.poiDetailVerified),
                         ),
                     ],
                   ),
@@ -117,7 +119,7 @@ class PoiDetailScreen extends StatelessWidget {
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          '(${poi.reviewCount} reviews)',
+                          loc.poiDetailReviews(poi.reviewCount),
                           style: theme.textTheme.bodySmall,
                         ),
                       ],
@@ -133,14 +135,14 @@ class PoiDetailScreen extends StatelessWidget {
                           Expanded(
                             child: _InfoTile(
                               icon: Icons.schedule,
-                              label: 'Duration',
-                              value: '${poi.durationMinutes} min',
+                              label: loc.poiDetailDuration,
+                              value: loc.poiDurationMinutes(poi.durationMinutes),
                             ),
                           ),
                           Expanded(
                             child: _InfoTile(
                               icon: Icons.payments_outlined,
-                              label: 'Price',
+                              label: loc.poiDetailPrice,
                               value: poi.priceRange,
                             ),
                           ),
@@ -149,7 +151,7 @@ class PoiDetailScreen extends StatelessWidget {
                             Expanded(
                               child: _InfoTile(
                                 icon: Icons.location_on_outlined,
-                                label: 'Address',
+                                label: loc.poiDetailAddress,
                                 value: poi.address!,
                               ),
                             ),
@@ -159,7 +161,7 @@ class PoiDetailScreen extends StatelessWidget {
                   ),
                   if (hasDescription) ...[
                     const SizedBox(height: 20),
-                    Text('About', style: theme.textTheme.titleMedium),
+                    Text(loc.poiDetailAbout, style: theme.textTheme.titleMedium),
                     const SizedBox(height: 6),
                     Text(
                       poi.description!,
@@ -195,7 +197,7 @@ class PoiDetailScreen extends StatelessWidget {
                   ],
                   if (poi.tags.isNotEmpty) ...[
                     const SizedBox(height: 20),
-                    Text('Tags', style: theme.textTheme.titleMedium),
+                    Text(loc.poiDetailTags, style: theme.textTheme.titleMedium),
                     const SizedBox(height: 6),
                     Wrap(
                       key: const Key('poi_detail_tags'),
@@ -208,7 +210,8 @@ class PoiDetailScreen extends StatelessWidget {
                   ],
                   if (poi.accessibility.isNotEmpty) ...[
                     const SizedBox(height: 20),
-                    Text('Accessibility', style: theme.textTheme.titleMedium),
+                    Text(loc.poiDetailAccessibility,
+                        style: theme.textTheme.titleMedium),
                     const SizedBox(height: 6),
                     Wrap(
                       key: const Key('poi_detail_accessibility'),
@@ -226,7 +229,8 @@ class PoiDetailScreen extends StatelessWidget {
                   ],
                   if (poi.openingHours.isNotEmpty) ...[
                     const SizedBox(height: 20),
-                    Text('Opening hours', style: theme.textTheme.titleMedium),
+                    Text(loc.poiDetailOpeningHours,
+                        style: theme.textTheme.titleMedium),
                     const SizedBox(height: 6),
                     Card(
                       key: const Key('poi_detail_hours'),
@@ -254,7 +258,7 @@ class PoiDetailScreen extends StatelessWidget {
                             builder: (_) => const TripFormScreen()),
                       ),
                       icon: const Icon(Icons.map_outlined),
-                      label: const Text('Plan a visit'),
+                      label: Text(loc.poiDetailPlanVisit),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -265,7 +269,7 @@ class PoiDetailScreen extends StatelessWidget {
                         key: const Key('poi_detail_book_button'),
                         onPressed: () => showBookingSheet(context, poi),
                         icon: const Icon(Icons.verified_user_outlined),
-                        label: const Text('Book'),
+                        label: Text(loc.poiDetailBook),
                       ),
                     ),
                     // Optional companion label for the non-default bookable
@@ -275,8 +279,8 @@ class PoiDetailScreen extends StatelessWidget {
                       Center(
                         child: Text(
                           poi.bookingMode == 'pay_on_site'
-                              ? 'Pay on site'
-                              : 'Confirmation by the provider',
+                              ? loc.poiDetailPayOnSite
+                              : loc.poiDetailProviderConfirmation,
                           key: Key(
                               'poi_detail_booking_mode_${poi.bookingMode}'),
                           style: theme.textTheme.bodySmall
@@ -290,7 +294,7 @@ class PoiDetailScreen extends StatelessWidget {
                     Center(
                       key: const Key('poi_detail_info_only'),
                       child: Text(
-                        'Information only — booking not available',
+                        loc.poiDetailInfoOnly,
                         style: theme.textTheme.bodySmall
                             ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                       ),
@@ -300,7 +304,7 @@ class PoiDetailScreen extends StatelessWidget {
                     Center(
                       key: const Key('poi_detail_booking_soon'),
                       child: Text(
-                        'Online booking coming soon',
+                        loc.poiDetailBookingSoon,
                         style: theme.textTheme.bodySmall
                             ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                       ),

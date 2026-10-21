@@ -1,3 +1,4 @@
+import 'package:discover_ai/l10n/app_localizations.dart';
 import 'package:discover_ai/models/poi.dart';
 import 'package:discover_ai/providers/booking_provider.dart';
 import 'package:discover_ai/providers/poi_provider.dart';
@@ -43,7 +44,12 @@ void main() {
           ChangeNotifierProvider<BookingProvider>.value(value: bookingProvider),
           ChangeNotifierProvider<POIProvider>.value(value: poiProvider),
         ],
-        child: const MaterialApp(home: BookingsScreen()),
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('en'),
+          home: const BookingsScreen(),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -121,7 +127,12 @@ void main() {
           ChangeNotifierProvider<BookingProvider>.value(value: provider),
           ChangeNotifierProvider<POIProvider>.value(value: await loadedPois()),
         ],
-        child: MaterialApp(home: PoiDetailScreen(poi: _poi(samplePoisJson[0]))),
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('en'),
+          home: PoiDetailScreen(poi: _poi(samplePoisJson[0])),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -165,7 +176,12 @@ void main() {
           ChangeNotifierProvider<BookingProvider>.value(value: provider),
           ChangeNotifierProvider<POIProvider>.value(value: await loadedPois()),
         ],
-        child: MaterialApp(home: PoiDetailScreen(poi: _poi(samplePoisJson[0]))),
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('en'),
+          home: PoiDetailScreen(poi: _poi(samplePoisJson[0])),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -206,7 +222,12 @@ void main() {
           ChangeNotifierProvider<BookingProvider>.value(value: provider),
           ChangeNotifierProvider<POIProvider>.value(value: await loadedPois()),
         ],
-        child: MaterialApp(home: PoiDetailScreen(poi: _poi(samplePoisJson[0]))),
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('en'),
+          home: PoiDetailScreen(poi: _poi(samplePoisJson[0])),
+        ),
       ),
     );
     await tester.pumpAndSettle();

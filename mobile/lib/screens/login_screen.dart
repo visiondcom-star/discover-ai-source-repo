@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../config.dart';
+import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -27,26 +28,48 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _submitting = true);
-    final ok = await context.read<AuthProvider>().login(
-          _emailController.text.trim(),
-          _passwordController.text,
-        );
+    final auth = context.read<AuthProvider>();
+    final ok = await auth.login(
+      _emailController.text.trim(),
+      _passwordController.text,
+    );
     if (!mounted) return;
     setState(() => _submitting = false);
     if (!ok) {
+      final loc = AppLocalizations.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Invalid email or password.', key: Key('login_error')),
+        SnackBar(
+          content: Text(
+            _loginErrorText(loc, auth.loginError),
+            key: const Key('login_error'),
+          ),
         ),
       );
     }
-    // On success the AuthGate switches to POIListScreen automatically.
+    // On success the AuthGate switches to HomeShell automatically.
+  }
+
+  /// Translates the provider's locale-agnostic [AuthError] into a
+  /// user-facing string. The provider has no `BuildContext`, so the mapping
+  /// lives here — and the `null` case (login returned false without setting
+  /// a code, e.g. an empty token) falls back to the generic message.
+  String _loginErrorText(AppLocalizations loc, AuthError? error) {
+    switch (error) {
+      case AuthError.invalidCredentials:
+        return loc.loginErrorInvalidCredentials;
+      case AuthError.network:
+        return loc.loginErrorNetwork;
+      case AuthError.generic:
+      case null:
+        return loc.loginErrorGeneric;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Discover AI')),
+      appBar: AppBar(title: Text(loc.appName)),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -61,13 +84,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextFormField(
                   key: const Key('login_email'),
                   controller: _emailController,
-                  decoration: const InputDecoration(
-                    labelText: 'Email',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: loc.loginEmailLabel,
+                    border: const OutlineInputBorder(),
                   ),
                   keyboardType: TextInputType.emailAddress,
                   validator: (v) => (v == null || !v.contains('@'))
-                      ? 'Enter a valid email'
+                      ? loc.loginEmailInvalid
                       : null,
                 ),
                 const SizedBox(height: 16),
@@ -75,14 +98,15 @@ class _LoginScreenState extends State<LoginScreen> {
                   key: const Key('login_password'),
                   controller: _passwordController,
                   obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Password',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: loc.loginPasswordLabel,
+                    border: const OutlineInputBorder(),
                   ),
                   enableSuggestions: false,
                   autocorrect: false,
-                  validator: (v) =>
-                      (v == null || v.isEmpty) ? 'Enter your password' : null,
+                  validator: (v) => (v == null || v.isEmpty)
+                      ? loc.loginPasswordRequired
+                      : null,
                 ),
                 const SizedBox(height: 24),
                 FilledButton(
@@ -94,7 +118,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           width: 20,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('Sign in'),
+                      : Text(loc.loginSubmit),
                 ),
               ],
             ),

@@ -1,3 +1,4 @@
+import 'package:discover_ai/l10n/app_localizations.dart';
 import 'package:discover_ai/models/poi.dart';
 import 'package:discover_ai/providers/booking_provider.dart';
 import 'package:discover_ai/providers/poi_provider.dart';
@@ -28,7 +29,12 @@ void main() {
               value: BookingProvider(bookingsApi: api)),
           ChangeNotifierProvider<POIProvider>.value(value: await loadedPois()),
         ],
-        child: MaterialApp(home: PoiDetailScreen(poi: _poi(samplePoisJson[0]))),
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('en'),
+          home: PoiDetailScreen(poi: _poi(samplePoisJson[0])),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -165,7 +171,12 @@ void main() {
               value: BookingProvider(bookingsApi: FakeBookingsApi())),
           ChangeNotifierProvider<POIProvider>.value(value: await loadedPois()),
         ],
-        child: MaterialApp(home: PoiDetailScreen(poi: infoOnly)),
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('en'),
+          home: PoiDetailScreen(poi: infoOnly),
+        ),
       ),
     );
     await tester.pumpAndSettle();

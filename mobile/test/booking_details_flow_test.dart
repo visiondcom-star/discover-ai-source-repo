@@ -1,4 +1,5 @@
 import 'package:discover_ai/l10n/app_localizations.dart';
+import 'package:discover_ai/l10n/app_localizations_en.dart';
 import 'package:discover_ai/models/poi.dart';
 import 'package:discover_ai/providers/booking_provider.dart';
 import 'package:discover_ai/providers/poi_provider.dart';
@@ -143,8 +144,10 @@ void main() {
 
   testWidgets('notes field shows the no-personal-data helper', (tester) async {
     await openSheet(tester);
+    // The harness pumps with locale 'en' (see openSheet) ⇒ the helper is the
+    // EN string, read from the localization instead of being hardcoded.
     expect(
-      find.text('Ne saisissez ni email ni numéro de téléphone.'),
+      find.text(AppLocalizationsEn().bookingNotesHelper),
       findsOneWidget,
     );
   });

@@ -149,7 +149,8 @@ void main() {
       expect(fake.maxConcurrentStatusCalls, 1);
     });
 
-    test('erreur inattendue au lancement : isLoading retombe et un message '
+    test(
+        'erreur inattendue au lancement : isLoading retombe et un message '
         'est affiché', () async {
       final provider =
           ResearchCollectionProvider(_BrokenApi(), pollInterval: _fast);
@@ -158,7 +159,7 @@ void main() {
       await provider.startCollection(tenantId: 't1');
 
       expect(provider.isLoading, isFalse);
-      expect(provider.error, 'Échec du lancement de la collecte.');
+      expect(provider.error, ResearchCollectionError.generic);
       expect(provider.currentJob, isNull);
     });
 

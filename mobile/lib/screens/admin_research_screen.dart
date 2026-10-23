@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/research_job.dart';
 import '../models/tenant_category.dart';
 import '../providers/admin_categories_provider.dart';
@@ -19,6 +20,20 @@ class AdminResearchScreen extends StatefulWidget {
 }
 
 class _AdminResearchScreenState extends State<AdminResearchScreen> {
+  String _errorText(AppLocalizations loc, ResearchError? error) {
+    switch (error) {
+      case ResearchError.rateLimited:
+        return loc.adminResearchErrorRateLimited;
+      case ResearchError.pollFailed:
+        return loc.adminResearchErrorPollFailed;
+      case ResearchError.network:
+        return loc.adminResearchErrorNetwork;
+      case ResearchError.generic:
+      case null:
+        return loc.adminResearchErrorGeneric;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -33,13 +48,14 @@ class _AdminResearchScreenState extends State<AdminResearchScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     final tenant = context.watch<TenantProvider>().tenant;
     final research = context.watch<ResearchProvider>();
     final job = research.currentJob;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Recherche IA — destination')),
+      appBar: AppBar(title: Text(loc.adminResearchTitle)),
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
@@ -50,7 +66,7 @@ class _AdminResearchScreenState extends State<AdminResearchScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Statut du pipeline',
+                  Text(loc.adminResearchStatusTitle,
                       style: Theme.of(context)
                           .textTheme
                           .titleMedium
@@ -59,15 +75,17 @@ class _AdminResearchScreenState extends State<AdminResearchScreen> {
                   _StatusRow(job: job, isLoading: research.isLoading),
                   if (research.error != null) ...[
                     const SizedBox(height: 12),
-                    Text(research.error!,
+                    Text(_errorText(loc, research.error),
                         style: TextStyle(color: scheme.error)),
                   ],
                   if (job != null && job.status.isTerminal) ...[
                     const SizedBox(height: 8),
                     Text(
-                      '${job.categoriesProposed} proposée(s) · '
-                      '${job.categoriesAutoPublished} publiée(s) auto · '
-                      '${job.categoriesPendingReview} en attente de revue',
+                      loc.adminResearchSummary(
+                        job.categoriesProposed,
+                        job.categoriesAutoPublished,
+                        job.categoriesPendingReview,
+                      ),
                       style: Theme.of(context)
                           .textTheme
                           .bodySmall
@@ -97,26 +115,21 @@ class _AdminResearchScreenState extends State<AdminResearchScreen> {
                   )
                 : const Icon(Icons.travel_explore),
             label: Text(research.isRunning
-                ? 'Recherche en cours…'
-                : 'Lancer la recherche IA'),
+                ? loc.adminResearchRunning
+                : loc.adminResearchRunButton),
           ),
           const SizedBox(height: 24),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Catégories du territoire',
+              Text(loc.adminResearchCategoriesTitle,
                   style: Theme.of(context)
                       .textTheme
                       .titleMedium
                       ?.copyWith(fontWeight: FontWeight.bold)),
-              // Le rechargement n'est plus déclenché ici : le catalogue voyageur
-              // se rafraîchit depuis `ResearchProvider.onJobDone` (branché dans
-              // main.dart) et depuis `AdminCategoriesProvider.onChanged`. Ce
-              // bouton ne rafraîchissait que si l'admin y pensez, ce qui laissait
-              // la file de validation fausser dès la fin d'un run.
               IconButton(
                 key: const Key('refresh_categories_button'),
-                tooltip: 'Actualiser',
+                tooltip: loc.adminResearchRefreshTooltip,
                 icon: const Icon(Icons.refresh),
                 onPressed: () => context.read<AdminCategoriesProvider>().load(),
               ),
@@ -136,8 +149,24 @@ class _StatusRow extends StatelessWidget {
   final ResearchJob? job;
   final bool isLoading;
 
+  String _statusLabel(AppLocalizations loc, ResearchJobStatus? status) {
+    switch (status) {
+      case ResearchJobStatus.pending:
+        return loc.adminResearchStatusPending;
+      case ResearchJobStatus.processing:
+        return loc.adminResearchStatusProcessing;
+      case ResearchJobStatus.done:
+        return loc.adminResearchStatusDone;
+      case ResearchJobStatus.failed:
+        return loc.adminResearchStatusFailed;
+      case null:
+        return loc.adminResearchStatusReady;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
 
     if (isLoading || (job != null && !job!.status.isTerminal)) {
@@ -149,13 +178,13 @@ class _StatusRow extends StatelessWidget {
             child: CircularProgressIndicator(strokeWidth: 2),
           ),
           const SizedBox(width: 12),
-          Text(_statusLabel(job?.status)),
+          Text(_statusLabel(loc, job?.status)),
         ],
       );
     }
 
     if (job == null) {
-      return Text('Aucun run lancé récemment',
+      return Text(loc.adminResearchNoRecentRun,
           style: TextStyle(color: scheme.onSurfaceVariant));
     }
 
@@ -167,37 +196,32 @@ class _StatusRow extends StatelessWidget {
           color: isFailed ? scheme.error : Colors.green,
         ),
         const SizedBox(width: 8),
-        Text(_statusLabel(job!.status)),
+        Text(_statusLabel(loc, job!.status)),
       ],
     );
-  }
-
-  String _statusLabel(ResearchJobStatus? status) {
-    switch (status) {
-      case ResearchJobStatus.pending:
-        return 'En attente de démarrage…';
-      case ResearchJobStatus.processing:
-        return 'Traitement en cours…';
-      case ResearchJobStatus.done:
-        return 'Terminé';
-      case ResearchJobStatus.failed:
-        return 'Échec du run';
-      case null:
-        return 'Prêt';
-    }
   }
 }
 
 class _CategoriesList extends StatelessWidget {
   const _CategoriesList();
 
+  String _categoriesErrorText(
+      AppLocalizations loc, AdminCategoriesError? error) {
+    switch (error) {
+      case AdminCategoriesError.network:
+        return loc.adminCategoriesErrorNetwork;
+      case AdminCategoriesError.generic:
+      case null:
+        return loc.adminCategoriesErrorGeneric;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     final admin = context.watch<AdminCategoriesProvider>();
     final scheme = Theme.of(context).colorScheme;
 
-    // proposed d'abord (à traiter), puis active, puis rejected. Trois passes
-    // plutôt qu'un sort() : l'ordre du serveur est conservé dans chaque groupe.
     final ordered = [
       for (final s in const ['proposed', 'active', 'rejected'])
         ...admin.categories.where((c) => c.status == s),
@@ -208,15 +232,16 @@ class _CategoriesList extends StatelessWidget {
         if (admin.error != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: Text(admin.error!, style: TextStyle(color: scheme.error)),
+            child: Text(_categoriesErrorText(loc, admin.error),
+                style: TextStyle(color: scheme.error)),
           ),
         if (ordered.isEmpty && !admin.isLoading)
-          const Card(
+          Card(
             margin: EdgeInsets.zero,
             child: ListTile(
               enabled: false,
-              leading: Icon(Icons.category_outlined),
-              title: Text('Aucune catégorie pour le moment'),
+              leading: const Icon(Icons.category_outlined),
+              title: Text(loc.adminResearchNoCategories),
             ),
           ),
         for (final cat in ordered)
@@ -233,24 +258,24 @@ class _CategoryTile extends StatelessWidget {
   final bool busy;
 
   Future<void> _change(BuildContext context, String status) async {
+    final loc = AppLocalizations.of(context);
     if (status == 'rejected') {
       // D'après le schéma, pas de retour arrière depuis `rejected`.
       final ok = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Rejeter cette catégorie ?'),
+          title: Text(loc.adminResearchRejectDialogTitle),
           content: Text(category.status == 'active'
-              ? 'Elle disparaîtra de l’app pour les voyageurs. '
-                  'Cette action est définitive.'
-              : 'Cette action est définitive.'),
+              ? loc.adminResearchRejectActiveContent
+              : loc.adminResearchRejectContent),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Annuler'),
+              child: Text(loc.adminResearchCancel),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Confirmer'),
+              child: Text(loc.adminResearchConfirm),
             ),
           ],
         ),
@@ -262,6 +287,7 @@ class _CategoryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     final id = category.id;
 
@@ -276,13 +302,13 @@ class _CategoryTile extends StatelessWidget {
       trailing = Row(mainAxisSize: MainAxisSize.min, children: [
         IconButton(
           key: Key('publish_$id'),
-          tooltip: 'Publier',
+          tooltip: loc.adminResearchPublish,
           icon: const Icon(Icons.check_circle_outline, color: Colors.green),
           onPressed: () => _change(context, 'active'),
         ),
         IconButton(
           key: Key('reject_$id'),
-          tooltip: 'Rejeter',
+          tooltip: loc.adminResearchReject,
           icon: Icon(Icons.cancel_outlined, color: scheme.error),
           onPressed: () => _change(context, 'rejected'),
         ),
@@ -290,12 +316,13 @@ class _CategoryTile extends StatelessWidget {
     } else if (category.status == 'active') {
       trailing = IconButton(
         key: Key('retire_$id'),
-        tooltip: 'Retirer',
+        tooltip: loc.adminResearchRetire,
         icon: const Icon(Icons.remove_circle_outline),
         onPressed: () => _change(context, 'rejected'),
       );
     } else {
-      trailing = Text('Rejetée', style: TextStyle(color: scheme.outline));
+      trailing = Text(loc.adminResearchRejected,
+          style: TextStyle(color: scheme.outline));
     }
 
     final confidence = category.confidence;

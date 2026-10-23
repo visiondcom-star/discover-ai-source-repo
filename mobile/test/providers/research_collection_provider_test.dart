@@ -37,8 +37,7 @@ Future<void> _waitFor(bool Function() condition) async {
   }
 }
 
-Future<void> _pause() =>
-    Future<void>.delayed(const Duration(milliseconds: 80));
+Future<void> _pause() => Future<void>.delayed(const Duration(milliseconds: 80));
 
 void main() {
   group('ResearchCollectionProvider', () {
@@ -69,25 +68,25 @@ void main() {
       provider.dispose();
     });
 
-    test('409 : message « déjà en cours »', () async {
+    test('409 : code conflict', () async {
       final fake = FakeResearchCollectionApi(runError: ApiException(409, 'x'));
       final provider = ResearchCollectionProvider(fake, pollInterval: _fast);
 
       await provider.startCollection(tenantId: 't1');
 
-      expect(provider.error, contains('déjà en cours'));
+      expect(provider.error, ResearchCollectionError.conflict);
       expect(provider.currentJob, isNull);
       expect(provider.isLoading, isFalse);
       provider.dispose();
     });
 
-    test('429 : message « patienter »', () async {
+    test('429 : code rateLimited', () async {
       final fake = FakeResearchCollectionApi(runError: ApiException(429, 'x'));
       final provider = ResearchCollectionProvider(fake, pollInterval: _fast);
 
       await provider.startCollection(tenantId: 't1');
 
-      expect(provider.error, contains('patienter'));
+      expect(provider.error, ResearchCollectionError.rateLimited);
       provider.dispose();
     });
 
@@ -187,13 +186,13 @@ void main() {
       provider.dispose();
     });
 
-    test('autre erreur : message générique', () async {
+    test('autre erreur : code generic', () async {
       final fake = FakeResearchCollectionApi(runError: ApiException(500, 'x'));
       final provider = ResearchCollectionProvider(fake, pollInterval: _fast);
 
       await provider.startCollection(tenantId: 't1');
 
-      expect(provider.error, 'Échec du lancement de la collecte.');
+      expect(provider.error, ResearchCollectionError.generic);
       provider.dispose();
     });
 
@@ -275,8 +274,8 @@ void main() {
         // s'empileraient.
         latency: const Duration(milliseconds: 40),
       );
-      final provider = ResearchCollectionProvider(
-          fake, pollInterval: const Duration(milliseconds: 5));
+      final provider = ResearchCollectionProvider(fake,
+          pollInterval: const Duration(milliseconds: 5));
 
       await provider.startCollection(tenantId: 't1');
       await _waitFor(() => fake.completedStatusCalls >= 2);
@@ -300,8 +299,8 @@ void main() {
         statusSequence: [_job(ResearchJobStatus.done, documentsNew: 1)],
         latency: const Duration(milliseconds: 50),
       );
-      final provider = ResearchCollectionProvider(
-          fake, pollInterval: const Duration(milliseconds: 10));
+      final provider = ResearchCollectionProvider(fake,
+          pollInterval: const Duration(milliseconds: 10));
 
       await provider.startCollection(tenantId: 't1');
       await _waitFor(() => fake.getStatusCalls.isNotEmpty);
@@ -328,8 +327,8 @@ void main() {
         statusSequence: [_job(ResearchJobStatus.done, documentsNew: 7)],
         statusGate: gate,
       );
-      final provider =
-          ResearchCollectionProvider(fake, pollInterval: const Duration(milliseconds: 5));
+      final provider = ResearchCollectionProvider(fake,
+          pollInterval: const Duration(milliseconds: 5));
 
       await provider.startCollection(tenantId: 't1');
       await _waitFor(() => fake.startedStatusCalls == 1);
@@ -353,8 +352,8 @@ void main() {
         statusSequence: [_job(ResearchJobStatus.done, documentsNew: 1)],
         statusGate: gate,
       );
-      final provider =
-          ResearchCollectionProvider(fake, pollInterval: const Duration(milliseconds: 5));
+      final provider = ResearchCollectionProvider(fake,
+          pollInterval: const Duration(milliseconds: 5));
 
       await provider.startCollection(tenantId: 't1');
       await _waitFor(() => fake.startedStatusCalls == 1);
@@ -376,8 +375,8 @@ void main() {
         statusSequence: [_job(ResearchJobStatus.processing)],
         latency: const Duration(milliseconds: 60),
       );
-      final provider = ResearchCollectionProvider(
-          fake, pollInterval: const Duration(milliseconds: 5));
+      final provider = ResearchCollectionProvider(fake,
+          pollInterval: const Duration(milliseconds: 5));
 
       await provider.startCollection(tenantId: 't1');
       await _waitFor(() => fake.completedStatusCalls >= 3);
@@ -430,7 +429,7 @@ void main() {
 
       expect(provider.isLoading, isFalse,
           reason: 'isLoading doit être libéré même sur erreur inattendue');
-      expect(provider.error, 'Échec du lancement de la collecte.');
+      expect(provider.error, ResearchCollectionError.generic);
       provider.dispose();
     });
 
@@ -444,7 +443,7 @@ void main() {
       await _waitFor(() => provider.error != null);
       await _pause();
 
-      expect(provider.error, 'Impossible de récupérer le statut de la collecte.');
+      expect(provider.error, ResearchCollectionError.pollFailed);
       final calls = fake.calls;
       await _pause();
       expect(fake.calls, calls, reason: 'polling arrêté après erreur');

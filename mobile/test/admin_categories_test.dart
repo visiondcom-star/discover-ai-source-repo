@@ -1,3 +1,4 @@
+import 'package:discover_ai/l10n/app_localizations.dart';
 import 'package:discover_ai/providers/admin_categories_provider.dart';
 import 'package:discover_ai/providers/research_provider.dart';
 import 'package:discover_ai/providers/tenant_provider.dart';
@@ -42,7 +43,8 @@ void main() {
     test('setStatus remplace la catégorie et déclenche onChanged', () async {
       final fake = FakeAdminCategoriesApi(categories: [_cat('a', 'proposed')]);
       var changed = 0;
-      final provider = AdminCategoriesProvider(fake, onChanged: () => changed++);
+      final provider =
+          AdminCategoriesProvider(fake, onChanged: () => changed++);
       await provider.load();
 
       await provider.setStatus(provider.categories.single, 'active');
@@ -61,7 +63,8 @@ void main() {
         updateError: ApiException(409, '{"detail":"invalid transition"}'),
       );
       var changed = 0;
-      final provider = AdminCategoriesProvider(fake, onChanged: () => changed++);
+      final provider =
+          AdminCategoriesProvider(fake, onChanged: () => changed++);
       await provider.load();
 
       await provider.setStatus(provider.categories.single, 'active');
@@ -90,7 +93,12 @@ void main() {
           ChangeNotifierProvider<TenantProvider>.value(value: tenants),
           ChangeNotifierProvider<AdminCategoriesProvider>.value(value: admin),
         ],
-        child: const MaterialApp(home: AdminResearchScreen()),
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('fr'),
+          home: AdminResearchScreen(),
+        ),
       ),
     );
     await tester.pumpAndSettle();

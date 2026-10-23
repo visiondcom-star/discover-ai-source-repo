@@ -1,8 +1,9 @@
 // test/providers/admin_collection_screen_test.dart
 
+import 'package:discover_ai/l10n/app_localizations.dart';
+import 'package:discover_ai/l10n/app_localizations_en.dart';
 import 'package:discover_ai/models/research_collection_job.dart';
 import 'package:discover_ai/models/research_job.dart';
-import 'package:discover_ai/l10n/app_localizations.dart';
 import 'package:discover_ai/providers/auth_provider.dart';
 import 'package:discover_ai/providers/locale_provider.dart';
 import 'package:discover_ai/providers/research_collection_provider.dart';
@@ -42,6 +43,7 @@ void main() {
       WidgetTester tester, {
       required ResearchCollectionProvider collection,
       required ResearchProvider research,
+      Locale locale = const Locale('fr'),
     }) async {
       final tenantsApi = FakeTenantsApi();
       final tenants = TenantProvider(tenantsApi: tenantsApi);
@@ -54,7 +56,12 @@ void main() {
             ChangeNotifierProvider<ResearchProvider>.value(value: research),
             ChangeNotifierProvider<TenantProvider>.value(value: tenants),
           ],
-          child: const MaterialApp(home: AdminCollectionScreen()),
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            locale: locale,
+            home: const AdminCollectionScreen(),
+          ),
         ),
       );
       await tester.pumpAndSettle();
@@ -145,6 +152,27 @@ void main() {
         find.text('5 récupéré(s) · 3 nouveau(x) · 2 doublon(s) · 0 en échec'),
         findsOneWidget,
       );
+
+      collection.dispose();
+      research.dispose();
+    });
+
+    testWidgets('AdminCollectionScreen rend ses chaînes en EN', (tester) async {
+      final collection =
+          ResearchCollectionProvider(FakeResearchCollectionApi());
+      final research = ResearchProvider(FakeResearchApi());
+
+      await pumpScreen(
+        tester,
+        collection: collection,
+        research: research,
+        locale: const Locale('en'),
+      );
+
+      final en = AppLocalizationsEn();
+      expect(find.text(en.adminCollectionTitle), findsOneWidget);
+      expect(find.text(en.adminCollectionRunPipeline), findsOneWidget);
+      expect(find.text(en.adminCollectionRunButton), findsOneWidget);
 
       collection.dispose();
       research.dispose();

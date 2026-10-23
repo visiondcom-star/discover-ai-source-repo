@@ -4,12 +4,23 @@
 // Même pattern que ResearchProvider (ChangeNotifier + polling).
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
 import '../models/research_collection_job.dart';
 import '../models/research_job.dart';
 import '../services/api_service.dart';
+
+/// Locale-agnostic failure codes for research collection operations.
+enum ResearchCollectionError {
+  conflict,
+  rateLimited,
+  pollFailed,
+  network,
+  generic,
+}
 
 /// Appelé une seule fois quand le serveur a enchaîné un job de recherche IA
 /// sur la collecte : l'appelant confie alors son suivi à ResearchProvider.
@@ -38,8 +49,8 @@ class ResearchCollectionProvider extends ChangeNotifier {
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
-  String? _error;
-  String? get error => _error;
+  ResearchCollectionError? _error;
+  ResearchCollectionError? get error => _error;
 
   /// Incrémenté à chaque relance/reset/dispose : toute réponse HTTP en vol
   /// portant une génération antérieure est ignorée. Sans cela, un `dispose()`
@@ -56,8 +67,7 @@ class ResearchCollectionProvider extends ChangeNotifier {
   int _chainWaitPolls = 0;
   bool _chainNotified = false;
 
-  bool get isRunning =>
-      _currentJob != null && !_currentJob!.status.isTerminal;
+  bool get isRunning => _currentJob != null && !_currentJob!.status.isTerminal;
 
   Future<void> startCollection({
     required String tenantId,
@@ -93,20 +103,34 @@ class ResearchCollectionProvider extends ChangeNotifier {
       if (gen != _generation) return;
       _isLoading = false;
       if (e.statusCode == 409) {
-        _error = 'Une collecte est déjà en cours pour ce tenant.';
+        _error = ResearchCollectionError.conflict;
       } else if (e.statusCode == 429) {
-        _error =
-            'Merci de patienter quelques minutes avant de relancer une collecte.';
+        _error = ResearchCollectionError.rateLimited;
+      } else if (e.statusCode == null) {
+        _error = ResearchCollectionError.network;
       } else {
-        _error = 'Échec du lancement de la collecte.';
+        _error = ResearchCollectionError.generic;
       }
       notifyListeners();
-    } catch (_) {
-      // Repli : un StateError du faux d'API ou un FormatException de
-      // fromJson ne doivent pas laisser le provider bloqué sur isLoading.
+    } on SocketException catch (_) {
       if (gen != _generation) return;
       _isLoading = false;
-      _error = 'Échec du lancement de la collecte.';
+      _error = ResearchCollectionError.network;
+      notifyListeners();
+    } on TimeoutException catch (_) {
+      if (gen != _generation) return;
+      _isLoading = false;
+      _error = ResearchCollectionError.network;
+      notifyListeners();
+    } on http.ClientException catch (_) {
+      if (gen != _generation) return;
+      _isLoading = false;
+      _error = ResearchCollectionError.network;
+      notifyListeners();
+    } catch (_) {
+      if (gen != _generation) return;
+      _isLoading = false;
+      _error = ResearchCollectionError.generic;
       notifyListeners();
     }
   }
@@ -153,11 +177,31 @@ class ResearchCollectionProvider extends ChangeNotifier {
         final keepPolling = _afterUpdate(tenantId, job);
         if (!keepPolling) _pollTimer?.cancel();
         notifyListeners();
-      } catch (_) {
-        // Couvre ApiException mais aussi un FormatException de fromJson : un
-        // statut inconnu ne doit pas laisser le timer tourner indéfiniment.
+      } on ApiException catch (e) {
         if (gen != _generation) return;
-        _error = 'Impossible de récupérer le statut de la collecte.';
+        _error = e.statusCode == null
+            ? ResearchCollectionError.network
+            : ResearchCollectionError.pollFailed;
+        _pollTimer?.cancel();
+        notifyListeners();
+      } on SocketException catch (_) {
+        if (gen != _generation) return;
+        _error = ResearchCollectionError.network;
+        _pollTimer?.cancel();
+        notifyListeners();
+      } on TimeoutException catch (_) {
+        if (gen != _generation) return;
+        _error = ResearchCollectionError.network;
+        _pollTimer?.cancel();
+        notifyListeners();
+      } on http.ClientException catch (_) {
+        if (gen != _generation) return;
+        _error = ResearchCollectionError.network;
+        _pollTimer?.cancel();
+        notifyListeners();
+      } catch (_) {
+        if (gen != _generation) return;
+        _error = ResearchCollectionError.pollFailed;
         _pollTimer?.cancel();
         notifyListeners();
       } finally {

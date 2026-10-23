@@ -353,5 +353,79 @@
       }
     }
   },
-  "timelineItemDefaultPoi": "Lieu d'intérêt"
+  "timelineItemDefaultPoi": "Lieu d'intérêt",
+  "adminResearchTitle": "Recherche IA — destination",
+  "adminResearchStatusTitle": "Statut du pipeline",
+  "adminResearchStatusPending": "En attente de démarrage…",
+  "adminResearchStatusProcessing": "Traitement en cours…",
+  "adminResearchStatusDone": "Terminé",
+  "adminResearchStatusFailed": "Échec du run",
+  "adminResearchStatusReady": "Prêt",
+  "adminResearchNoRecentRun": "Aucun run lancé récemment",
+  "adminResearchSummary": "{proposed} proposée(s) · {autoPublished} publiée(s) auto · {pendingReview} en attente de revue",
+  "@adminResearchSummary": {
+    "description": "Compteurs récapitulatifs du run de recherche IA.",
+    "placeholders": {
+      "proposed": {
+        "type": "int"
+      },
+      "autoPublished": {
+        "type": "int"
+      },
+      "pendingReview": {
+        "type": "int"
+      }
+    }
+  },
+  "adminResearchRunning": "Recherche en cours…",
+  "adminResearchRunButton": "Lancer la recherche IA",
+  "adminResearchCategoriesTitle": "Catégories du territoire",
+  "adminResearchRefreshTooltip": "Actualiser",
+  "adminResearchNoCategories": "Aucune catégorie pour le moment",
+  "adminResearchRejectDialogTitle": "Rejeter cette catégorie ?",
+  "adminResearchRejectActiveContent": "Elle disparaîtra de l’app pour les voyageurs. Cette action est définitive.",
+  "adminResearchRejectContent": "Cette action est définitive.",
+  "adminResearchCancel": "Annuler",
+  "adminResearchConfirm": "Confirmer",
+  "adminResearchPublish": "Publier",
+  "adminResearchReject": "Rejeter",
+  "adminResearchRetire": "Retirer",
+  "adminResearchRejected": "Rejetée",
+  "adminResearchErrorRateLimited": "Une actualisation manuelle a déjà été effectuée ce mois-ci.",
+  "adminResearchErrorPollFailed": "Impossible de récupérer le statut du job.",
+  "adminResearchErrorNetwork": "Impossible de lancer la recherche. Vérifiez votre connexion.",
+  "adminResearchErrorGeneric": "Échec du lancement du run de recherche.",
+  "adminCategoriesErrorNetwork": "Impossible de charger les catégories. Vérifiez votre connexion.",
+  "adminCategoriesErrorGeneric": "Impossible de charger les catégories.",
+  "adminCategoriesUpdateError": "Échec de la mise à jour de la catégorie.",
+  "adminCollectionTitle": "Collecte des documents",
+  "adminCollectionRunPipeline": "Enchaîner l'analyse IA",
+  "adminCollectionRunPipelineSubtitle": "Crée un job de recherche à partir des documents collectés.",
+  "adminCollectionRunButton": "Lancer la collecte",
+  "adminCollectionRunning": "Collecte en cours…",
+  "adminCollectionDone": "Collecte terminée",
+  "adminCollectionSummary": "{fetched} récupéré(s) · {newDocs} nouveau(x) · {duplicates} doublon(s) · {failed} en échec",
+  "@adminCollectionSummary": {
+    "description": "Compteurs récapitulatifs du job de collecte.",
+    "placeholders": {
+      "fetched": {
+        "type": "int"
+      },
+      "newDocs": {
+        "type": "int"
+      },
+      "duplicates": {
+        "type": "int"
+      },
+      "failed": {
+        "type": "int"
+      }
+    }
+  },
+  "adminCollectionErrorConflict": "Une collecte est déjà en cours pour ce tenant.",
+  "adminCollectionErrorRateLimited": "Merci de patienter quelques minutes avant de relancer une collecte.",
+  "adminCollectionErrorPollFailed": "Impossible de récupérer le statut de la collecte.",
+  "adminCollectionErrorNetwork": "Impossible de lancer la collecte. Vérifiez votre connexion.",
+  "adminCollectionErrorGeneric": "Échec du lancement de la collecte.",
+  "adminCollectionJobFailed": "La collecte a échoué."
 }

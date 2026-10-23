@@ -72,8 +72,7 @@ void main() {
     test('propage l\'erreur si runResearch échoue (ex: rate-limit 429)',
         () async {
       final fake = FakeResearchApi(
-        runResearchError:
-            ApiException(429, 'Déjà actualisé ce mois-ci'),
+        runResearchError: ApiException(429, 'Déjà actualisé ce mois-ci'),
       );
 
       final provider = ResearchProvider(fake);
@@ -83,15 +82,14 @@ void main() {
         triggerType: ResearchTriggerType.manualRefresh,
       );
 
-      expect(provider.error, 'Une actualisation manuelle a déjà été effectuée ce mois-ci.');
+      expect(provider.error, ResearchError.rateLimited);
       expect(provider.currentJob, isNull);
       expect(provider.isLoading, isFalse);
 
       provider.dispose();
     });
 
-    test('resumeTracking reprend le polling d\'un job déjà en cours',
-        () async {
+    test('resumeTracking reprend le polling d\'un job déjà en cours', () async {
       final fake = FakeResearchApi(
         statusSequence: [
           _job(status: ResearchJobStatus.processing),
@@ -175,12 +173,15 @@ void main() {
       provider.dispose();
     });
 
-    test('onJobDone est appelé aussi quand le job est déjà terminé au lancement',
+    test(
+        'onJobDone est appelé aussi quand le job est déjà terminé au lancement',
         () async {
       // Pas de polling dans ce cas : sans appel ici, le catalogue voyageur ne
       // serait jamais rechargé et l'app resterait sur des données périmées.
       final fake = FakeResearchApi(
-        jobsQueue: [_job(status: ResearchJobStatus.done, categoriesProposed: 1)],
+        jobsQueue: [
+          _job(status: ResearchJobStatus.done, categoriesProposed: 1)
+        ],
         statusSequence: [_job(status: ResearchJobStatus.done)],
       );
 

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:discover_ai/models/poi.dart';
@@ -17,6 +18,42 @@ class _ThrowingPoisApi implements PoisApi {
     String? search,
   }) async {
     throw ApiException(500, 'boom');
+  }
+}
+
+class _SocketThrowingPoisApi implements PoisApi {
+  @override
+  Future<Map<String, dynamic>> getPOIs({
+    String? city,
+    String? category,
+    String? search,
+  }) async {
+    throw const SocketException('no internet');
+  }
+}
+
+class _FormatThrowingPoisApi implements PoisApi {
+  @override
+  Future<Map<String, dynamic>> getPOIs({
+    String? city,
+    String? category,
+    String? search,
+  }) async {
+    throw const FormatException('bad json');
+  }
+}
+
+class _SocketThrowingAuthApi extends FakeAuthApi {
+  @override
+  Future<Map<String, dynamic>> login(String email, String password) async {
+    throw const SocketException('no internet');
+  }
+}
+
+class _FormatThrowingAuthApi extends FakeAuthApi {
+  @override
+  Future<Map<String, dynamic>> login(String email, String password) async {
+    throw const FormatException('bad json');
   }
 }
 
@@ -91,6 +128,36 @@ void main() {
       expect(auth.isAuthenticated, isFalse);
       expect(store.token, isNull); // deleted during restore
     });
+
+    test('SocketException maps to network error', () async {
+      final store = InMemoryTokenStore();
+      final auth = AuthProvider(
+        api: _SocketThrowingAuthApi(),
+        tokenStore: store,
+      );
+      await auth.initialized;
+
+      final ok = await auth.login('demo@discoverai.dz', 'secret123');
+
+      expect(ok, isFalse);
+      expect(auth.isAuthenticated, isFalse);
+      expect(auth.loginError, AuthError.network);
+    });
+
+    test('FormatException maps to generic error', () async {
+      final store = InMemoryTokenStore();
+      final auth = AuthProvider(
+        api: _FormatThrowingAuthApi(),
+        tokenStore: store,
+      );
+      await auth.initialized;
+
+      final ok = await auth.login('demo@discoverai.dz', 'secret123');
+
+      expect(ok, isFalse);
+      expect(auth.isAuthenticated, isFalse);
+      expect(auth.loginError, AuthError.generic);
+    });
   });
 
   group('POIProvider', () {
@@ -113,6 +180,18 @@ void main() {
           reason:
               'ApiException(500) carries a status code → generic bucket, never raw text');
       expect(provider.isLoading, isFalse);
+    });
+
+    test('SocketException maps to network error', () async {
+      final provider = POIProvider(poisApi: _SocketThrowingPoisApi());
+      await provider.loadPOIs();
+      expect(provider.error, POIError.network);
+    });
+
+    test('FormatException maps to generic error', () async {
+      final provider = POIProvider(poisApi: _FormatThrowingPoisApi());
+      await provider.loadPOIs();
+      expect(provider.error, POIError.generic);
     });
   });
 

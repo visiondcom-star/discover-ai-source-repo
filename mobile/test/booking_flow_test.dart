@@ -1,4 +1,5 @@
 import 'package:discover_ai/l10n/app_localizations.dart';
+import 'package:discover_ai/l10n/app_localizations_fr.dart';
 import 'package:discover_ai/models/poi.dart';
 import 'package:discover_ai/providers/booking_provider.dart';
 import 'package:discover_ai/providers/poi_provider.dart';
@@ -44,11 +45,33 @@ void main() {
           ChangeNotifierProvider<BookingProvider>.value(value: bookingProvider),
           ChangeNotifierProvider<POIProvider>.value(value: poiProvider),
         ],
-        child: MaterialApp(
+        child: const MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
-          locale: const Locale('en'),
-          home: const BookingsScreen(),
+          locale: Locale('en'),
+          home: BookingsScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> pumpBookingsFr(
+    WidgetTester tester, {
+    required BookingProvider bookingProvider,
+    required POIProvider poiProvider,
+  }) async {
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<BookingProvider>.value(value: bookingProvider),
+          ChangeNotifierProvider<POIProvider>.value(value: poiProvider),
+        ],
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('fr'),
+          home: BookingsScreen(),
         ),
       ),
     );
@@ -70,6 +93,19 @@ void main() {
     expect(find.byKey(const Key('booking_cancel_b-1')), findsOneWidget);
     expect(find.byKey(const Key('booking_ref_b-1')), findsNothing,
         reason: 'no external reference before consent');
+  });
+
+  testWidgets('libellés de réservation rendus en FR', (tester) async {
+    await pumpBookingsFr(
+      tester,
+      bookingProvider: BookingProvider(bookingsApi: FakeBookingsApi()),
+      poiProvider: await loadedPois(),
+    );
+    final fr = AppLocalizationsFr();
+    expect(find.text(fr.bookingStatusPendingConsent), findsOneWidget);
+    expect(find.text(fr.bookingPartnerLabel('hotel')), findsOneWidget);
+    expect(find.text(fr.bookingConfirmAction), findsOneWidget);
+    expect(find.text(fr.bookingCancelAction), findsOneWidget);
   });
 
   testWidgets('refusing consent cancels the booking', (tester) async {

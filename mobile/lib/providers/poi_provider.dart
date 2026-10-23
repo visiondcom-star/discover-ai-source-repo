@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
 import '../models/poi.dart';
 import '../services/api_service.dart';
@@ -105,13 +107,20 @@ class POIProvider extends ChangeNotifier {
           .map((e) => POI.fromJson(Map<String, dynamic>.from(e as Map)))
           .toList();
     } on ApiException catch (e) {
-      if (seq != _seq) return; // stale failure — discard silently
+      if (seq != _seq) return;
       _error = e.statusCode == null ? POIError.network : POIError.generic;
-    } catch (_) {
-      if (seq != _seq) return; // stale failure — discard silently
-      // Transport-level failure (no HTTP status): SocketException,
-      // TimeoutException… — never a payload problem.
+    } on SocketException catch (_) {
+      if (seq != _seq) return;
       _error = POIError.network;
+    } on TimeoutException catch (_) {
+      if (seq != _seq) return;
+      _error = POIError.network;
+    } on http.ClientException catch (_) {
+      if (seq != _seq) return;
+      _error = POIError.network;
+    } catch (_) {
+      if (seq != _seq) return;
+      _error = POIError.generic;
     }
     if (seq != _seq) return;
     _isLoading = false;

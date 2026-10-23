@@ -548,7 +548,7 @@ class _BookingSheetState extends State<_BookingSheet> {
               ),
             ] else if (!_loading && adapters.isEmpty)
               Padding(
-                padding: EdgeInsets.symmetric(vertical: 24),
+                padding: const EdgeInsets.symmetric(vertical: 24),
                 child: Text(loc.bookingAdaptersEmpty),
               )
             else

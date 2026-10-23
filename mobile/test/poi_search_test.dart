@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:discover_ai/l10n/app_localizations.dart';
+import 'package:discover_ai/l10n/app_localizations_fr.dart';
 import 'package:discover_ai/providers/poi_provider.dart';
 import 'package:discover_ai/screens/poi_list_screen.dart';
 import 'package:discover_ai/services/api_service.dart';
@@ -35,6 +36,17 @@ class _GatePoisApi implements PoisApi {
       gates[index].complete(_payload(names));
 
   void fail(int index, Object error) => gates[index].completeError(error);
+}
+
+class _FailingPoisApi implements PoisApi {
+  @override
+  Future<Map<String, dynamic>> getPOIs({
+    String? city,
+    String? category,
+    String? search,
+  }) async {
+    throw ApiException(500, 'boom');
+  }
 }
 
 Map<String, dynamic> _payload(List<String> names) => {
@@ -149,11 +161,11 @@ void main() {
       await tester.pumpWidget(
         ChangeNotifierProvider<POIProvider>.value(
           value: provider,
-          child: MaterialApp(
+          child: const MaterialApp(
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
-            locale: const Locale('en'),
-            home: const POIListScreen(),
+            locale: Locale('en'),
+            home: POIListScreen(),
           ),
         ),
       );
@@ -161,19 +173,20 @@ void main() {
     }
 
     /// Idem pumpExplorer(), mais avec la locale FR.
-    Future<void> pumpExplorerFr(WidgetTester tester, POIProvider provider) async {
+    Future<void> pumpExplorerFr(
+        WidgetTester tester, POIProvider provider) async {
       await tester.pumpWidget(
         ChangeNotifierProvider<POIProvider>.value(
           value: provider,
-          child: MaterialApp(
+          child: const MaterialApp(
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
-            locale: const Locale('fr'),
-            home: const POIListScreen(),
+            locale: Locale('fr'),
+            home: POIListScreen(),
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
     }
 
     testWidgets('typing fires one debounced request and renders the results',
@@ -228,9 +241,48 @@ void main() {
         (tester) async {
       final provider = POIProvider(poisApi: FakePoisApi(itemsJson: []));
       await pumpExplorerFr(tester, provider);
+      await tester.pumpAndSettle();
 
       expect(find.text('Rechercher des lieux, des villes…'), findsOneWidget);
       expect(find.text('Aucun lieu pour le moment.'), findsOneWidget);
+    });
+
+    testWidgets('liste en erreur rend le message localisé en FR',
+        (tester) async {
+      final provider = POIProvider(poisApi: _FailingPoisApi());
+      await pumpExplorerFr(tester, provider);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(AppLocalizationsFr().poiListErrorGeneric),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets(
+        'recherche sans correspondance affiche « Aucun résultat » en FR',
+        (tester) async {
+      final api = _GatePoisApi();
+      final provider = POIProvider(poisApi: api);
+
+      await pumpExplorerFr(tester, provider);
+      api.respond(0, ['Casbah of Algiers']);
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+          find.byKey(const Key('poi_search_field')), 'sahara');
+      await tester.pump(POIProvider.searchDebounce);
+      expect(api.searchArgs, [null, 'sahara']);
+
+      api.respond(1, []);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('poi_search_empty')), findsOneWidget);
+      expect(
+        find.text(AppLocalizationsFr().poiListNoResults('sahara')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Aucun résultat'), findsOneWidget);
     });
   });
 }

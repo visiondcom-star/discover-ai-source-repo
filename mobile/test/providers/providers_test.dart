@@ -57,6 +57,28 @@ class _FormatThrowingAuthApi extends FakeAuthApi {
   }
 }
 
+class _SocketThrowingTripsApi extends FakeTripsApi {
+  @override
+  Future<Map<String, dynamic>> generateTrip({
+    required List<String> interests,
+    required String budgetLevel,
+    required int numDays,
+  }) async {
+    throw const SocketException('no internet');
+  }
+}
+
+class _FormatThrowingTripsApi extends FakeTripsApi {
+  @override
+  Future<Map<String, dynamic>> generateTrip({
+    required List<String> interests,
+    required String budgetLevel,
+    required int numDays,
+  }) async {
+    throw const FormatException('bad json');
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -235,11 +257,33 @@ void main() {
       expect(trip, isNull);
       expect(provider.currentTrip, isNull);
       expect(provider.trips, isEmpty);
-      expect(provider.error, contains('trip planner failed'));
+      expect(provider.error, TripError.generic);
       expect(provider.isGenerating, isFalse);
 
       provider.clearError();
       expect(provider.error, isNull);
+    });
+
+    test('generate: SocketException maps to TripError.network', () async {
+      final provider = TripProvider(tripsApi: _SocketThrowingTripsApi());
+      final trip = await provider.generate(
+        interests: const ['nature'],
+        budgetLevel: 'low',
+        numDays: 2,
+      );
+      expect(trip, isNull);
+      expect(provider.error, TripError.network);
+    });
+
+    test('generate: FormatException maps to TripError.generic', () async {
+      final provider = TripProvider(tripsApi: _FormatThrowingTripsApi());
+      final trip = await provider.generate(
+        interests: const ['nature'],
+        budgetLevel: 'low',
+        numDays: 2,
+      );
+      expect(trip, isNull);
+      expect(provider.error, TripError.generic);
     });
 
     test('generate rejects an empty interest selection before calling the API',

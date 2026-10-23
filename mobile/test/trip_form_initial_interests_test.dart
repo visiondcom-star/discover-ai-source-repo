@@ -5,6 +5,7 @@
 // catalogue dynamique du tenant.
 
 import 'package:discover_ai/config.dart';
+import 'package:discover_ai/l10n/app_localizations.dart';
 import 'package:discover_ai/providers/tenant_provider.dart';
 import 'package:discover_ai/providers/trip_provider.dart';
 import 'package:discover_ai/screens/trip_form_screen.dart';
@@ -25,8 +26,8 @@ Future<void> _pumpWithDynamicCatalog(
   required TripProvider trips,
   required Set<String> initialInterests,
 }) async {
-  final tenants =
-      TenantProvider(tenantsApi: FakeTenantsApi(categorySlugs: [dynamicOnlySlug]));
+  final tenants = TenantProvider(
+      tenantsApi: FakeTenantsApi(categorySlugs: [dynamicOnlySlug]));
   // Le catalogue arrive comme en production : après le premier build.
   await tenants.loadCategories();
 
@@ -37,6 +38,9 @@ Future<void> _pumpWithDynamicCatalog(
         ChangeNotifierProvider<TripProvider>.value(value: trips),
       ],
       child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
         home: TripFormScreen(initialInterests: initialInterests),
       ),
     ),
@@ -103,7 +107,8 @@ void main() {
     expect(find.byKey(const Key('trip_form_validation')), findsOneWidget);
   });
 
-  testWidgets('retombe sur le catalogue compile-time quand le tenant n\'en a pas',
+  testWidgets(
+      'retombe sur le catalogue compile-time quand le tenant n\'en a pas',
       (tester) async {
     final api = FakeTripsApi();
     final trips = TripProvider(tripsApi: api);
@@ -116,7 +121,12 @@ void main() {
           ChangeNotifierProvider<TenantProvider>.value(value: tenants),
           ChangeNotifierProvider<TripProvider>.value(value: trips),
         ],
-        child: const MaterialApp(home: TripFormScreen()),
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
+          home: TripFormScreen(),
+        ),
       ),
     );
     await tester.pump();

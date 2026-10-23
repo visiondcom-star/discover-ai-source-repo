@@ -2,16 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
+import 'package:discover_ai/l10n/app_localizations.dart';
+import 'package:discover_ai/l10n/app_localizations_fr.dart';
 import 'package:discover_ai/providers/trip_provider.dart';
 import 'package:discover_ai/screens/trip_form_screen.dart';
 import 'package:discover_ai/screens/trip_timeline_screen.dart';
 
 import 'helpers/fakes.dart';
 
-Widget _wrap(Widget home, TripProvider trips) {
+Widget _wrap(Widget home, TripProvider trips,
+    {Locale locale = const Locale('en')}) {
   return ChangeNotifierProvider<TripProvider>.value(
     value: trips,
-    child: MaterialApp(home: home),
+    child: MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: locale,
+      home: home,
+    ),
   );
 }
 
@@ -82,6 +90,22 @@ void main() {
       expect(trips.error, isNull); // cleared after surfacing the snackbar
       expect(find.byType(TripFormScreen), findsOneWidget);
     });
+
+    testWidgets('TripFormScreen rend ses chaînes en FR', (tester) async {
+      final trips = TripProvider(tripsApi: FakeTripsApi());
+      await tester.pumpWidget(
+        _wrap(const TripFormScreen(), trips, locale: const Locale('fr')),
+      );
+      await tester.pumpAndSettle();
+
+      final fr = AppLocalizationsFr();
+      expect(find.text(fr.tripFormTitle), findsOneWidget);
+      expect(find.text(fr.tripFormInterests), findsOneWidget);
+      expect(find.text(fr.tripFormDays), findsOneWidget);
+      expect(find.text(fr.tripFormBudget), findsOneWidget);
+      expect(find.text(fr.tripFormSubmit), findsOneWidget);
+      expect(find.text(fr.tripBudgetLow), findsOneWidget);
+    });
   });
 
   group('TripTimelineScreen (widget)', () {
@@ -142,6 +166,20 @@ void main() {
       await tester.pumpWidget(_wrap(const TripTimelineScreen(), trips));
 
       expect(find.byKey(const Key('trip_items_empty')), findsOneWidget);
+    });
+
+    testWidgets('TripTimelineScreen rend ses chaînes en FR', (tester) async {
+      final trips = await loadedProvider(FakeTripsApi());
+      await tester.pumpWidget(
+        _wrap(const TripTimelineScreen(), trips, locale: const Locale('fr')),
+      );
+      await tester.pumpAndSettle();
+
+      final fr = AppLocalizationsFr();
+      expect(find.text(fr.tripTimelineDay(1)), findsOneWidget);
+      expect(find.text(fr.tripTimelineDay(2)), findsOneWidget);
+      expect(find.text(fr.tripFormDaysCount(2)), findsOneWidget);
+      expect(find.text(fr.timelineItemDefaultPoi), findsOneWidget);
     });
   });
 }

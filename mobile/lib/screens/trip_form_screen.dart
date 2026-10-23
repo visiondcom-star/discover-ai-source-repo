@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../config.dart';
+import '../l10n/app_localizations.dart';
 import '../providers/tenant_provider.dart';
 import '../providers/trip_provider.dart';
 import 'trip_timeline_screen.dart';
@@ -82,11 +83,35 @@ class _TripFormScreenState extends State<TripFormScreen> {
     if (_selectedInterests.isEmpty) _selectedInterests = accepted;
   }
 
+  String _errorText(AppLocalizations loc, TripError? error) {
+    switch (error) {
+      case TripError.network:
+        return loc.tripErrorNetwork;
+      case TripError.generic:
+      case null:
+        return loc.tripErrorGeneric;
+    }
+  }
+
+  String _budgetLabel(AppLocalizations loc, String level) {
+    switch (level) {
+      case 'low':
+        return loc.tripBudgetLow;
+      case 'medium':
+        return loc.tripBudgetMedium;
+      case 'high':
+        return loc.tripBudgetHigh;
+      default:
+        return level;
+    }
+  }
+
   Future<void> _submit() async {
+    final loc = AppLocalizations.of(context);
     if (_selectedInterests.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Pick at least one interest.',
-            key: Key('trip_form_validation')),
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(loc.tripFormValidationInterests,
+            key: const Key('trip_form_validation')),
       ));
       return;
     }
@@ -99,8 +124,8 @@ class _TripFormScreenState extends State<TripFormScreen> {
     if (!mounted) return;
     if (trip == null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Trip generation failed: ${trips.error}',
-            key: const Key('trip_error')),
+        content:
+            Text(_errorText(loc, trips.error), key: const Key('trip_error')),
       ));
       trips.clearError();
       return;
@@ -113,17 +138,19 @@ class _TripFormScreenState extends State<TripFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     final trips = context.watch<TripProvider>();
     final tripInterestOptions = _visibleCatalog(context);
     _syncWithCatalog(tripInterestOptions);
     return Scaffold(
-      appBar: AppBar(title: const Text('Plan a trip')),
+      appBar: AppBar(title: Text(loc.tripFormTitle)),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Interests', style: Theme.of(context).textTheme.titleMedium),
+            Text(loc.tripFormInterests,
+                style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
@@ -141,28 +168,30 @@ class _TripFormScreenState extends State<TripFormScreen> {
               ],
             ),
             const SizedBox(height: 24),
-            Text('Number of days',
+            Text(loc.tripFormDays,
                 style: Theme.of(context).textTheme.titleMedium),
             Slider(
               key: const Key('days_slider'),
               min: 1,
               max: AppConfig.maxTripDays.toDouble(),
               divisions: AppConfig.maxTripDays - 1,
-              label: '$_numDays day(s)',
+              label: loc.tripFormDaysCount(_numDays),
               value: _numDays.toDouble(),
               onChanged: (v) => setState(() => _numDays = v.round()),
             ),
             Center(
-                child: Text('$_numDays day(s)', key: const Key('days_value'))),
+                child: Text(loc.tripFormDaysCount(_numDays),
+                    key: const Key('days_value'))),
             const SizedBox(height: 24),
-            Text('Budget level',
+            Text(loc.tripFormBudget,
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             SegmentedButton<String>(
               key: const Key('budget_selector'),
               segments: [
                 for (final level in AppConfig.budgetLevels)
-                  ButtonSegment(value: level, label: Text(level)),
+                  ButtonSegment(
+                      value: level, label: Text(_budgetLabel(loc, level))),
               ],
               selected: {_budgetLevel},
               onSelectionChanged: (selection) =>
@@ -178,7 +207,7 @@ class _TripFormScreenState extends State<TripFormScreen> {
                       width: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('Generate itinerary'),
+                  : Text(loc.tripFormSubmit),
             ),
           ],
         ),

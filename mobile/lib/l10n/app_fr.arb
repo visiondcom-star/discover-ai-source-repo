@@ -311,5 +311,47 @@
   "chatEmpty": "Posez-moi une question sur votre destination.",
   "chatInputHint": "Poser une question…",
   "chatErrorNetwork": "Impossible de joindre l'assistant. Vérifiez votre connexion.",
-  "chatErrorGeneric": "Une erreur est survenue. Réessayez."
+  "chatErrorGeneric": "Une erreur est survenue. Réessayez.",
+  "tripFormTitle": "Planifier un voyage",
+  "tripFormValidationInterests": "Choisissez au moins un centre d'intérêt.",
+  "tripErrorNetwork": "Impossible de générer l'itinéraire. Vérifiez votre connexion.",
+  "tripErrorGeneric": "La génération de l'itinéraire a échoué. Réessayez.",
+  "tripFormInterests": "Centres d'intérêt",
+  "tripFormDays": "Nombre de jours",
+  "tripFormDaysCount": "{count, plural, =1{1 jour} other{{count} jours}}",
+  "@tripFormDaysCount": {
+    "description": "Nombre de jours sur le formulaire de voyage et l'itinéraire.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tripFormBudget": "Niveau de budget",
+  "tripBudgetLow": "Économique",
+  "tripBudgetMedium": "Moyen",
+  "tripBudgetHigh": "Élevé",
+  "tripFormSubmit": "Générer l'itinéraire",
+  "tripTimelineTitle": "Itinéraire",
+  "tripTimelineEmpty": "Aucun voyage généré pour le moment.",
+  "tripTimelineNoStops": "Cet itinéraire ne contient aucune étape pour le moment.",
+  "tripTimelineBudget": "Budget : {level}",
+  "@tripTimelineBudget": {
+    "description": "Indicateur de budget sur la fiche récapitulative du voyage.",
+    "placeholders": {
+      "level": {
+        "type": "String"
+      }
+    }
+  },
+  "tripTimelineDay": "Jour {day}",
+  "@tripTimelineDay": {
+    "description": "En-tête de groupe de jour dans l'itinéraire.",
+    "placeholders": {
+      "day": {
+        "type": "int"
+      }
+    }
+  },
+  "timelineItemDefaultPoi": "Lieu d'intérêt"
 }

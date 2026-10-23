@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/trip_item.dart';
 
 /// Reusable timeline row — the mobile equivalent of one entry in the web
@@ -15,6 +16,7 @@ class TimelineItemWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -44,7 +46,7 @@ class TimelineItemWidget extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  item.poi?.name ?? 'Point of interest',
+                  item.poi?.name ?? loc.timelineItemDefaultPoi,
                   key: Key('timeline_poi_${item.poiId}'),
                   style: theme.textTheme.titleMedium
                       ?.copyWith(fontWeight: FontWeight.w600),
@@ -72,7 +74,7 @@ class TimelineItemWidget extends StatelessWidget {
                         Icon(Icons.schedule,
                             size: 14, color: Colors.grey.shade600),
                         const SizedBox(width: 4),
-                        Text('${item.poi!.durationMinutes} min',
+                        Text(loc.poiDurationMinutes(item.poi!.durationMinutes),
                             style: theme.textTheme.bodySmall),
                       ],
                     ),

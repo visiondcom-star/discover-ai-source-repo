@@ -309,5 +309,47 @@
   "chatEmpty": "Ask me a question about your destination.",
   "chatInputHint": "Ask a question…",
   "chatErrorNetwork": "Could not reach the assistant. Check your connection.",
-  "chatErrorGeneric": "Something went wrong. Try again."
+  "chatErrorGeneric": "Something went wrong. Try again.",
+  "tripFormTitle": "Plan a trip",
+  "tripFormValidationInterests": "Pick at least one interest.",
+  "tripErrorNetwork": "Could not generate the itinerary. Check your connection.",
+  "tripErrorGeneric": "Trip generation failed. Try again.",
+  "tripFormInterests": "Interests",
+  "tripFormDays": "Number of days",
+  "tripFormDaysCount": "{count, plural, other{{count} day(s)}}",
+  "@tripFormDaysCount": {
+    "description": "Number of days on the trip form and timeline.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tripFormBudget": "Budget level",
+  "tripBudgetLow": "low",
+  "tripBudgetMedium": "medium",
+  "tripBudgetHigh": "high",
+  "tripFormSubmit": "Generate itinerary",
+  "tripTimelineTitle": "Itinerary",
+  "tripTimelineEmpty": "No trip generated yet.",
+  "tripTimelineNoStops": "This trip has no stops yet.",
+  "tripTimelineBudget": "Budget: {level}",
+  "@tripTimelineBudget": {
+    "description": "Budget level indicator on the trip summary card.",
+    "placeholders": {
+      "level": {
+        "type": "String"
+      }
+    }
+  },
+  "tripTimelineDay": "Day {day}",
+  "@tripTimelineDay": {
+    "description": "Day group header on the trip timeline.",
+    "placeholders": {
+      "day": {
+        "type": "int"
+      }
+    }
+  },
+  "timelineItemDefaultPoi": "Point of interest"
 }

@@ -1,7 +1,19 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
 import '../models/chat_message.dart';
 import '../services/api_service.dart';
+
+/// Locale-agnostic failure codes for chat message delivery. The provider has
+/// no `BuildContext`, so it never renders text itself — the screen maps these
+/// to localized strings via `AppLocalizations`.
+enum ChatError {
+  network,
+  generic,
+}
 
 /// In-memory conversation state for the mobile chat screen.
 ///
@@ -15,13 +27,13 @@ class ChatProvider extends ChangeNotifier {
 
   final List<ChatMessage> _messages = [];
   bool _isSending = false;
-  String? _error;
+  ChatError? _error;
 
   /// Most-recent-first is *not* used; the screen renders [messages] newest
   /// at the bottom via a reverse ListView, so this stays chronological.
   List<ChatMessage> get messages => List.unmodifiable(_messages);
   bool get isSending => _isSending;
-  String? get error => _error;
+  ChatError? get error => _error;
   bool get isEmpty => _messages.isEmpty;
 
   /// Follow-up suggestions of the latest assistant turn. Empty until an
@@ -54,8 +66,16 @@ class ChatProvider extends ChangeNotifier {
     try {
       final data = await _api.sendMessage(trimmed);
       _messages.add(ChatMessage.fromApiResponse(data));
-    } catch (e) {
-      _error = e.toString();
+    } on ApiException catch (e) {
+      _error = e.statusCode == null ? ChatError.network : ChatError.generic;
+    } on SocketException catch (_) {
+      _error = ChatError.network;
+    } on TimeoutException catch (_) {
+      _error = ChatError.network;
+    } on http.ClientException catch (_) {
+      _error = ChatError.network;
+    } catch (_) {
+      _error = ChatError.generic;
     } finally {
       _isSending = false;
       notifyListeners();

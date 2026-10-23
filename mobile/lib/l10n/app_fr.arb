@@ -303,5 +303,13 @@
   "bookingErrorGeneric": "La réservation a échoué. Réessayez dans un instant.",
   "bookingCancelErrorNotCancellable": "Cette réservation ne peut plus être annulée.",
   "bookingCancelErrorNetwork": "Impossible d'annuler la réservation. Vérifiez votre connexion.",
-  "bookingCancelErrorGeneric": "L'annulation a échoué. Réessayez dans un instant."
+  "bookingCancelErrorGeneric": "L'annulation a échoué. Réessayez dans un instant.",
+  "chatTitle": "Assistant",
+  "chatSubtitle": "Bienvenue ! Je suis votre guide.",
+  "chatClearError": "Effacer l'erreur",
+  "chatThinking": "En train de réfléchir…",
+  "chatEmpty": "Posez-moi une question sur votre destination.",
+  "chatInputHint": "Poser une question…",
+  "chatErrorNetwork": "Impossible de joindre l'assistant. Vérifiez votre connexion.",
+  "chatErrorGeneric": "Une erreur est survenue. Réessayez."
 }

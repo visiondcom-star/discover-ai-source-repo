@@ -1,11 +1,36 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
+import 'package:discover_ai/l10n/app_localizations.dart';
+import 'package:discover_ai/l10n/app_localizations_en.dart';
+import 'package:discover_ai/l10n/app_localizations_fr.dart';
 import 'package:discover_ai/providers/chat_provider.dart';
 import 'package:discover_ai/screens/chat_screen.dart';
 
 import 'helpers/fakes.dart';
+
+class _SocketThrowingChatApi extends FakeChatApi {
+  @override
+  Future<Map<String, dynamic>> sendMessage(
+    String message, {
+    Map<String, dynamic>? context,
+  }) async {
+    throw const SocketException('offline');
+  }
+}
+
+class _FormatThrowingChatApi extends FakeChatApi {
+  @override
+  Future<Map<String, dynamic>> sendMessage(
+    String message, {
+    Map<String, dynamic>? context,
+  }) async {
+    throw const FormatException('bad json');
+  }
+}
 
 void main() {
   testWidgets(
@@ -19,15 +44,19 @@ void main() {
         providers: [
           ChangeNotifierProvider(create: (_) => ChatProvider(chatApi: fake)),
         ],
-        child: const MaterialApp(home: ChatScreen()),
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
+          home: ChatScreen(),
+        ),
       ),
     );
     await tester.pumpAndSettle();
 
     // Empty state mirrors the web screen.
     expect(find.byKey(const Key('chat_empty')), findsOneWidget);
-    expect(find.text('Posez-moi une question sur votre destination.'),
-        findsOneWidget);
+    expect(find.text(AppLocalizationsEn().chatEmpty), findsOneWidget);
 
     // Type a real message and send.
     await tester.enterText(find.byKey(const Key('chat_input')),
@@ -58,7 +87,12 @@ void main() {
         providers: [
           ChangeNotifierProvider(create: (_) => ChatProvider(chatApi: fake)),
         ],
-        child: const MaterialApp(home: ChatScreen()),
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
+          home: ChatScreen(),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -70,7 +104,7 @@ void main() {
 
     expect(fake.calls, 1);
     expect(find.byKey(const Key('chat_error')), findsOneWidget);
-    expect(find.textContaining('chat service unavailable'), findsOneWidget);
+    expect(find.text(AppLocalizationsEn().chatErrorGeneric), findsOneWidget);
     // No assistant bubble carrying a hardcoded apology — only the banner.
     expect(find.text('Désolé, une erreur est survenue.'), findsNothing);
     // No suggestion chips either: the envelope never arrived, so the
@@ -88,7 +122,12 @@ void main() {
         providers: [
           ChangeNotifierProvider(create: (_) => ChatProvider(chatApi: fake)),
         ],
-        child: const MaterialApp(home: ChatScreen()),
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
+          home: ChatScreen(),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -112,5 +151,42 @@ void main() {
         reason: 'the user bubble text plus the refreshed chip');
     expect(
         find.text('Mocked assistant reply to: Suggestion 1'), findsOneWidget);
+  });
+
+  testWidgets('ChatScreen rend ses chaînes en FR', (tester) async {
+    final fake = FakeChatApi();
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => ChatProvider(chatApi: fake)),
+        ],
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('fr'),
+          home: ChatScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final fr = AppLocalizationsFr();
+    expect(find.text(fr.chatTitle), findsOneWidget);
+    expect(find.text(fr.chatSubtitle), findsOneWidget);
+    expect(find.text(fr.chatEmpty), findsOneWidget);
+    expect(find.text(fr.chatInputHint), findsOneWidget);
+  });
+
+  test('ChatProvider: SocketException maps to network error', () async {
+    final provider = ChatProvider(chatApi: _SocketThrowingChatApi());
+    await provider.sendMessage('hi');
+    expect(provider.error, ChatError.network);
+  });
+
+  test('ChatProvider: FormatException maps to generic error', () async {
+    final provider = ChatProvider(chatApi: _FormatThrowingChatApi());
+    await provider.sendMessage('hi');
+    expect(provider.error, ChatError.generic);
   });
 }

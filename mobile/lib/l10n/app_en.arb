@@ -301,5 +301,13 @@
   "bookingErrorGeneric": "The booking failed. Try again in a moment.",
   "bookingCancelErrorNotCancellable": "This booking can no longer be cancelled.",
   "bookingCancelErrorNetwork": "Could not cancel the booking. Check your connection.",
-  "bookingCancelErrorGeneric": "The cancellation failed. Try again in a moment."
+  "bookingCancelErrorGeneric": "The cancellation failed. Try again in a moment.",
+  "chatTitle": "Assistant",
+  "chatSubtitle": "Welcome! I am your guide.",
+  "chatClearError": "Clear error",
+  "chatThinking": "Thinking…",
+  "chatEmpty": "Ask me a question about your destination.",
+  "chatInputHint": "Ask a question…",
+  "chatErrorNetwork": "Could not reach the assistant. Check your connection.",
+  "chatErrorGeneric": "Something went wrong. Try again."
 }

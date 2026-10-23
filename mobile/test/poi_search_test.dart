@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:discover_ai/l10n/app_localizations.dart';
+import 'package:discover_ai/l10n/app_localizations_en.dart';
 import 'package:discover_ai/l10n/app_localizations_fr.dart';
 import 'package:discover_ai/providers/poi_provider.dart';
 import 'package:discover_ai/screens/poi_list_screen.dart';
@@ -39,13 +41,16 @@ class _GatePoisApi implements PoisApi {
 }
 
 class _FailingPoisApi implements PoisApi {
+  _FailingPoisApi([this.error]);
+  final Object? error;
+
   @override
   Future<Map<String, dynamic>> getPOIs({
     String? city,
     String? category,
     String? search,
   }) async {
-    throw ApiException(500, 'boom');
+    throw error ?? ApiException(500, 'boom');
   }
 }
 
@@ -255,6 +260,44 @@ void main() {
 
       expect(
         find.text(AppLocalizationsFr().poiListErrorGeneric),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('liste en erreur network rend le message localisé en FR',
+        (tester) async {
+      final provider = POIProvider(
+          poisApi: _FailingPoisApi(const SocketException('offline')));
+      await pumpExplorerFr(tester, provider);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(AppLocalizationsFr().poiListErrorNetwork),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('liste en erreur network rend le message localisé en EN',
+        (tester) async {
+      final provider = POIProvider(
+          poisApi: _FailingPoisApi(const SocketException('offline')));
+      await pumpExplorer(tester, provider);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(AppLocalizationsEn().poiListErrorNetwork),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('liste en erreur generic rend le message localisé en EN',
+        (tester) async {
+      final provider = POIProvider(poisApi: _FailingPoisApi());
+      await pumpExplorer(tester, provider);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(AppLocalizationsEn().poiListErrorGeneric),
         findsOneWidget,
       );
     });

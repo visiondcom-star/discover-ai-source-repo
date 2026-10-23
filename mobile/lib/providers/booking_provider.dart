@@ -260,6 +260,8 @@ class BookingProvider extends ChangeNotifier {
         _lastCreateSignature = null;
       }
     } on SocketException catch (_) {
+      // Transport failure: keep the key and its signature so the next tap
+      // replays instead of creating a second booking.
       _actionError = BookingError.network;
     } on TimeoutException catch (_) {
       _actionError = BookingError.network;

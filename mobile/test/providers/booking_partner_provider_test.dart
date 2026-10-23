@@ -17,6 +17,11 @@ class _SocketThrowingBookingsApi extends FakeBookingsApi {
   }) async {
     throw const SocketException('no internet');
   }
+
+  @override
+  Future<List<Map<String, dynamic>>> listBookings() async {
+    throw const SocketException('no internet');
+  }
 }
 
 class _FormatThrowingBookingsApi extends FakeBookingsApi {
@@ -27,6 +32,11 @@ class _FormatThrowingBookingsApi extends FakeBookingsApi {
     Map<String, dynamic>? bookingData,
     String? idempotencyKey,
   }) async {
+    throw const FormatException('bad json');
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> listBookings() async {
     throw const FormatException('bad json');
   }
 }
@@ -109,5 +119,21 @@ void main() {
     await provider.createBooking(
         poiId: 'p-1', adapterType: 'hotel', idempotencyKey: 'k');
     expect(provider.actionError, BookingError.generic);
+  });
+
+  test('loadBookings with SocketException maps to BookingLoadError.network',
+      () async {
+    final provider = BookingProvider(bookingsApi: _SocketThrowingBookingsApi());
+    await provider.loadBookings();
+    expect(provider.loadError, BookingLoadError.network);
+    expect(provider.items, isEmpty);
+  });
+
+  test('loadBookings with FormatException maps to BookingLoadError.generic',
+      () async {
+    final provider = BookingProvider(bookingsApi: _FormatThrowingBookingsApi());
+    await provider.loadBookings();
+    expect(provider.loadError, BookingLoadError.generic);
+    expect(provider.items, isEmpty);
   });
 }

@@ -107,19 +107,19 @@ class POIProvider extends ChangeNotifier {
           .map((e) => POI.fromJson(Map<String, dynamic>.from(e as Map)))
           .toList();
     } on ApiException catch (e) {
-      if (seq != _seq) return;
+      if (seq != _seq) return; // stale failure — discard silently
       _error = e.statusCode == null ? POIError.network : POIError.generic;
     } on SocketException catch (_) {
-      if (seq != _seq) return;
+      if (seq != _seq) return; // stale failure — discard silently
       _error = POIError.network;
     } on TimeoutException catch (_) {
-      if (seq != _seq) return;
+      if (seq != _seq) return; // stale failure — discard silently
       _error = POIError.network;
     } on http.ClientException catch (_) {
-      if (seq != _seq) return;
+      if (seq != _seq) return; // stale failure — discard silently
       _error = POIError.network;
     } catch (_) {
-      if (seq != _seq) return;
+      if (seq != _seq) return; // stale failure — discard silently
       _error = POIError.generic;
     }
     if (seq != _seq) return;

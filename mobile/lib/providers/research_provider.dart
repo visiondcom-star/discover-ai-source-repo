@@ -4,9 +4,21 @@
 // Pattern aligné sur TenantProvider/PromotionProvider (ChangeNotifier + context.watch).
 
 import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
-import '../services/api_service.dart';
+import 'package:http/http.dart' as http;
+
 import '../models/research_job.dart';
+import '../services/api_service.dart';
+
+/// Locale-agnostic failure codes for destination research operations.
+enum ResearchError {
+  rateLimited,
+  pollFailed,
+  network,
+  generic,
+}
 
 class ResearchProvider extends ChangeNotifier {
   final ResearchApi _api;
@@ -33,13 +45,12 @@ class ResearchProvider extends ChangeNotifier {
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
-  String? _error;
-  String? get error => _error;
+  ResearchError? _error;
+  ResearchError? get error => _error;
 
   Timer? _pollTimer;
 
-  bool get isRunning =>
-      _currentJob != null && !_currentJob!.status.isTerminal;
+  bool get isRunning => _currentJob != null && !_currentJob!.status.isTerminal;
 
   Future<void> startResearch({
     required String tenantId,
@@ -67,9 +78,29 @@ class ResearchProvider extends ChangeNotifier {
       }
     } on ApiException catch (e) {
       _isLoading = false;
-      _error = e.statusCode == 429
-          ? 'Une actualisation manuelle a déjà été effectuée ce mois-ci.'
-          : 'Échec du lancement du run de recherche.';
+      if (e.statusCode == 429) {
+        _error = ResearchError.rateLimited;
+      } else if (e.statusCode == null) {
+        _error = ResearchError.network;
+      } else {
+        _error = ResearchError.generic;
+      }
+      notifyListeners();
+    } on SocketException catch (_) {
+      _isLoading = false;
+      _error = ResearchError.network;
+      notifyListeners();
+    } on TimeoutException catch (_) {
+      _isLoading = false;
+      _error = ResearchError.network;
+      notifyListeners();
+    } on http.ClientException catch (_) {
+      _isLoading = false;
+      _error = ResearchError.network;
+      notifyListeners();
+    } catch (_) {
+      _isLoading = false;
+      _error = ResearchError.generic;
       notifyListeners();
     }
   }
@@ -79,7 +110,7 @@ class ResearchProvider extends ChangeNotifier {
     _pollTimer = Timer.periodic(pollInterval, (_) async {
       try {
         final job = ResearchJob.fromJson(
-          await _api.getJobStatus(tenantId: tenantId, jobId: jobId));
+            await _api.getJobStatus(tenantId: tenantId, jobId: jobId));
         _currentJob = job;
         notifyListeners();
 
@@ -89,8 +120,26 @@ class ResearchProvider extends ChangeNotifier {
           // catalogue déjà à jour, et une seule fois par job.
           onJobDone?.call();
         }
-      } on ApiException {
-        _error = 'Impossible de récupérer le statut du job.';
+      } on ApiException catch (e) {
+        _error = e.statusCode == null
+            ? ResearchError.network
+            : ResearchError.pollFailed;
+        _pollTimer?.cancel();
+        notifyListeners();
+      } on SocketException catch (_) {
+        _error = ResearchError.network;
+        _pollTimer?.cancel();
+        notifyListeners();
+      } on TimeoutException catch (_) {
+        _error = ResearchError.network;
+        _pollTimer?.cancel();
+        notifyListeners();
+      } on http.ClientException catch (_) {
+        _error = ResearchError.network;
+        _pollTimer?.cancel();
+        notifyListeners();
+      } catch (_) {
+        _error = ResearchError.generic;
         _pollTimer?.cancel();
         notifyListeners();
       }

@@ -1,4 +1,8 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
 import '../models/booking.dart';
 import '../models/booking_details.dart';
@@ -41,9 +45,19 @@ enum BookingError {
 }
 
 /// Maps a failed listing call to a locale-agnostic code.
-BookingLoadError _loadErrorCode(Object e) => e is ApiException
-    ? (e.statusCode == null ? BookingLoadError.network : BookingLoadError.generic)
-    : BookingLoadError.network;
+BookingLoadError _loadErrorCode(Object e) {
+  if (e is ApiException) {
+    return e.statusCode == null
+        ? BookingLoadError.network
+        : BookingLoadError.generic;
+  }
+  if (e is SocketException ||
+      e is TimeoutException ||
+      e is http.ClientException) {
+    return BookingLoadError.network;
+  }
+  return BookingLoadError.generic;
+}
 
 /// Maps a failed create/consent call to a locale-agnostic code.
 ///
@@ -227,7 +241,10 @@ class BookingProvider extends ChangeNotifier {
       // Idempotent replay: same id already known → replace, never duplicate.
       final known = _items.any((b) => b.id == created!.id);
       _items = known
-          ? [for (final b in _items) if (b.id == created.id) created else b]
+          ? [
+              for (final b in _items)
+                if (b.id == created.id) created else b
+            ]
           : [created, ..._items];
       // The logical attempt is over: forget the key, a later booking is a
       // new one even with identical details.
@@ -242,10 +259,16 @@ class BookingProvider extends ChangeNotifier {
         _lastIdempotencyKey = null;
         _lastCreateSignature = null;
       }
-    } catch (_) {
+    } on SocketException catch (_) {
       // Transport failure: keep the key and its signature so the next tap
       // replays instead of creating a second booking.
       _actionError = BookingError.network;
+    } on TimeoutException catch (_) {
+      _actionError = BookingError.network;
+    } on http.ClientException catch (_) {
+      _actionError = BookingError.network;
+    } catch (_) {
+      _actionError = BookingError.generic;
     }
     _isActing = false;
     notifyListeners();
@@ -264,8 +287,14 @@ class BookingProvider extends ChangeNotifier {
       updated = Booking.fromJson(json);
     } on ApiException catch (e) {
       _actionError = _bookingErrorCode(e);
-    } catch (_) {
+    } on SocketException catch (_) {
       _actionError = BookingError.network;
+    } on TimeoutException catch (_) {
+      _actionError = BookingError.network;
+    } on http.ClientException catch (_) {
+      _actionError = BookingError.network;
+    } catch (_) {
+      _actionError = BookingError.generic;
     }
     _isActing = false;
     final u = updated;
@@ -292,8 +321,14 @@ class BookingProvider extends ChangeNotifier {
       updated = Booking.fromJson(json);
     } on ApiException catch (e) {
       _cancelError = _cancelErrorCode(e);
-    } catch (_) {
+    } on SocketException catch (_) {
       _cancelError = BookingCancelError.network;
+    } on TimeoutException catch (_) {
+      _cancelError = BookingCancelError.network;
+    } on http.ClientException catch (_) {
+      _cancelError = BookingCancelError.network;
+    } catch (_) {
+      _cancelError = BookingCancelError.generic;
     }
     _isActing = false;
     final u = updated;

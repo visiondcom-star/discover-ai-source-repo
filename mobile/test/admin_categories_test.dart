@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:discover_ai/l10n/app_localizations.dart';
 import 'package:discover_ai/providers/admin_categories_provider.dart';
 import 'package:discover_ai/providers/research_provider.dart';
 import 'package:discover_ai/providers/tenant_provider.dart';
@@ -42,7 +45,8 @@ void main() {
     test('setStatus remplace la catégorie et déclenche onChanged', () async {
       final fake = FakeAdminCategoriesApi(categories: [_cat('a', 'proposed')]);
       var changed = 0;
-      final provider = AdminCategoriesProvider(fake, onChanged: () => changed++);
+      final provider =
+          AdminCategoriesProvider(fake, onChanged: () => changed++);
       await provider.load();
 
       await provider.setStatus(provider.categories.single, 'active');
@@ -61,7 +65,8 @@ void main() {
         updateError: ApiException(409, '{"detail":"invalid transition"}'),
       );
       var changed = 0;
-      final provider = AdminCategoriesProvider(fake, onChanged: () => changed++);
+      final provider =
+          AdminCategoriesProvider(fake, onChanged: () => changed++);
       await provider.load();
 
       await provider.setStatus(provider.categories.single, 'active');
@@ -70,6 +75,69 @@ void main() {
       expect(provider.error, isNotNull);
       expect(provider.isUpdating('a'), isFalse);
       expect(changed, 0);
+      provider.dispose();
+    });
+
+    test('load: SocketException maps to network', () async {
+      final fake =
+          FakeAdminCategoriesApi(getAllError: const SocketException('offline'));
+      final provider = AdminCategoriesProvider(fake);
+      await provider.load();
+      expect(provider.error, AdminCategoriesError.network);
+      provider.dispose();
+    });
+
+    test('load: FormatException maps to generic', () async {
+      final fake = FakeAdminCategoriesApi(
+          getAllError: const FormatException('bad json'));
+      final provider = AdminCategoriesProvider(fake);
+      await provider.load();
+      expect(provider.error, AdminCategoriesError.generic);
+      provider.dispose();
+    });
+
+    test('load: ApiException(null) maps to network', () async {
+      final fake =
+          FakeAdminCategoriesApi(getAllError: ApiException(null, 'no status'));
+      final provider = AdminCategoriesProvider(fake);
+      await provider.load();
+      expect(provider.error, AdminCategoriesError.network);
+      provider.dispose();
+    });
+
+    test('setStatus: SocketException maps to network', () async {
+      final fake = FakeAdminCategoriesApi(
+        categories: [_cat('a', 'proposed')],
+        updateError: const SocketException('offline'),
+      );
+      final provider = AdminCategoriesProvider(fake);
+      await provider.load();
+      await provider.setStatus(provider.categories.single, 'active');
+      expect(provider.error, AdminCategoriesError.network);
+      provider.dispose();
+    });
+
+    test('setStatus: FormatException maps to generic', () async {
+      final fake = FakeAdminCategoriesApi(
+        categories: [_cat('a', 'proposed')],
+        updateError: const FormatException('bad json'),
+      );
+      final provider = AdminCategoriesProvider(fake);
+      await provider.load();
+      await provider.setStatus(provider.categories.single, 'active');
+      expect(provider.error, AdminCategoriesError.generic);
+      provider.dispose();
+    });
+
+    test('setStatus: ApiException(null) maps to network', () async {
+      final fake = FakeAdminCategoriesApi(
+        categories: [_cat('a', 'proposed')],
+        updateError: ApiException(null, 'no status'),
+      );
+      final provider = AdminCategoriesProvider(fake);
+      await provider.load();
+      await provider.setStatus(provider.categories.single, 'active');
+      expect(provider.error, AdminCategoriesError.network);
       provider.dispose();
     });
   });
@@ -90,7 +158,12 @@ void main() {
           ChangeNotifierProvider<TenantProvider>.value(value: tenants),
           ChangeNotifierProvider<AdminCategoriesProvider>.value(value: admin),
         ],
-        child: const MaterialApp(home: AdminResearchScreen()),
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('fr'),
+          home: AdminResearchScreen(),
+        ),
       ),
     );
     await tester.pumpAndSettle();

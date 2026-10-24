@@ -1,4 +1,6 @@
 import 'package:discover_ai/l10n/app_localizations.dart';
+import 'package:discover_ai/l10n/app_localizations_en.dart';
+import 'package:discover_ai/l10n/app_localizations_fr.dart';
 import 'package:discover_ai/models/poi.dart';
 import 'package:discover_ai/providers/booking_provider.dart';
 import 'package:discover_ai/providers/poi_provider.dart';
@@ -44,11 +46,33 @@ void main() {
           ChangeNotifierProvider<BookingProvider>.value(value: bookingProvider),
           ChangeNotifierProvider<POIProvider>.value(value: poiProvider),
         ],
-        child: MaterialApp(
+        child: const MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
-          locale: const Locale('en'),
-          home: const BookingsScreen(),
+          locale: Locale('en'),
+          home: BookingsScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> pumpBookingsFr(
+    WidgetTester tester, {
+    required BookingProvider bookingProvider,
+    required POIProvider poiProvider,
+  }) async {
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<BookingProvider>.value(value: bookingProvider),
+          ChangeNotifierProvider<POIProvider>.value(value: poiProvider),
+        ],
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('fr'),
+          home: BookingsScreen(),
         ),
       ),
     );
@@ -70,6 +94,103 @@ void main() {
     expect(find.byKey(const Key('booking_cancel_b-1')), findsOneWidget);
     expect(find.byKey(const Key('booking_ref_b-1')), findsNothing,
         reason: 'no external reference before consent');
+  });
+
+  testWidgets('libellés de réservation rendus en FR', (tester) async {
+    await pumpBookingsFr(
+      tester,
+      bookingProvider: BookingProvider(bookingsApi: FakeBookingsApi()),
+      poiProvider: await loadedPois(),
+    );
+    final fr = AppLocalizationsFr();
+    expect(find.text(fr.bookingStatusPendingConsent), findsOneWidget);
+    expect(find.text(fr.bookingPartnerLabel('hotel')), findsOneWidget);
+    expect(find.text(fr.bookingConfirmAction), findsOneWidget);
+    expect(find.text(fr.bookingCancelAction), findsOneWidget);
+  });
+
+  testWidgets(
+      'carte confirmed affiche le libellé traduit dans la Key booking_status en FR',
+      (tester) async {
+    final api = FakeBookingsApi(
+      bookings: [sampleBookingJson(id: 'b-1', status: 'confirmed')],
+    );
+    await pumpBookingsFr(
+      tester,
+      bookingProvider: BookingProvider(bookingsApi: api),
+      poiProvider: await loadedPois(),
+    );
+    final fr = AppLocalizationsFr();
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('booking_status_b-1')),
+        matching: find.text(fr.bookingStatusConfirmed),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+      'carte cancelled affiche le libellé traduit dans la Key booking_status en FR',
+      (tester) async {
+    final api = FakeBookingsApi(
+      bookings: [sampleBookingJson(id: 'b-1', status: 'cancelled')],
+    );
+    await pumpBookingsFr(
+      tester,
+      bookingProvider: BookingProvider(bookingsApi: api),
+      poiProvider: await loadedPois(),
+    );
+    final fr = AppLocalizationsFr();
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('booking_status_b-1')),
+        matching: find.text(fr.bookingStatusCancelled),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+      'confirmed card displays translated label in Key booking_status in EN',
+      (tester) async {
+    final api = FakeBookingsApi(
+      bookings: [sampleBookingJson(id: 'b-1', status: 'confirmed')],
+    );
+    await pumpBookings(
+      tester,
+      bookingProvider: BookingProvider(bookingsApi: api),
+      poiProvider: await loadedPois(),
+    );
+    final en = AppLocalizationsEn();
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('booking_status_b-1')),
+        matching: find.text(en.bookingStatusConfirmed),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+      'cancelled card displays translated label in Key booking_status in EN',
+      (tester) async {
+    final api = FakeBookingsApi(
+      bookings: [sampleBookingJson(id: 'b-1', status: 'cancelled')],
+    );
+    await pumpBookings(
+      tester,
+      bookingProvider: BookingProvider(bookingsApi: api),
+      poiProvider: await loadedPois(),
+    );
+    final en = AppLocalizationsEn();
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('booking_status_b-1')),
+        matching: find.text(en.bookingStatusCancelled),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('refusing consent cancels the booking', (tester) async {

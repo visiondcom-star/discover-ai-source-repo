@@ -1,4 +1,8 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
 import '../models/user.dart';
 import '../services/api_service.dart';
@@ -87,11 +91,20 @@ class AuthProvider extends ChangeNotifier {
       _loginError = _mapLoginError(e.statusCode);
       notifyListeners();
       return false;
-    } catch (_) {
-      // Transport-level failure (no HTTP status) — e.g. SocketException,
-      // TimeoutException, DNS resolution error. Don't fall back to generic:
-      // the user's credentials weren't even the problem.
+    } on SocketException catch (_) {
       _loginError = AuthError.network;
+      notifyListeners();
+      return false;
+    } on TimeoutException catch (_) {
+      _loginError = AuthError.network;
+      notifyListeners();
+      return false;
+    } on http.ClientException catch (_) {
+      _loginError = AuthError.network;
+      notifyListeners();
+      return false;
+    } catch (_) {
+      _loginError = AuthError.generic;
       notifyListeners();
       return false;
     }

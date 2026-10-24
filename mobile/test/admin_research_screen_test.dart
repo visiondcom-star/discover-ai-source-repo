@@ -1,5 +1,6 @@
-import 'package:discover_ai/models/research_job.dart';
 import 'package:discover_ai/l10n/app_localizations.dart';
+import 'package:discover_ai/l10n/app_localizations_en.dart';
+import 'package:discover_ai/models/research_job.dart';
 import 'package:discover_ai/providers/admin_categories_provider.dart';
 import 'package:discover_ai/providers/locale_provider.dart';
 import 'package:discover_ai/providers/research_provider.dart';
@@ -45,6 +46,7 @@ void main() {
       WidgetTester tester, {
       required ResearchProvider researchProvider,
       required TenantProvider tenantProvider,
+      Locale locale = const Locale('fr'),
     }) async {
       await tester.pumpWidget(
         MultiProvider(
@@ -56,7 +58,12 @@ void main() {
                 create: (_) =>
                     AdminCategoriesProvider(FakeAdminCategoriesApi())),
           ],
-          child: const MaterialApp(home: AdminResearchScreen()),
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            locale: locale,
+            home: const AdminResearchScreen(),
+          ),
         ),
       );
       await tester.pumpAndSettle();
@@ -196,6 +203,26 @@ void main() {
       );
       expect(button.onPressed, isNull,
           reason: 'disabled while ResearchProvider.isRunning is true');
+
+      researchProvider.dispose();
+    });
+
+    testWidgets('AdminResearchScreen rend ses chaînes en EN', (tester) async {
+      final fake = FakeResearchApi();
+      final researchProvider = ResearchProvider(fake);
+
+      await pumpScreen(
+        tester,
+        researchProvider: researchProvider,
+        tenantProvider: await loadedTenant(),
+        locale: const Locale('en'),
+      );
+
+      final en = AppLocalizationsEn();
+      expect(find.text(en.adminResearchTitle), findsOneWidget);
+      expect(find.text(en.adminResearchStatusTitle), findsOneWidget);
+      expect(find.text(en.adminResearchRunButton), findsOneWidget);
+      expect(find.text(en.adminResearchCategoriesTitle), findsOneWidget);
 
       researchProvider.dispose();
     });

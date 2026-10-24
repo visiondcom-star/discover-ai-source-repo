@@ -7,6 +7,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../l10n/app_localizations.dart';
 import '../providers/research_collection_provider.dart';
 import '../providers/tenant_provider.dart';
 
@@ -25,15 +26,32 @@ class AdminCollectionScreen extends StatefulWidget {
 class _AdminCollectionScreenState extends State<AdminCollectionScreen> {
   bool _runPipeline = true;
 
+  String _errorText(AppLocalizations loc, ResearchCollectionError? error) {
+    switch (error) {
+      case ResearchCollectionError.conflict:
+        return loc.adminCollectionErrorConflict;
+      case ResearchCollectionError.rateLimited:
+        return loc.adminCollectionErrorRateLimited;
+      case ResearchCollectionError.pollFailed:
+        return loc.adminCollectionErrorPollFailed;
+      case ResearchCollectionError.network:
+        return loc.adminCollectionErrorNetwork;
+      case ResearchCollectionError.generic:
+      case null:
+        return loc.adminCollectionErrorGeneric;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     final tenants = context.watch<TenantProvider>();
     final collection = context.watch<ResearchCollectionProvider>();
     final job = collection.currentJob;
     final tenantId = tenants.tenant?.id ?? '';
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Collecte des documents')),
+      appBar: AppBar(title: Text(loc.adminCollectionTitle)),
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
@@ -41,10 +59,8 @@ class _AdminCollectionScreenState extends State<AdminCollectionScreen> {
             margin: EdgeInsets.zero,
             child: SwitchListTile(
               key: const Key('run_pipeline_switch'),
-              title: const Text('Enchaîner l\'analyse IA'),
-              subtitle: const Text(
-                'Crée un job de recherche à partir des documents collectés.',
-              ),
+              title: Text(loc.adminCollectionRunPipeline),
+              subtitle: Text(loc.adminCollectionRunPipelineSubtitle),
               value: _runPipeline,
               onChanged: (value) => setState(() => _runPipeline = value),
             ),
@@ -59,12 +75,12 @@ class _AdminCollectionScreenState extends State<AdminCollectionScreen> {
                       runPipeline: _runPipeline,
                     ),
             icon: const Icon(Icons.cloud_download_outlined),
-            label: const Text('Lancer la collecte'),
+            label: Text(loc.adminCollectionRunButton),
           ),
           if (collection.error != null) ...[
             const SizedBox(height: 12),
             Text(
-              collection.error!,
+              _errorText(loc, collection.error),
               style: TextStyle(
                 color: Theme.of(context).colorScheme.error,
               ),
@@ -73,23 +89,25 @@ class _AdminCollectionScreenState extends State<AdminCollectionScreen> {
           if (job != null) ...[
             const SizedBox(height: 12),
             if (!job.status.isTerminal)
-              const Text('Collecte en cours…')
+              Text(loc.adminCollectionRunning)
             else if (job.status.name == 'done')
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Collecte terminée'),
+                  Text(loc.adminCollectionDone),
                   Text(
-                    '${job.documentsFetched} récupéré(s) · '
-                    '${job.documentsNew} nouveau(x) · '
-                    '${job.documentsDuplicate} doublon(s) · '
-                    '${job.documentsFailed} en échec',
+                    loc.adminCollectionSummary(
+                      job.documentsFetched,
+                      job.documentsNew,
+                      job.documentsDuplicate,
+                      job.documentsFailed,
+                    ),
                   ),
                 ],
               )
             else
               Text(
-                job.errorMessage ?? 'La collecte a échoué.',
+                job.errorMessage ?? loc.adminCollectionJobFailed,
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.error,
                 ),

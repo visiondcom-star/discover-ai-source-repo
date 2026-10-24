@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/trip.dart';
 import '../providers/trip_provider.dart';
 import '../widgets/timeline_item.dart';
+import 'trip_form_screen.dart';
 
 /// Day-by-day itinerary display — the mobile equivalent of `TripTimeline.tsx`.
 class TripTimelineScreen extends StatelessWidget {
@@ -11,13 +13,14 @@ class TripTimelineScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     final trip = context.watch<TripProvider>().currentTrip;
 
     if (trip == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Itinerary')),
-        body: const Center(
-          child: Text('No trip generated yet.', key: Key('trip_empty')),
+        appBar: AppBar(title: Text(loc.tripTimelineTitle)),
+        body: Center(
+          child: Text(loc.tripTimelineEmpty, key: const Key('trip_empty')),
         ),
       );
     }
@@ -32,13 +35,14 @@ class _TripTimelineView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     final byDay = trip.itemsByDay;
     return Scaffold(
       appBar: AppBar(title: Text(trip.title)),
       body: trip.items.isEmpty
-          ? const Center(
-              child: Text('This trip has no stops yet.',
-                  key: Key('trip_items_empty')),
+          ? Center(
+              child: Text(loc.tripTimelineNoStops,
+                  key: const Key('trip_items_empty')),
             )
           : ListView(
               key: const Key('trip_timeline'),
@@ -63,8 +67,12 @@ class _TripTimelineView extends StatelessWidget {
                           spacing: 8,
                           runSpacing: 4,
                           children: [
-                            Chip(label: Text('${trip.numDays} day(s)')),
-                            Chip(label: Text('Budget: ${trip.budgetLevel}')),
+                            Chip(
+                                label:
+                                    Text(loc.tripFormDaysCount(trip.numDays))),
+                            Chip(
+                                label: Text(loc.tripTimelineBudget(
+                                    budgetLabel(loc, trip.budgetLevel)))),
                             for (final i in trip.interests)
                               Chip(label: Text(i)),
                           ],
@@ -95,7 +103,7 @@ class _TripTimelineView extends StatelessWidget {
                               ),
                               const SizedBox(width: 10),
                               Text(
-                                'Day ${entry.key}',
+                                loc.tripTimelineDay(entry.key),
                                 key: Key('day_header_${entry.key}'),
                                 style: Theme.of(context)
                                     .textTheme

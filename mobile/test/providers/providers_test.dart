@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:discover_ai/models/poi.dart';
@@ -17,6 +18,64 @@ class _ThrowingPoisApi implements PoisApi {
     String? search,
   }) async {
     throw ApiException(500, 'boom');
+  }
+}
+
+class _SocketThrowingPoisApi implements PoisApi {
+  @override
+  Future<Map<String, dynamic>> getPOIs({
+    String? city,
+    String? category,
+    String? search,
+  }) async {
+    throw const SocketException('no internet');
+  }
+}
+
+class _FormatThrowingPoisApi implements PoisApi {
+  @override
+  Future<Map<String, dynamic>> getPOIs({
+    String? city,
+    String? category,
+    String? search,
+  }) async {
+    throw const FormatException('bad json');
+  }
+}
+
+class _SocketThrowingAuthApi extends FakeAuthApi {
+  @override
+  Future<Map<String, dynamic>> login(String email, String password) async {
+    throw const SocketException('no internet');
+  }
+}
+
+class _FormatThrowingAuthApi extends FakeAuthApi {
+  @override
+  Future<Map<String, dynamic>> login(String email, String password) async {
+    throw const FormatException('bad json');
+  }
+}
+
+class _SocketThrowingTripsApi extends FakeTripsApi {
+  @override
+  Future<Map<String, dynamic>> generateTrip({
+    required List<String> interests,
+    required String budgetLevel,
+    required int numDays,
+  }) async {
+    throw const SocketException('no internet');
+  }
+}
+
+class _FormatThrowingTripsApi extends FakeTripsApi {
+  @override
+  Future<Map<String, dynamic>> generateTrip({
+    required List<String> interests,
+    required String budgetLevel,
+    required int numDays,
+  }) async {
+    throw const FormatException('bad json');
   }
 }
 
@@ -91,6 +150,36 @@ void main() {
       expect(auth.isAuthenticated, isFalse);
       expect(store.token, isNull); // deleted during restore
     });
+
+    test('SocketException maps to network error', () async {
+      final store = InMemoryTokenStore();
+      final auth = AuthProvider(
+        api: _SocketThrowingAuthApi(),
+        tokenStore: store,
+      );
+      await auth.initialized;
+
+      final ok = await auth.login('demo@discoverai.dz', 'secret123');
+
+      expect(ok, isFalse);
+      expect(auth.isAuthenticated, isFalse);
+      expect(auth.loginError, AuthError.network);
+    });
+
+    test('FormatException maps to generic error', () async {
+      final store = InMemoryTokenStore();
+      final auth = AuthProvider(
+        api: _FormatThrowingAuthApi(),
+        tokenStore: store,
+      );
+      await auth.initialized;
+
+      final ok = await auth.login('demo@discoverai.dz', 'secret123');
+
+      expect(ok, isFalse);
+      expect(auth.isAuthenticated, isFalse);
+      expect(auth.loginError, AuthError.generic);
+    });
   });
 
   group('POIProvider', () {
@@ -113,6 +202,18 @@ void main() {
           reason:
               'ApiException(500) carries a status code → generic bucket, never raw text');
       expect(provider.isLoading, isFalse);
+    });
+
+    test('SocketException maps to network error', () async {
+      final provider = POIProvider(poisApi: _SocketThrowingPoisApi());
+      await provider.loadPOIs();
+      expect(provider.error, POIError.network);
+    });
+
+    test('FormatException maps to generic error', () async {
+      final provider = POIProvider(poisApi: _FormatThrowingPoisApi());
+      await provider.loadPOIs();
+      expect(provider.error, POIError.generic);
     });
   });
 
@@ -156,11 +257,33 @@ void main() {
       expect(trip, isNull);
       expect(provider.currentTrip, isNull);
       expect(provider.trips, isEmpty);
-      expect(provider.error, contains('trip planner failed'));
+      expect(provider.error, TripError.generic);
       expect(provider.isGenerating, isFalse);
 
       provider.clearError();
       expect(provider.error, isNull);
+    });
+
+    test('generate: SocketException maps to TripError.network', () async {
+      final provider = TripProvider(tripsApi: _SocketThrowingTripsApi());
+      final trip = await provider.generate(
+        interests: const ['nature'],
+        budgetLevel: 'low',
+        numDays: 2,
+      );
+      expect(trip, isNull);
+      expect(provider.error, TripError.network);
+    });
+
+    test('generate: FormatException maps to TripError.generic', () async {
+      final provider = TripProvider(tripsApi: _FormatThrowingTripsApi());
+      final trip = await provider.generate(
+        interests: const ['nature'],
+        budgetLevel: 'low',
+        numDays: 2,
+      );
+      expect(trip, isNull);
+      expect(provider.error, TripError.generic);
     });
 
     test('generate rejects an empty interest selection before calling the API',

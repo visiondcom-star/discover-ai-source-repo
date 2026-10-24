@@ -1,5 +1,7 @@
 // test/providers/research_provider_test.dart
 
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:discover_ai/models/research_job.dart';
 import 'package:discover_ai/providers/research_provider.dart';
@@ -72,8 +74,7 @@ void main() {
     test('propage l\'erreur si runResearch échoue (ex: rate-limit 429)',
         () async {
       final fake = FakeResearchApi(
-        runResearchError:
-            ApiException(429, 'Déjà actualisé ce mois-ci'),
+        runResearchError: ApiException(429, 'Déjà actualisé ce mois-ci'),
       );
 
       final provider = ResearchProvider(fake);
@@ -83,15 +84,122 @@ void main() {
         triggerType: ResearchTriggerType.manualRefresh,
       );
 
-      expect(provider.error, 'Une actualisation manuelle a déjà été effectuée ce mois-ci.');
+      expect(provider.error, ResearchError.rateLimited);
       expect(provider.currentJob, isNull);
       expect(provider.isLoading, isFalse);
 
       provider.dispose();
     });
 
-    test('resumeTracking reprend le polling d\'un job déjà en cours',
-        () async {
+    test('startResearch: SocketException maps to network', () async {
+      final fake = FakeResearchApi(
+        runResearchError: const SocketException('offline'),
+      );
+      final provider = ResearchProvider(fake);
+      await provider.startResearch(
+        tenantId: 'tenant1',
+        triggerType: ResearchTriggerType.manualRefresh,
+      );
+      expect(provider.error, ResearchError.network);
+      expect(provider.isLoading, isFalse);
+      provider.dispose();
+    });
+
+    test('startResearch: FormatException maps to generic', () async {
+      final fake = FakeResearchApi(
+        runResearchError: const FormatException('bad json'),
+      );
+      final provider = ResearchProvider(fake);
+      await provider.startResearch(
+        tenantId: 'tenant1',
+        triggerType: ResearchTriggerType.manualRefresh,
+      );
+      expect(provider.error, ResearchError.generic);
+      expect(provider.isLoading, isFalse);
+      provider.dispose();
+    });
+
+    test('startResearch: ApiException(null) maps to network', () async {
+      final fake = FakeResearchApi(
+        runResearchError: ApiException(null, 'no status'),
+      );
+      final provider = ResearchProvider(fake);
+      await provider.startResearch(
+        tenantId: 'tenant1',
+        triggerType: ResearchTriggerType.manualRefresh,
+      );
+      expect(provider.error, ResearchError.network);
+      expect(provider.isLoading, isFalse);
+      provider.dispose();
+    });
+
+    test('polling: SocketException maps to network', () async {
+      final fake = FakeResearchApi(
+        jobsQueue: [_job(status: ResearchJobStatus.pending)],
+        getStatusError: const SocketException('offline'),
+      );
+      final provider = ResearchProvider(
+        fake,
+        pollInterval: const Duration(milliseconds: 10),
+      );
+      await provider.startResearch(
+        tenantId: 'tenant1',
+        triggerType: ResearchTriggerType.manualRefresh,
+      );
+      await Future.doWhile(() async {
+        await Future.delayed(const Duration(milliseconds: 15));
+        return provider.error == null;
+      }).timeout(const Duration(seconds: 2));
+
+      expect(provider.error, ResearchError.network);
+      provider.dispose();
+    });
+
+    test('polling: FormatException maps to generic', () async {
+      final fake = FakeResearchApi(
+        jobsQueue: [_job(status: ResearchJobStatus.pending)],
+        getStatusError: const FormatException('bad json'),
+      );
+      final provider = ResearchProvider(
+        fake,
+        pollInterval: const Duration(milliseconds: 10),
+      );
+      await provider.startResearch(
+        tenantId: 'tenant1',
+        triggerType: ResearchTriggerType.manualRefresh,
+      );
+      await Future.doWhile(() async {
+        await Future.delayed(const Duration(milliseconds: 15));
+        return provider.error == null;
+      }).timeout(const Duration(seconds: 2));
+
+      expect(provider.error, ResearchError.generic);
+      provider.dispose();
+    });
+
+    test('polling: ApiException(null) maps to network', () async {
+      final fake = FakeResearchApi(
+        jobsQueue: [_job(status: ResearchJobStatus.pending)],
+        getStatusError: ApiException(null, 'no status'),
+      );
+      final provider = ResearchProvider(
+        fake,
+        pollInterval: const Duration(milliseconds: 10),
+      );
+      await provider.startResearch(
+        tenantId: 'tenant1',
+        triggerType: ResearchTriggerType.manualRefresh,
+      );
+      await Future.doWhile(() async {
+        await Future.delayed(const Duration(milliseconds: 15));
+        return provider.error == null;
+      }).timeout(const Duration(seconds: 2));
+
+      expect(provider.error, ResearchError.network);
+      provider.dispose();
+    });
+
+    test('resumeTracking reprend le polling d\'un job déjà en cours', () async {
       final fake = FakeResearchApi(
         statusSequence: [
           _job(status: ResearchJobStatus.processing),
@@ -175,12 +283,15 @@ void main() {
       provider.dispose();
     });
 
-    test('onJobDone est appelé aussi quand le job est déjà terminé au lancement',
+    test(
+        'onJobDone est appelé aussi quand le job est déjà terminé au lancement',
         () async {
       // Pas de polling dans ce cas : sans appel ici, le catalogue voyageur ne
       // serait jamais rechargé et l'app resterait sur des données périmées.
       final fake = FakeResearchApi(
-        jobsQueue: [_job(status: ResearchJobStatus.done, categoriesProposed: 1)],
+        jobsQueue: [
+          _job(status: ResearchJobStatus.done, categoriesProposed: 1)
+        ],
         statusSequence: [_job(status: ResearchJobStatus.done)],
       );
 

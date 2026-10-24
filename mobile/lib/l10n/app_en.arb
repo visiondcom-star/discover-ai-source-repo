@@ -184,8 +184,10 @@
       "Book a hotel, a table or a visit from a place page — every step asks for your explicit confirmation.",
   "bookingStatusPendingConsent": "Awaiting your confirmation",
   "bookingStatusAwaitingPartner": "Awaiting the provider",
+  "bookingStatusConfirmed": "Confirmed",
   "bookingStatusDeclined": "Declined by the provider",
   "bookingStatusExpired": "Request expired",
+  "bookingStatusCancelled": "Cancelled",
   "bookingPartnerLabel": "Provider: {provider}",
   "bookingPrice": "{price} {currency}",
   "@bookingPrice": {
@@ -301,5 +303,129 @@
   "bookingErrorGeneric": "The booking failed. Try again in a moment.",
   "bookingCancelErrorNotCancellable": "This booking can no longer be cancelled.",
   "bookingCancelErrorNetwork": "Could not cancel the booking. Check your connection.",
-  "bookingCancelErrorGeneric": "The cancellation failed. Try again in a moment."
+  "bookingCancelErrorGeneric": "The cancellation failed. Try again in a moment.",
+  "chatTitle": "Assistant",
+  "chatSubtitle": "Welcome! I am your guide.",
+  "chatClearError": "Clear error",
+  "chatThinking": "Thinking…",
+  "chatEmpty": "Ask me a question about your destination.",
+  "chatInputHint": "Ask a question…",
+  "chatErrorNetwork": "Could not reach the assistant. Check your connection.",
+  "chatErrorGeneric": "Something went wrong. Try again.",
+  "tripFormTitle": "Plan a trip",
+  "tripFormValidationInterests": "Pick at least one interest.",
+  "tripErrorNetwork": "Could not generate the itinerary. Check your connection.",
+  "tripErrorGeneric": "Trip generation failed. Try again.",
+  "tripFormInterests": "Interests",
+  "tripFormDays": "Number of days",
+  "tripFormDaysCount": "{count, plural, =1{1 day} other{{count} days}}",
+  "@tripFormDaysCount": {
+    "description": "Number of days on the trip form and timeline.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tripFormBudget": "Budget level",
+  "tripBudgetLow": "low",
+  "tripBudgetMedium": "medium",
+  "tripBudgetHigh": "high",
+  "tripFormSubmit": "Generate itinerary",
+  "tripTimelineTitle": "Itinerary",
+  "tripTimelineEmpty": "No trip generated yet.",
+  "tripTimelineNoStops": "This trip has no stops yet.",
+  "tripTimelineBudget": "Budget: {level}",
+  "@tripTimelineBudget": {
+    "description": "Budget level indicator on the trip summary card.",
+    "placeholders": {
+      "level": {
+        "type": "String"
+      }
+    }
+  },
+  "tripTimelineDay": "Day {day}",
+  "@tripTimelineDay": {
+    "description": "Day group header on the trip timeline.",
+    "placeholders": {
+      "day": {
+        "type": "int"
+      }
+    }
+  },
+  "timelineItemDefaultPoi": "Point of interest",
+  "adminResearchTitle": "AI Destination Research",
+  "adminResearchStatusTitle": "Pipeline status",
+  "adminResearchStatusPending": "Waiting to start…",
+  "adminResearchStatusProcessing": "Processing…",
+  "adminResearchStatusDone": "Completed",
+  "adminResearchStatusFailed": "Run failed",
+  "adminResearchStatusReady": "Ready",
+  "adminResearchNoRecentRun": "No run launched recently",
+  "adminResearchSummary": "{proposed} proposed · {autoPublished} auto-published · {pendingReview} pending review",
+  "@adminResearchSummary": {
+    "description": "Summary counters for the AI research run.",
+    "placeholders": {
+      "proposed": {
+        "type": "int"
+      },
+      "autoPublished": {
+        "type": "int"
+      },
+      "pendingReview": {
+        "type": "int"
+      }
+    }
+  },
+  "adminResearchRunning": "Research in progress…",
+  "adminResearchRunButton": "Run AI research",
+  "adminResearchCategoriesTitle": "Destination categories",
+  "adminResearchRefreshTooltip": "Refresh",
+  "adminResearchNoCategories": "No categories yet",
+  "adminResearchRejectDialogTitle": "Reject this category?",
+  "adminResearchRejectActiveContent": "It will disappear from the app for travelers. This action is irreversible.",
+  "adminResearchRejectContent": "This action is irreversible.",
+  "adminResearchCancel": "Cancel",
+  "adminResearchConfirm": "Confirm",
+  "adminResearchPublish": "Publish",
+  "adminResearchReject": "Reject",
+  "adminResearchRetire": "Retire",
+  "adminResearchRejected": "Rejected",
+  "adminResearchErrorRateLimited": "A manual refresh was already performed this month.",
+  "adminResearchErrorPollFailed": "Could not retrieve the job status.",
+  "adminResearchErrorNetwork": "Could not run research. Check your connection.",
+  "adminResearchErrorGeneric": "Failed to start the research run.",
+  "adminCategoriesErrorNetwork": "Could not load categories. Check your connection.",
+  "adminCategoriesErrorGeneric": "Could not load categories.",
+  "adminCategoriesUpdateError": "Failed to update the category.",
+  "adminCollectionTitle": "Document collection",
+  "adminCollectionRunPipeline": "Run AI analysis next",
+  "adminCollectionRunPipelineSubtitle": "Creates a research job from collected documents.",
+  "adminCollectionRunButton": "Start collection",
+  "adminCollectionRunning": "Collection in progress…",
+  "adminCollectionDone": "Collection completed",
+  "adminCollectionSummary": "{fetched} fetched · {newDocs} new · {duplicates} duplicate(s) · {failed} failed",
+  "@adminCollectionSummary": {
+    "description": "Summary counters for the document collection job.",
+    "placeholders": {
+      "fetched": {
+        "type": "int"
+      },
+      "newDocs": {
+        "type": "int"
+      },
+      "duplicates": {
+        "type": "int"
+      },
+      "failed": {
+        "type": "int"
+      }
+    }
+  },
+  "adminCollectionErrorConflict": "A collection is already in progress for this tenant.",
+  "adminCollectionErrorRateLimited": "Please wait a few minutes before starting another collection.",
+  "adminCollectionErrorPollFailed": "Could not retrieve the collection status.",
+  "adminCollectionErrorNetwork": "Could not start collection. Check your connection.",
+  "adminCollectionErrorGeneric": "Failed to start collection.",
+  "adminCollectionJobFailed": "Collection failed."
 }

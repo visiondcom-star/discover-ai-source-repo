@@ -1,8 +1,13 @@
+import 'package:discover_ai/l10n/app_localizations.dart';
+import 'package:discover_ai/l10n/app_localizations_en.dart';
+import 'package:discover_ai/l10n/app_localizations_fr.dart';
 import 'package:discover_ai/providers/booking_provider.dart';
 import 'package:discover_ai/providers/poi_provider.dart';
 import 'package:discover_ai/screens/bookings_screen.dart';
+import 'package:discover_ai/services/api_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import 'helpers/fakes.dart';
@@ -21,6 +26,7 @@ void main() {
     WidgetTester tester, {
     required BookingProvider bookingProvider,
     required POIProvider poiProvider,
+    Locale locale = const Locale('fr'),
   }) async {
     await tester.pumpWidget(
       MultiProvider(
@@ -28,7 +34,12 @@ void main() {
           ChangeNotifierProvider<BookingProvider>.value(value: bookingProvider),
           ChangeNotifierProvider<POIProvider>.value(value: poiProvider),
         ],
-        child: const MaterialApp(home: BookingsScreen()),
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: locale,
+          home: const BookingsScreen(),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -37,7 +48,8 @@ void main() {
   testWidgets(
       'manual_confirm creation + consent ⇒ awaiting the partner, snackbar, '
       'no reference', (tester) async {
-    final provider = BookingProvider(bookingsApi: FakeBookingsApi(bookings: [
+    final provider = BookingProvider(
+        bookingsApi: FakeBookingsApi(bookings: [
       sampleBookingJson(
           bookingMode: 'manual_confirm', respondBy: '2026-11-02T10:00:00Z'),
     ]));
@@ -55,8 +67,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('En attente du prestataire'), findsOneWidget);
-    expect(find.text('Le prestataire doit confirmer avant le 2/11/2026'),
+    // The deadline line goes through bookingAwaitingPartnerBy and the
+    // locale-aware formatDate ⇒ « 2 nov. 2026 » in FR (not 2/11/2026).
+    // The expected wording is built from the same sources as the UI: the
+    // locale-aware date format and the FR localization.
+    final date = DateFormat.yMMMd('fr').format(DateTime(2026, 11, 2));
+    expect(find.text(AppLocalizationsFr().bookingAwaitingPartnerBy(date)),
         findsOneWidget);
+    expect(find.byKey(const Key('booking_awaiting_b-1')), findsOneWidget);
     expect(find.byKey(const Key('booking_ref_b-1')), findsNothing,
         reason: 'no EXT reference before the partner answers');
     expect(find.byKey(const Key('booking_consent_b-1')), findsNothing);
@@ -122,7 +140,8 @@ void main() {
     await provider.loadBookings();
     await tester.pumpAndSettle();
 
-    expect(find.text('confirmed'), findsOneWidget);
+    expect(
+        find.text(AppLocalizationsFr().bookingStatusConfirmed), findsOneWidget);
     expect(find.byKey(const Key('booking_ref_b-1')), findsOneWidget);
     expect(find.byKey(const Key('booking_cancel_b-1')), findsNothing);
   });
@@ -151,7 +170,8 @@ void main() {
 
   testWidgets('cancelling a requested booking ⇒ cancelled, no buttons left',
       (tester) async {
-    final provider = BookingProvider(bookingsApi: FakeBookingsApi(bookings: [
+    final provider = BookingProvider(
+        bookingsApi: FakeBookingsApi(bookings: [
       sampleBookingJson(bookingMode: 'manual_confirm'),
     ]));
     await pumpBookings(tester,
@@ -171,9 +191,11 @@ void main() {
     expect(find.byKey(const Key('booking_consent_b-1')), findsNothing);
   });
 
-  testWidgets('cancelling from declined ⇒ readable 409, status unchanged',
+  testWidgets(
+      'cancelling from declined ⇒ structured 409 code, status unchanged',
       (tester) async {
-    final provider = BookingProvider(bookingsApi: FakeBookingsApi(bookings: [
+    final provider = BookingProvider(
+        bookingsApi: FakeBookingsApi(bookings: [
       sampleBookingJson(
           bookingMode: 'manual_confirm',
           status: 'declined',
@@ -187,14 +209,17 @@ void main() {
     await provider.cancelBooking(provider.items.single);
     await tester.pumpAndSettle();
 
-    expect(provider.actionError,
-        'Cette réservation ne peut plus être annulée.');
+    expect(provider.cancelError, BookingCancelError.notCancellable,
+        reason: '409 ⇒ the booking left the cancellable window');
+    expect(provider.actionError, isNull,
+        reason: 'a refused cancellation never uses the create/consent code');
     expect(provider.items.single.status, 'declined');
   });
 
   testWidgets('an unknown status still renders its raw text, no exception',
       (tester) async {
-    final provider = BookingProvider(bookingsApi: FakeBookingsApi(bookings: [
+    final provider = BookingProvider(
+        bookingsApi: FakeBookingsApi(bookings: [
       sampleBookingJson(status: 'archived'),
     ]));
     await pumpBookings(tester,
@@ -205,5 +230,96 @@ void main() {
     expect(find.byKey(const Key('booking_consent_b-1')), findsNothing);
     expect(find.byKey(const Key('booking_cancel_b-1')), findsNothing);
   });
-}
 
+  /// Cancels a pending booking whose cancellation fails with [error] and
+  /// asserts the failure is surfaced as a snackbar carrying [expectedMessage]
+  /// — the wording comes from the localization, never from a literal.
+  Future<void> expectCancelFailureSnackbar(
+    WidgetTester tester, {
+    required ApiException error,
+    required String expectedMessage,
+    required Locale locale,
+  }) async {
+    final api = FakeBookingsApi(bookings: [sampleBookingJson()])
+      ..cancelError = error;
+    final provider = BookingProvider(bookingsApi: api);
+    await pumpBookings(tester,
+        bookingProvider: provider,
+        poiProvider: await loadedPois(),
+        locale: locale);
+
+    await tester.tap(find.byKey(const Key('booking_cancel_b-1')));
+    await tester.pumpAndSettle();
+
+    expect(
+        find.byKey(const Key('booking_cancel_error_snackbar')), findsOneWidget,
+        reason: 'a failed cancellation must be reported to the traveller');
+    expect(find.text(expectedMessage), findsOneWidget);
+    // The booking is untouched: a refusal never changes its status.
+    expect(provider.items.single.status, 'pending');
+  }
+
+  testWidgets('cancel 409 ⇒ snackbar « not cancellable » in FR',
+      (tester) async {
+    await expectCancelFailureSnackbar(
+      tester,
+      error: ApiException(409, '{"detail":"Booking cannot be cancelled"}'),
+      expectedMessage: AppLocalizationsFr().bookingCancelErrorNotCancellable,
+      locale: const Locale('fr'),
+    );
+    expect(find.text(AppLocalizationsFr().bookingCancelErrorNotCancellable),
+        findsOneWidget);
+  });
+
+  testWidgets('cancel 500 ⇒ snackbar « generic failure » in FR',
+      (tester) async {
+    await expectCancelFailureSnackbar(
+      tester,
+      error: ApiException(500, '{"detail":"Server error"}'),
+      expectedMessage: AppLocalizationsFr().bookingCancelErrorGeneric,
+      locale: const Locale('fr'),
+    );
+  });
+
+  testWidgets(
+      'cancel network failure ⇒ snackbar « check your connection » in FR',
+      (tester) async {
+    await expectCancelFailureSnackbar(
+      tester,
+      error: ApiException(null, '{"detail":"Network error"}'),
+      expectedMessage: AppLocalizationsFr().bookingCancelErrorNetwork,
+      locale: const Locale('fr'),
+    );
+  });
+
+  testWidgets('cancel 409 ⇒ snackbar « not cancellable » in EN',
+      (tester) async {
+    await expectCancelFailureSnackbar(
+      tester,
+      error: ApiException(409, '{"detail":"Booking cannot be cancelled"}'),
+      expectedMessage: AppLocalizationsEn().bookingCancelErrorNotCancellable,
+      locale: const Locale('en'),
+    );
+  });
+
+  testWidgets('cancel 500 ⇒ snackbar « generic failure » in EN',
+      (tester) async {
+    await expectCancelFailureSnackbar(
+      tester,
+      error: ApiException(500, '{"detail":"Server error"}'),
+      expectedMessage: AppLocalizationsEn().bookingCancelErrorGeneric,
+      locale: const Locale('en'),
+    );
+  });
+
+  testWidgets(
+      'cancel network failure ⇒ snackbar « check your connection » in EN',
+      (tester) async {
+    await expectCancelFailureSnackbar(
+      tester,
+      error: ApiException(null, '{"detail":"Network error"}'),
+      expectedMessage: AppLocalizationsEn().bookingCancelErrorNetwork,
+      locale: const Locale('en'),
+    );
+  });
+}

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../l10n/app_localizations.dart';
 import '../providers/chat_provider.dart';
 import '../widgets/chat_bubble.dart';
 
@@ -35,20 +36,30 @@ class _ChatScreenState extends State<ChatScreen> {
     context.read<ChatProvider>().sendMessage(text);
   }
 
+  String _errorText(AppLocalizations loc, ChatError? error) {
+    switch (error) {
+      case ChatError.network:
+        return loc.chatErrorNetwork;
+      case ChatError.generic:
+      case null:
+        return loc.chatErrorGeneric;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     final chat = context.watch<ChatProvider>();
     final hasMessages = chat.messages.isNotEmpty;
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Column(
+        title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Assistant'),
-            Text('Bienvenue ! Je suis votre guide.',
-                style: TextStyle(fontSize: 12)),
+            Text(loc.chatTitle),
+            Text(loc.chatSubtitle, style: const TextStyle(fontSize: 12)),
           ],
         ),
         titleSpacing: 0,
@@ -56,7 +67,7 @@ class _ChatScreenState extends State<ChatScreen> {
           if (chat.error != null)
             IconButton(
               key: const Key('chat_clear_error'),
-              tooltip: 'Clear error',
+              tooltip: loc.chatClearError,
               icon: const Icon(Icons.close),
               onPressed: () => chat.clearError(),
             ),
@@ -107,7 +118,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         const SizedBox(width: 6),
                         _ThinkingDot(colorScheme.outline),
                         const SizedBox(width: 8),
-                        Text('En train de réfléchir…',
+                        Text(loc.chatThinking,
                             style: Theme.of(context).textTheme.labelSmall),
                       ],
                     ),
@@ -132,7 +143,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                chat.error!,
+                _errorText(loc, chat.error),
                 style: TextStyle(
                     color: Theme.of(context).colorScheme.onErrorContainer),
               ),
@@ -153,17 +164,20 @@ class _EmptyState extends StatelessWidget {
   const _EmptyState();
 
   @override
-  Widget build(BuildContext context) => const Center(
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 32),
-          child: Text(
-            'Posez-moi une question sur votre destination.',
-            key: Key('chat_empty'),
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey),
-          ),
+  Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Text(
+          loc.chatEmpty,
+          key: const Key('chat_empty'),
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: Colors.grey),
         ),
-      );
+      ),
+    );
+  }
 }
 
 class _InputBar extends StatefulWidget {
@@ -198,6 +212,7 @@ class _InputBarState extends State<_InputBar> {
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context);
     final canSend = !widget.sending && widget.controller.text.trim().isNotEmpty;
     return SafeArea(
       child: Padding(
@@ -209,7 +224,7 @@ class _InputBarState extends State<_InputBar> {
                 key: const Key('chat_input'),
                 controller: widget.controller,
                 decoration: InputDecoration(
-                  hintText: 'Poser une question…',
+                  hintText: loc.chatInputHint,
                   border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14)),
                 ),

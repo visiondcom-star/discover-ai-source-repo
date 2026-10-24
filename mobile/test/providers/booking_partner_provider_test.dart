@@ -1,9 +1,45 @@
+import 'dart:io';
+
 import 'package:discover_ai/models/booking.dart';
 import 'package:discover_ai/providers/booking_provider.dart';
 import 'package:discover_ai/services/api_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../helpers/fakes.dart';
+
+class _SocketThrowingBookingsApi extends FakeBookingsApi {
+  @override
+  Future<Map<String, dynamic>> createBooking({
+    required String poiId,
+    required String adapterType,
+    Map<String, dynamic>? bookingData,
+    String? idempotencyKey,
+  }) async {
+    throw const SocketException('no internet');
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> listBookings() async {
+    throw const SocketException('no internet');
+  }
+}
+
+class _FormatThrowingBookingsApi extends FakeBookingsApi {
+  @override
+  Future<Map<String, dynamic>> createBooking({
+    required String poiId,
+    required String adapterType,
+    Map<String, dynamic>? bookingData,
+    String? idempotencyKey,
+  }) async {
+    throw const FormatException('bad json');
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> listBookings() async {
+    throw const FormatException('bad json');
+  }
+}
 
 /// Provider contract for the partner lifecycle (§4 of the
 /// requested/declined/expired patch): the server response is used as-is and
@@ -25,8 +61,7 @@ void main() {
         reason: 'the provider must never force confirmed');
   });
 
-  test('cancel: 409 → notCancellable, 5xx → generic, null → network',
-      () async {
+  test('cancel: 409 → notCancellable, 5xx → generic, null → network', () async {
     // 409 via a declined manual_confirm booking (backend contract)
     final api409 = FakeBookingsApi(bookings: [
       sampleBookingJson(bookingMode: 'manual_confirm'),
@@ -70,5 +105,35 @@ void main() {
       expect(provider.actionError, entry.value,
           reason: 'statusCode ${entry.key}');
     }
+  });
+
+  test('SocketException maps to network error', () async {
+    final provider = BookingProvider(bookingsApi: _SocketThrowingBookingsApi());
+    await provider.createBooking(
+        poiId: 'p-1', adapterType: 'hotel', idempotencyKey: 'k');
+    expect(provider.actionError, BookingError.network);
+  });
+
+  test('FormatException maps to generic error', () async {
+    final provider = BookingProvider(bookingsApi: _FormatThrowingBookingsApi());
+    await provider.createBooking(
+        poiId: 'p-1', adapterType: 'hotel', idempotencyKey: 'k');
+    expect(provider.actionError, BookingError.generic);
+  });
+
+  test('loadBookings with SocketException maps to BookingLoadError.network',
+      () async {
+    final provider = BookingProvider(bookingsApi: _SocketThrowingBookingsApi());
+    await provider.loadBookings();
+    expect(provider.loadError, BookingLoadError.network);
+    expect(provider.items, isEmpty);
+  });
+
+  test('loadBookings with FormatException maps to BookingLoadError.generic',
+      () async {
+    final provider = BookingProvider(bookingsApi: _FormatThrowingBookingsApi());
+    await provider.loadBookings();
+    expect(provider.loadError, BookingLoadError.generic);
+    expect(provider.items, isEmpty);
   });
 }

@@ -76,10 +76,10 @@ class _BookingsScreenState extends State<BookingsScreen> {
                   size: 48, color: scheme.onSurfaceVariant),
               const SizedBox(height: 12),
               Text(
-                bookings.loadError == BookingLoadError.network
-                    ? loc.bookingsLoadErrorNetwork
-                    : loc.bookingsLoadErrorGeneric,
-                style: Theme.of(context).textTheme.bodyLarge),
+                  bookings.loadError == BookingLoadError.network
+                      ? loc.bookingsLoadErrorNetwork
+                      : loc.bookingsLoadErrorGeneric,
+                  style: Theme.of(context).textTheme.bodyLarge),
               const SizedBox(height: 12),
               OutlinedButton(
                 onPressed: bookings.loadBookings,
@@ -152,22 +152,27 @@ BookingStatusStyle styleFor(
   AppLocalizations loc,
 ) {
   if (booking.isPending) {
-    return BookingStatusStyle(loc.bookingStatusPendingConsent, scheme.secondaryContainer);
+    return BookingStatusStyle(
+        loc.bookingStatusPendingConsent, scheme.secondaryContainer);
   }
   if (booking.isAwaitingPartner) {
-    return BookingStatusStyle(loc.bookingStatusAwaitingPartner, scheme.secondaryContainer);
+    return BookingStatusStyle(
+        loc.bookingStatusAwaitingPartner, scheme.secondaryContainer);
   }
   if (booking.isConfirmed) {
-    return BookingStatusStyle(booking.status, scheme.primaryContainer);
+    return BookingStatusStyle(
+        loc.bookingStatusConfirmed, scheme.primaryContainer);
   }
   if (booking.isDeclined) {
     return BookingStatusStyle(loc.bookingStatusDeclined, scheme.errorContainer);
   }
   if (booking.isExpired) {
-    return BookingStatusStyle(loc.bookingStatusExpired, scheme.errorContainer.withAlpha(150));
+    return BookingStatusStyle(
+        loc.bookingStatusExpired, scheme.errorContainer.withAlpha(150));
   }
   if (booking.isCancelled) {
-    return BookingStatusStyle(booking.status, scheme.errorContainer);
+    return BookingStatusStyle(
+        loc.bookingStatusCancelled, scheme.errorContainer);
   }
   // Unknown status: render the raw text, never crash.
   return BookingStatusStyle(booking.status, scheme.secondaryContainer);
@@ -237,8 +242,7 @@ class _BookingCard extends StatelessWidget {
               ),
             if (booking.isPending && booking.respondBy != null)
               Text(
-                loc.bookingRespondBy(
-                    formatDate(context, booking.respondBy!)),
+                loc.bookingRespondBy(formatDate(context, booking.respondBy!)),
                 key: Key('booking_respond_by_${booking.id}'),
                 style: Theme.of(context)
                     .textTheme
@@ -303,14 +307,17 @@ class _BookingCard extends StatelessWidget {
                         ? null
                         : () async {
                             await provider.cancelBooking(booking);
+                            // The await may outlive the card (sheet dismissed,
+                            // list rebuilt): never touch the messenger of an
+                            // unmounted context.
+                            if (!context.mounted) return;
                             if (provider.cancelError != null) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   key: const Key(
                                       'booking_cancel_error_snackbar'),
-                                  content: Text(
-                                      _cancelErrorMessage(
-                                          loc, provider.cancelError!)),
+                                  content: Text(_cancelErrorMessage(
+                                      loc, provider.cancelError!)),
                                 ),
                               );
                             }
@@ -543,7 +550,7 @@ class _BookingSheetState extends State<_BookingSheet> {
               ),
             ] else if (!_loading && adapters.isEmpty)
               Padding(
-                padding: EdgeInsets.symmetric(vertical: 24),
+                padding: const EdgeInsets.symmetric(vertical: 24),
                 child: Text(loc.bookingAdaptersEmpty),
               )
             else
@@ -583,8 +590,9 @@ class _BookingSheetState extends State<_BookingSheet> {
                   (_selected == null || _date == null || provider.isActing)
                       ? null
                       : _create,
-              child: Text(
-                  provider.isActing ? loc.bookingCreatingAction : loc.bookingCreateAction),
+              child: Text(provider.isActing
+                  ? loc.bookingCreatingAction
+                  : loc.bookingCreateAction),
             ),
             if (provider.actionError != null) ...[
               const SizedBox(height: 8),
@@ -666,7 +674,6 @@ class _BookingSheetState extends State<_BookingSheet> {
         return loc.bookingErrorGeneric;
     }
   }
-
 }
 
 /// Maps a typed [BookingCancelError] to its localized user-facing message.

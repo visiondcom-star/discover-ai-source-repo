@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 import 'package:discover_ai/l10n/app_localizations.dart';
+import 'package:discover_ai/l10n/app_localizations_fr.dart';
 import 'package:discover_ai/models/poi.dart';
 import 'package:discover_ai/providers/auth_provider.dart';
 import 'package:discover_ai/providers/tenant_provider.dart';
@@ -203,5 +204,56 @@ void main() {
     expect(find.text('09:00-17:00'), findsOneWidget);
     expect(find.byKey(const Key('poi_detail_plan_button')), findsOneWidget);
     expect(find.text('Planifier une visite'), findsOneWidget);
+  });
+
+  testWidgets('POI détail FR pour pay_on_site', (tester) async {
+    await tester.pumpWidget(wrapFr(poi(bookingMode: 'pay_on_site')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('poi_detail_book_button')), findsOneWidget);
+    expect(find.text(AppLocalizationsFr().poiDetailBook), findsOneWidget);
+    expect(
+      find.byKey(const Key('poi_detail_booking_mode_pay_on_site')),
+      findsOneWidget,
+    );
+    expect(find.text(AppLocalizationsFr().poiDetailPayOnSite), findsOneWidget);
+  });
+
+  testWidgets(
+      'POI détail FR pour un mode autre que request (provider_confirmation)',
+      (tester) async {
+    await tester.pumpWidget(wrapFr(poi(bookingMode: 'manual_confirm')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('poi_detail_book_button')), findsOneWidget);
+    expect(find.text(AppLocalizationsFr().poiDetailBook), findsOneWidget);
+    expect(
+      find.byKey(const Key('poi_detail_booking_mode_manual_confirm')),
+      findsOneWidget,
+    );
+    expect(
+      find.text(AppLocalizationsFr().poiDetailProviderConfirmation),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('POI détail FR pour info_only', (tester) async {
+    await tester.pumpWidget(wrapFr(poi(bookingMode: 'info_only')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('poi_detail_book_button')), findsNothing);
+    expect(find.byKey(const Key('poi_detail_info_only')), findsOneWidget);
+    expect(find.text(AppLocalizationsFr().poiDetailInfoOnly), findsOneWidget);
+  });
+
+  testWidgets('POI détail FR pour un mode non réservable (deposit)',
+      (tester) async {
+    await tester.pumpWidget(wrapFr(poi(bookingMode: 'deposit')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('poi_detail_book_button')), findsNothing);
+    expect(find.byKey(const Key('poi_detail_booking_soon')), findsOneWidget);
+    expect(
+        find.text(AppLocalizationsFr().poiDetailBookingSoon), findsOneWidget);
   });
 }

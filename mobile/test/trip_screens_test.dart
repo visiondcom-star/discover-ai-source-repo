@@ -1,17 +1,28 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
+import 'package:discover_ai/l10n/app_localizations.dart';
+import 'package:discover_ai/l10n/app_localizations_en.dart';
+import 'package:discover_ai/l10n/app_localizations_fr.dart';
 import 'package:discover_ai/providers/trip_provider.dart';
 import 'package:discover_ai/screens/trip_form_screen.dart';
 import 'package:discover_ai/screens/trip_timeline_screen.dart';
 
 import 'helpers/fakes.dart';
 
-Widget _wrap(Widget home, TripProvider trips) {
+Widget _wrap(Widget home, TripProvider trips,
+    {Locale locale = const Locale('en')}) {
   return ChangeNotifierProvider<TripProvider>.value(
     value: trips,
-    child: MaterialApp(home: home),
+    child: MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: locale,
+      home: home,
+    ),
   );
 }
 
@@ -82,6 +93,76 @@ void main() {
       expect(trips.error, isNull); // cleared after surfacing the snackbar
       expect(find.byType(TripFormScreen), findsOneWidget);
     });
+
+    testWidgets(
+        'formulaire d\'itinéraire : échec generic affiche tripErrorGeneric dans la SnackBar',
+        (tester) async {
+      final api = FakeTripsApi(failGenerate: true);
+      final trips = TripProvider(tripsApi: api);
+      await tester.pumpWidget(
+          _wrap(const TripFormScreen(), trips, locale: const Locale('fr')));
+
+      await tester.tap(find.byKey(const Key('interest_chip_nature')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('generate_trip_button')));
+      await tester.pumpAndSettle();
+
+      final fr = AppLocalizationsFr();
+      expect(find.byKey(const Key('trip_error')), findsOneWidget);
+      expect(find.text(fr.tripErrorGeneric), findsOneWidget);
+    });
+
+    testWidgets(
+        'formulaire d\'itinéraire : échec network affiche tripErrorNetwork dans la SnackBar',
+        (tester) async {
+      final api = FakeTripsApi(generateError: const SocketException('offline'));
+      final trips = TripProvider(tripsApi: api);
+      await tester.pumpWidget(
+          _wrap(const TripFormScreen(), trips, locale: const Locale('fr')));
+
+      await tester.tap(find.byKey(const Key('interest_chip_nature')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('generate_trip_button')));
+      await tester.pumpAndSettle();
+
+      final fr = AppLocalizationsFr();
+      expect(find.byKey(const Key('trip_error')), findsOneWidget);
+      expect(find.text(fr.tripErrorNetwork), findsOneWidget);
+    });
+
+    testWidgets(
+        'formulaire d\'itinéraire : échec network affiche tripErrorNetwork en EN',
+        (tester) async {
+      final api = FakeTripsApi(generateError: const SocketException('offline'));
+      final trips = TripProvider(tripsApi: api);
+      await tester.pumpWidget(
+          _wrap(const TripFormScreen(), trips, locale: const Locale('en')));
+
+      await tester.tap(find.byKey(const Key('interest_chip_nature')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('generate_trip_button')));
+      await tester.pumpAndSettle();
+
+      final en = AppLocalizationsEn();
+      expect(find.byKey(const Key('trip_error')), findsOneWidget);
+      expect(find.text(en.tripErrorNetwork), findsOneWidget);
+    });
+
+    testWidgets('TripFormScreen rend ses chaînes en FR', (tester) async {
+      final trips = TripProvider(tripsApi: FakeTripsApi());
+      await tester.pumpWidget(
+        _wrap(const TripFormScreen(), trips, locale: const Locale('fr')),
+      );
+      await tester.pumpAndSettle();
+
+      final fr = AppLocalizationsFr();
+      expect(find.text(fr.tripFormTitle), findsOneWidget);
+      expect(find.text(fr.tripFormInterests), findsOneWidget);
+      expect(find.text(fr.tripFormDays), findsOneWidget);
+      expect(find.text(fr.tripFormBudget), findsOneWidget);
+      expect(find.text(fr.tripFormSubmit), findsOneWidget);
+      expect(find.text(fr.tripBudgetLow), findsOneWidget);
+    });
   });
 
   group('TripTimelineScreen (widget)', () {
@@ -105,7 +186,7 @@ void main() {
       // Header card mirrors trip metadata.
       expect(
           find.text('Algiers highlights'), findsNWidgets(2)); // appbar + card
-      expect(find.text('2 day(s)'), findsOneWidget);
+      expect(find.text('2 days'), findsOneWidget);
 
       // Both days present, ordered.
       expect(find.byKey(const Key('day_card_1')), findsOneWidget);
@@ -142,6 +223,58 @@ void main() {
       await tester.pumpWidget(_wrap(const TripTimelineScreen(), trips));
 
       expect(find.byKey(const Key('trip_items_empty')), findsOneWidget);
+    });
+
+    testWidgets('TripTimelineScreen rend ses chaînes en FR', (tester) async {
+      final trips = await loadedProvider(FakeTripsApi());
+      await tester.pumpWidget(
+        _wrap(const TripTimelineScreen(), trips, locale: const Locale('fr')),
+      );
+      await tester.pumpAndSettle();
+
+      final fr = AppLocalizationsFr();
+      expect(find.text(fr.tripTimelineDay(1)), findsOneWidget);
+      expect(find.text(fr.tripTimelineDay(2)), findsOneWidget);
+      expect(find.text(fr.tripFormDaysCount(2)), findsOneWidget);
+      expect(find.text(fr.timelineItemDefaultPoi), findsOneWidget);
+    });
+
+    testWidgets(
+        'TripTimelineScreen rend la fiche en FR : « Budget : Économique » et « 1 jour »',
+        (tester) async {
+      final trips = TripProvider(tripsApi: FakeTripsApi());
+      await trips.generate(
+        interests: const ['food'],
+        budgetLevel: 'low',
+        numDays: 1,
+      );
+      await tester.pumpWidget(
+        _wrap(const TripTimelineScreen(), trips, locale: const Locale('fr')),
+      );
+      await tester.pumpAndSettle();
+
+      final fr = AppLocalizationsFr();
+      expect(
+          find.text(fr.tripTimelineBudget(fr.tripBudgetLow)), findsOneWidget);
+      expect(find.text(fr.tripFormDaysCount(1)), findsOneWidget);
+      expect(fr.tripFormDaysCount(1), '1 jour');
+    });
+
+    testWidgets('TripTimelineScreen rend « 1 day » en EN', (tester) async {
+      final trips = TripProvider(tripsApi: FakeTripsApi());
+      await trips.generate(
+        interests: const ['food'],
+        budgetLevel: 'low',
+        numDays: 1,
+      );
+      await tester.pumpWidget(
+        _wrap(const TripTimelineScreen(), trips, locale: const Locale('en')),
+      );
+      await tester.pumpAndSettle();
+
+      final en = AppLocalizationsEn();
+      expect(find.text(en.tripFormDaysCount(1)), findsOneWidget);
+      expect(en.tripFormDaysCount(1), '1 day');
     });
   });
 }

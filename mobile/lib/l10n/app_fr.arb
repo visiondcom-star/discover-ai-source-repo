@@ -185,8 +185,10 @@
       "Réservez un hôtel, une table ou une visite depuis la fiche d'un lieu — chaque étape demandera votre confirmation explicite.",
   "bookingStatusPendingConsent": "En attente de consentement",
   "bookingStatusAwaitingPartner": "En attente du prestataire",
+  "bookingStatusConfirmed": "Confirmée",
   "bookingStatusDeclined": "Refusée par le prestataire",
   "bookingStatusExpired": "Demande expirée",
+  "bookingStatusCancelled": "Annulée",
   "bookingPartnerLabel": "Prestataire : {provider}",
   "bookingPrice": "{price} {currency}",
   "@bookingPrice": {
@@ -303,5 +305,129 @@
   "bookingErrorGeneric": "La réservation a échoué. Réessayez dans un instant.",
   "bookingCancelErrorNotCancellable": "Cette réservation ne peut plus être annulée.",
   "bookingCancelErrorNetwork": "Impossible d'annuler la réservation. Vérifiez votre connexion.",
-  "bookingCancelErrorGeneric": "L'annulation a échoué. Réessayez dans un instant."
+  "bookingCancelErrorGeneric": "L'annulation a échoué. Réessayez dans un instant.",
+  "chatTitle": "Assistant",
+  "chatSubtitle": "Bienvenue ! Je suis votre guide.",
+  "chatClearError": "Effacer l'erreur",
+  "chatThinking": "En train de réfléchir…",
+  "chatEmpty": "Posez-moi une question sur votre destination.",
+  "chatInputHint": "Poser une question…",
+  "chatErrorNetwork": "Impossible de joindre l'assistant. Vérifiez votre connexion.",
+  "chatErrorGeneric": "Une erreur est survenue. Réessayez.",
+  "tripFormTitle": "Planifier un voyage",
+  "tripFormValidationInterests": "Choisissez au moins un centre d'intérêt.",
+  "tripErrorNetwork": "Impossible de générer l'itinéraire. Vérifiez votre connexion.",
+  "tripErrorGeneric": "La génération de l'itinéraire a échoué. Réessayez.",
+  "tripFormInterests": "Centres d'intérêt",
+  "tripFormDays": "Nombre de jours",
+  "tripFormDaysCount": "{count, plural, =1{1 jour} other{{count} jours}}",
+  "@tripFormDaysCount": {
+    "description": "Nombre de jours sur le formulaire de voyage et l'itinéraire.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "tripFormBudget": "Niveau de budget",
+  "tripBudgetLow": "Économique",
+  "tripBudgetMedium": "Moyen",
+  "tripBudgetHigh": "Élevé",
+  "tripFormSubmit": "Générer l'itinéraire",
+  "tripTimelineTitle": "Itinéraire",
+  "tripTimelineEmpty": "Aucun voyage généré pour le moment.",
+  "tripTimelineNoStops": "Cet itinéraire ne contient aucune étape pour le moment.",
+  "tripTimelineBudget": "Budget : {level}",
+  "@tripTimelineBudget": {
+    "description": "Indicateur de budget sur la fiche récapitulative du voyage.",
+    "placeholders": {
+      "level": {
+        "type": "String"
+      }
+    }
+  },
+  "tripTimelineDay": "Jour {day}",
+  "@tripTimelineDay": {
+    "description": "En-tête de groupe de jour dans l'itinéraire.",
+    "placeholders": {
+      "day": {
+        "type": "int"
+      }
+    }
+  },
+  "timelineItemDefaultPoi": "Lieu d'intérêt",
+  "adminResearchTitle": "Recherche IA — destination",
+  "adminResearchStatusTitle": "Statut du pipeline",
+  "adminResearchStatusPending": "En attente de démarrage…",
+  "adminResearchStatusProcessing": "Traitement en cours…",
+  "adminResearchStatusDone": "Terminé",
+  "adminResearchStatusFailed": "Échec du run",
+  "adminResearchStatusReady": "Prêt",
+  "adminResearchNoRecentRun": "Aucun run lancé récemment",
+  "adminResearchSummary": "{proposed} proposée(s) · {autoPublished} publiée(s) auto · {pendingReview} en attente de revue",
+  "@adminResearchSummary": {
+    "description": "Compteurs récapitulatifs du run de recherche IA.",
+    "placeholders": {
+      "proposed": {
+        "type": "int"
+      },
+      "autoPublished": {
+        "type": "int"
+      },
+      "pendingReview": {
+        "type": "int"
+      }
+    }
+  },
+  "adminResearchRunning": "Recherche en cours…",
+  "adminResearchRunButton": "Lancer la recherche IA",
+  "adminResearchCategoriesTitle": "Catégories du territoire",
+  "adminResearchRefreshTooltip": "Actualiser",
+  "adminResearchNoCategories": "Aucune catégorie pour le moment",
+  "adminResearchRejectDialogTitle": "Rejeter cette catégorie ?",
+  "adminResearchRejectActiveContent": "Elle disparaîtra de l’app pour les voyageurs. Cette action est définitive.",
+  "adminResearchRejectContent": "Cette action est définitive.",
+  "adminResearchCancel": "Annuler",
+  "adminResearchConfirm": "Confirmer",
+  "adminResearchPublish": "Publier",
+  "adminResearchReject": "Rejeter",
+  "adminResearchRetire": "Retirer",
+  "adminResearchRejected": "Rejetée",
+  "adminResearchErrorRateLimited": "Une actualisation manuelle a déjà été effectuée ce mois-ci.",
+  "adminResearchErrorPollFailed": "Impossible de récupérer le statut du job.",
+  "adminResearchErrorNetwork": "Impossible de lancer la recherche. Vérifiez votre connexion.",
+  "adminResearchErrorGeneric": "Échec du lancement du run de recherche.",
+  "adminCategoriesErrorNetwork": "Impossible de charger les catégories. Vérifiez votre connexion.",
+  "adminCategoriesErrorGeneric": "Impossible de charger les catégories.",
+  "adminCategoriesUpdateError": "Échec de la mise à jour de la catégorie.",
+  "adminCollectionTitle": "Collecte des documents",
+  "adminCollectionRunPipeline": "Enchaîner l'analyse IA",
+  "adminCollectionRunPipelineSubtitle": "Crée un job de recherche à partir des documents collectés.",
+  "adminCollectionRunButton": "Lancer la collecte",
+  "adminCollectionRunning": "Collecte en cours…",
+  "adminCollectionDone": "Collecte terminée",
+  "adminCollectionSummary": "{fetched} récupéré(s) · {newDocs} nouveau(x) · {duplicates} doublon(s) · {failed} en échec",
+  "@adminCollectionSummary": {
+    "description": "Compteurs récapitulatifs du job de collecte.",
+    "placeholders": {
+      "fetched": {
+        "type": "int"
+      },
+      "newDocs": {
+        "type": "int"
+      },
+      "duplicates": {
+        "type": "int"
+      },
+      "failed": {
+        "type": "int"
+      }
+    }
+  },
+  "adminCollectionErrorConflict": "Une collecte est déjà en cours pour ce tenant.",
+  "adminCollectionErrorRateLimited": "Merci de patienter quelques minutes avant de relancer une collecte.",
+  "adminCollectionErrorPollFailed": "Impossible de récupérer le statut de la collecte.",
+  "adminCollectionErrorNetwork": "Impossible de lancer la collecte. Vérifiez votre connexion.",
+  "adminCollectionErrorGeneric": "Échec du lancement de la collecte.",
+  "adminCollectionJobFailed": "La collecte a échoué."
 }

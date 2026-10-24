@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 import 'package:discover_ai/l10n/app_localizations.dart';
+import 'package:discover_ai/l10n/app_localizations_fr.dart';
 import 'package:discover_ai/providers/poi_provider.dart';
 import 'package:discover_ai/screens/poi_map_screen.dart';
 
@@ -44,11 +45,11 @@ final List<Map<String, dynamic>> mapPoisJson = [
 Widget _wrap(POIProvider pois) {
   return ChangeNotifierProvider<POIProvider>.value(
     value: pois,
-    child: MaterialApp(
+    child: const MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      locale: const Locale('en'),
-      home: const PoiMapScreen(),
+      locale: Locale('en'),
+      home: PoiMapScreen(),
     ),
   );
 }
@@ -57,11 +58,11 @@ Widget _wrap(POIProvider pois) {
 Widget _wrapFr(POIProvider pois) {
   return ChangeNotifierProvider<POIProvider>.value(
     value: pois,
-    child: MaterialApp(
+    child: const MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      locale: const Locale('fr'),
-      home: const PoiMapScreen(),
+      locale: Locale('fr'),
+      home: PoiMapScreen(),
     ),
   );
 }
@@ -123,5 +124,20 @@ void main() {
 
     expect(find.text('Carte'), findsOneWidget);
     expect(find.text('Aucun lieu géolocalisé pour le moment.'), findsOneWidget);
+  });
+
+  testWidgets('carte FR avec marqueur affiche la fiche et le bouton détails',
+      (tester) async {
+    await tester.pumpWidget(_wrapFr(_providerWith(mapPoisJson)));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byKey(const Key('poi_marker_p-1')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('poi_marker_p-1')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.byKey(const Key('poi_sheet_p-1')), findsOneWidget);
+    expect(find.text(AppLocalizationsFr().poiMapViewDetails), findsOneWidget);
   });
 }

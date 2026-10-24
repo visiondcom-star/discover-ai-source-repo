@@ -3,11 +3,13 @@ import 'package:discover_ai/services/api_service.dart';
 class FakeAdminCategoriesApi implements AdminCategoriesApi {
   FakeAdminCategoriesApi({
     List<Map<String, dynamic>>? categories,
+    this.getAllError,
     this.updateError,
   }) : categories = categories ?? [];
 
   final List<Map<String, dynamic>> categories;
-  final ApiException? updateError;
+  final Object? getAllError;
+  final Object? updateError;
 
   int getAllCalls = 0;
   final List<Map<String, String>> updateCalls = [];
@@ -15,6 +17,7 @@ class FakeAdminCategoriesApi implements AdminCategoriesApi {
   @override
   Future<List<Map<String, dynamic>>> getAllCategories() async {
     getAllCalls++;
+    if (getAllError != null) throw getAllError!;
     return categories.map((c) => Map<String, dynamic>.from(c)).toList();
   }
 

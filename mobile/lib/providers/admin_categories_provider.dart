@@ -66,6 +66,8 @@ class AdminCategoriesProvider extends ChangeNotifier {
       _error = AdminCategoriesError.network;
     } catch (_) {
       if (_disposed || seq != _loadSeq) return;
+      // On garde la liste précédente : un admin ne doit pas la perdre sur
+      // un incident réseau.
       _error = AdminCategoriesError.generic;
     }
     _isLoading = false;

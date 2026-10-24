@@ -1,5 +1,7 @@
 // test/providers/research_provider_test.dart
 
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:discover_ai/models/research_job.dart';
 import 'package:discover_ai/providers/research_provider.dart';
@@ -86,6 +88,114 @@ void main() {
       expect(provider.currentJob, isNull);
       expect(provider.isLoading, isFalse);
 
+      provider.dispose();
+    });
+
+    test('startResearch: SocketException maps to network', () async {
+      final fake = FakeResearchApi(
+        runResearchError: const SocketException('offline'),
+      );
+      final provider = ResearchProvider(fake);
+      await provider.startResearch(
+        tenantId: 'tenant1',
+        triggerType: ResearchTriggerType.manualRefresh,
+      );
+      expect(provider.error, ResearchError.network);
+      expect(provider.isLoading, isFalse);
+      provider.dispose();
+    });
+
+    test('startResearch: FormatException maps to generic', () async {
+      final fake = FakeResearchApi(
+        runResearchError: const FormatException('bad json'),
+      );
+      final provider = ResearchProvider(fake);
+      await provider.startResearch(
+        tenantId: 'tenant1',
+        triggerType: ResearchTriggerType.manualRefresh,
+      );
+      expect(provider.error, ResearchError.generic);
+      expect(provider.isLoading, isFalse);
+      provider.dispose();
+    });
+
+    test('startResearch: ApiException(null) maps to network', () async {
+      final fake = FakeResearchApi(
+        runResearchError: ApiException(null, 'no status'),
+      );
+      final provider = ResearchProvider(fake);
+      await provider.startResearch(
+        tenantId: 'tenant1',
+        triggerType: ResearchTriggerType.manualRefresh,
+      );
+      expect(provider.error, ResearchError.network);
+      expect(provider.isLoading, isFalse);
+      provider.dispose();
+    });
+
+    test('polling: SocketException maps to network', () async {
+      final fake = FakeResearchApi(
+        jobsQueue: [_job(status: ResearchJobStatus.pending)],
+        getStatusError: const SocketException('offline'),
+      );
+      final provider = ResearchProvider(
+        fake,
+        pollInterval: const Duration(milliseconds: 10),
+      );
+      await provider.startResearch(
+        tenantId: 'tenant1',
+        triggerType: ResearchTriggerType.manualRefresh,
+      );
+      await Future.doWhile(() async {
+        await Future.delayed(const Duration(milliseconds: 15));
+        return provider.error == null;
+      }).timeout(const Duration(seconds: 2));
+
+      expect(provider.error, ResearchError.network);
+      provider.dispose();
+    });
+
+    test('polling: FormatException maps to generic', () async {
+      final fake = FakeResearchApi(
+        jobsQueue: [_job(status: ResearchJobStatus.pending)],
+        getStatusError: const FormatException('bad json'),
+      );
+      final provider = ResearchProvider(
+        fake,
+        pollInterval: const Duration(milliseconds: 10),
+      );
+      await provider.startResearch(
+        tenantId: 'tenant1',
+        triggerType: ResearchTriggerType.manualRefresh,
+      );
+      await Future.doWhile(() async {
+        await Future.delayed(const Duration(milliseconds: 15));
+        return provider.error == null;
+      }).timeout(const Duration(seconds: 2));
+
+      expect(provider.error, ResearchError.generic);
+      provider.dispose();
+    });
+
+    test('polling: ApiException(null) maps to network', () async {
+      final fake = FakeResearchApi(
+        jobsQueue: [_job(status: ResearchJobStatus.pending)],
+        getStatusError: ApiException(null, 'no status'),
+      );
+      final provider = ResearchProvider(
+        fake,
+        pollInterval: const Duration(milliseconds: 10),
+      );
+      await provider.startResearch(
+        tenantId: 'tenant1',
+        triggerType: ResearchTriggerType.manualRefresh,
+      );
+      await Future.doWhile(() async {
+        await Future.delayed(const Duration(milliseconds: 15));
+        return provider.error == null;
+      }).timeout(const Duration(seconds: 2));
+
+      expect(provider.error, ResearchError.network);
       provider.dispose();
     });
 

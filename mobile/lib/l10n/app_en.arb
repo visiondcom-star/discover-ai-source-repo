@@ -316,7 +316,7 @@
   "tripErrorGeneric": "Trip generation failed. Try again.",
   "tripFormInterests": "Interests",
   "tripFormDays": "Number of days",
-  "tripFormDaysCount": "{count, plural, other{{count} day(s)}}",
+  "tripFormDaysCount": "{count, plural, =1{1 day} other{{count} days}}",
   "@tripFormDaysCount": {
     "description": "Number of days on the trip form and timeline.",
     "placeholders": {

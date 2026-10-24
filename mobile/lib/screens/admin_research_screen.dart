@@ -127,6 +127,11 @@ class _AdminResearchScreenState extends State<AdminResearchScreen> {
                       .textTheme
                       .titleMedium
                       ?.copyWith(fontWeight: FontWeight.bold)),
+              // Le rechargement n'est plus déclenché ici : le catalogue voyageur
+              // se rafraîchit depuis `ResearchProvider.onJobDone` (branché dans
+              // main.dart) et depuis `AdminCategoriesProvider.onChanged`. Ce
+              // bouton ne rafraîchissait que si l'admin y pensez, ce qui laissait
+              // la file de validation fausser dès la fin d'un run.
               IconButton(
                 key: const Key('refresh_categories_button'),
                 tooltip: loc.adminResearchRefreshTooltip,
@@ -222,6 +227,8 @@ class _CategoriesList extends StatelessWidget {
     final admin = context.watch<AdminCategoriesProvider>();
     final scheme = Theme.of(context).colorScheme;
 
+    // proposed d'abord (à traiter), puis active, puis rejected. Trois passes
+    // plutôt qu'un sort() : l'ordre du serveur est conservé dans chaque groupe.
     final ordered = [
       for (final s in const ['proposed', 'active', 'rejected'])
         ...admin.categories.where((c) => c.status == s),

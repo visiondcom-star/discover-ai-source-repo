@@ -1,6 +1,7 @@
 // test/providers/research_collection_provider_test.dart
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:discover_ai/models/research_collection_job.dart';
@@ -430,6 +431,78 @@ void main() {
       expect(provider.isLoading, isFalse,
           reason: 'isLoading doit être libéré même sur erreur inattendue');
       expect(provider.error, ResearchCollectionError.generic);
+      provider.dispose();
+    });
+
+    test('startCollection: SocketException maps to network', () async {
+      final fake = FakeResearchCollectionApi(
+        runError: const SocketException('offline'),
+      );
+      final provider = ResearchCollectionProvider(fake, pollInterval: _fast);
+      await provider.startCollection(tenantId: 't1');
+      expect(provider.error, ResearchCollectionError.network);
+      expect(provider.isLoading, isFalse);
+      provider.dispose();
+    });
+
+    test('startCollection: FormatException maps to generic', () async {
+      final fake = FakeResearchCollectionApi(
+        runError: const FormatException('bad json'),
+      );
+      final provider = ResearchCollectionProvider(fake, pollInterval: _fast);
+      await provider.startCollection(tenantId: 't1');
+      expect(provider.error, ResearchCollectionError.generic);
+      expect(provider.isLoading, isFalse);
+      provider.dispose();
+    });
+
+    test('startCollection: ApiException(null) maps to network', () async {
+      final fake = FakeResearchCollectionApi(
+        runError: ApiException(null, 'no status'),
+      );
+      final provider = ResearchCollectionProvider(fake, pollInterval: _fast);
+      await provider.startCollection(tenantId: 't1');
+      expect(provider.error, ResearchCollectionError.network);
+      expect(provider.isLoading, isFalse);
+      provider.dispose();
+    });
+
+    test('polling: SocketException maps to network', () async {
+      final fake = FakeResearchCollectionApi(
+        jobsQueue: [_job(ResearchJobStatus.pending)],
+        statusSequence: [_job(ResearchJobStatus.processing)],
+      );
+      fake.statusError = const SocketException('offline');
+      final provider = ResearchCollectionProvider(fake, pollInterval: _fast);
+      await provider.startCollection(tenantId: 't1');
+      await _waitFor(() => provider.error != null);
+      expect(provider.error, ResearchCollectionError.network);
+      provider.dispose();
+    });
+
+    test('polling: FormatException maps to generic', () async {
+      final fake = FakeResearchCollectionApi(
+        jobsQueue: [_job(ResearchJobStatus.pending)],
+        statusSequence: [_job(ResearchJobStatus.processing)],
+      );
+      fake.statusError = const FormatException('bad json');
+      final provider = ResearchCollectionProvider(fake, pollInterval: _fast);
+      await provider.startCollection(tenantId: 't1');
+      await _waitFor(() => provider.error != null);
+      expect(provider.error, ResearchCollectionError.generic);
+      provider.dispose();
+    });
+
+    test('polling: ApiException(null) maps to network', () async {
+      final fake = FakeResearchCollectionApi(
+        jobsQueue: [_job(ResearchJobStatus.pending)],
+        statusSequence: [_job(ResearchJobStatus.processing)],
+      );
+      fake.statusError = ApiException(null, 'no status');
+      final provider = ResearchCollectionProvider(fake, pollInterval: _fast);
+      await provider.startCollection(tenantId: 't1');
+      await _waitFor(() => provider.error != null);
+      expect(provider.error, ResearchCollectionError.network);
       provider.dispose();
     });
 

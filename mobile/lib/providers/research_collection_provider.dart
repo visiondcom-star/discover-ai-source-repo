@@ -128,6 +128,8 @@ class ResearchCollectionProvider extends ChangeNotifier {
       _error = ResearchCollectionError.network;
       notifyListeners();
     } catch (_) {
+      // Repli : un StateError du faux d'API ou un FormatException de
+      // fromJson ne doivent pas laisser le provider bloqué sur isLoading.
       if (gen != _generation) return;
       _isLoading = false;
       _error = ResearchCollectionError.generic;
@@ -199,7 +201,14 @@ class ResearchCollectionProvider extends ChangeNotifier {
         _error = ResearchCollectionError.network;
         _pollTimer?.cancel();
         notifyListeners();
+      } on FormatException catch (_) {
+        if (gen != _generation) return;
+        _error = ResearchCollectionError.generic;
+        _pollTimer?.cancel();
+        notifyListeners();
       } catch (_) {
+        // Couvre ApiException mais aussi un FormatException de fromJson : un
+        // statut inconnu ne doit pas laisser le timer tourner indéfiniment.
         if (gen != _generation) return;
         _error = ResearchCollectionError.pollFailed;
         _pollTimer?.cancel();

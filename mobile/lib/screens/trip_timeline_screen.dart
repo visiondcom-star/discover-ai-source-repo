@@ -5,6 +5,7 @@ import '../l10n/app_localizations.dart';
 import '../models/trip.dart';
 import '../providers/trip_provider.dart';
 import '../widgets/timeline_item.dart';
+import 'trip_form_screen.dart';
 
 /// Day-by-day itinerary display — the mobile equivalent of `TripTimeline.tsx`.
 class TripTimelineScreen extends StatelessWidget {
@@ -70,8 +71,8 @@ class _TripTimelineView extends StatelessWidget {
                                 label:
                                     Text(loc.tripFormDaysCount(trip.numDays))),
                             Chip(
-                                label: Text(
-                                    loc.tripTimelineBudget(trip.budgetLevel))),
+                                label: Text(loc.tripTimelineBudget(
+                                    budgetLabel(loc, trip.budgetLevel)))),
                             for (final i in trip.interests)
                               Chip(label: Text(i)),
                           ],

@@ -170,9 +170,10 @@ Map<String, dynamic> sampleTripJson() => {
     };
 
 class FakeTripsApi implements TripsApi {
-  FakeTripsApi({this.failGenerate = false});
+  FakeTripsApi({this.failGenerate = false, this.generateError});
 
   final bool failGenerate;
+  final Object? generateError;
   int generateCalls = 0;
   int listCalls = 0;
   Map<String, dynamic>? lastGeneratePayload;
@@ -189,10 +190,18 @@ class FakeTripsApi implements TripsApi {
       'budget_level': budgetLevel,
       'num_days': numDays,
     };
+    if (generateError != null) {
+      throw generateError!;
+    }
     if (failGenerate) {
       throw ApiException(500, '{"detail":"trip planner failed"}');
     }
-    return sampleTripJson();
+    return {
+      ...sampleTripJson(),
+      'budget_level': budgetLevel,
+      'num_days': numDays,
+      'interests': List<String>.from(interests),
+    };
   }
 
   @override
@@ -684,12 +693,12 @@ class FakeResearchApi implements ResearchApi {
   final List<ResearchJob> statusSequence;
 
   /// Si non-null, force une exception au prochain appel de runResearch().
-  ApiException? runResearchError;
+  Object? runResearchError;
 
   /// Si non-null, `getJobStatus` lève cette exception au lieu de répondre.
   /// Simule une interruption réseau qui coupe le polling avant tout statut
   /// final — le cas où aucun rechargement de catalogue n'a de sens.
-  ApiException? getStatusError;
+  Object? getStatusError;
 
   int _statusCallCount = 0;
   int _runResearchCallCount = 0;
@@ -701,6 +710,7 @@ class FakeResearchApi implements ResearchApi {
     List<ResearchJob>? jobsQueue,
     List<ResearchJob>? statusSequence,
     this.runResearchError,
+    this.getStatusError,
   })  : jobsQueue = jobsQueue ?? [],
         statusSequence = statusSequence ?? [];
 

@@ -113,6 +113,36 @@ void main() {
   });
 
   testWidgets(
+      'ChatScreen surfaces a network error in a banner (chatErrorNetwork in FR)',
+      (tester) async {
+    final fake = _SocketThrowingChatApi();
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => ChatProvider(chatApi: fake)),
+        ],
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('fr'),
+          home: ChatScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(const Key('chat_input')), 'Test réseau');
+    await tester.pump(); // flush controller listener -> canSend=true
+    await tester.tap(find.byKey(const Key('chat_send')));
+    await tester.pumpAndSettle();
+
+    final fr = AppLocalizationsFr();
+    expect(find.byKey(const Key('chat_error')), findsOneWidget);
+    expect(find.text(fr.chatErrorNetwork), findsOneWidget);
+  });
+
+  testWidgets(
       'assistant reply renders the API follow-up suggestions as chips '
       'and tapping one sends it as a new turn', (tester) async {
     final fake = FakeChatApi();

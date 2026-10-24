@@ -14,8 +14,26 @@ import 'trip_timeline_screen.dart';
 /// (fetched from GET /tenants/categories/), falling back to
 /// [AppConfig.tripInterestOptions] when the provider hasn't loaded yet —
 /// never hardcoded market content (CLAUDE.md principle 1).
+/// Localized label for a trip budget level ('low', 'medium', 'high').
+String budgetLabel(AppLocalizations loc, String level) {
+  switch (level) {
+    case 'low':
+      return loc.tripBudgetLow;
+    case 'medium':
+      return loc.tripBudgetMedium;
+    case 'high':
+      return loc.tripBudgetHigh;
+    default:
+      return level;
+  }
+}
+
 class TripFormScreen extends StatefulWidget {
   const TripFormScreen({super.key, this.initialInterests = const <String>{}});
+
+  /// Static helper delegating to [budgetLabel] for convenience.
+  static String formatBudget(AppLocalizations loc, String level) =>
+      budgetLabel(loc, level);
 
   /// Interests pre-selected on open (home travel-type grid shortcut).
   /// Values that are not in the catalog actually displayed are ignored, so a
@@ -90,19 +108,6 @@ class _TripFormScreenState extends State<TripFormScreen> {
       case TripError.generic:
       case null:
         return loc.tripErrorGeneric;
-    }
-  }
-
-  String _budgetLabel(AppLocalizations loc, String level) {
-    switch (level) {
-      case 'low':
-        return loc.tripBudgetLow;
-      case 'medium':
-        return loc.tripBudgetMedium;
-      case 'high':
-        return loc.tripBudgetHigh;
-      default:
-        return level;
     }
   }
 
@@ -191,7 +196,7 @@ class _TripFormScreenState extends State<TripFormScreen> {
               segments: [
                 for (final level in AppConfig.budgetLevels)
                   ButtonSegment(
-                      value: level, label: Text(_budgetLabel(loc, level))),
+                      value: level, label: Text(budgetLabel(loc, level))),
               ],
               selected: {_budgetLevel},
               onSelectionChanged: (selection) =>

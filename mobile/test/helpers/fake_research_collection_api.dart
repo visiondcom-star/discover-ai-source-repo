@@ -14,7 +14,8 @@ import 'package:discover_ai/services/api_service.dart';
 class FakeResearchCollectionApi implements ResearchCollectionApi {
   final List<ResearchCollectionJob> jobsQueue;
   final List<ResearchCollectionJob> statusSequence;
-  final ApiException? runError;
+  final Object? runError;
+  Object? statusError;
 
   /// Si fourni, `getCollectionJobStatus` ne répond pas immédiatement : le test
   /// garde la main via [statusGate] pour invoquer `reset()`/`dispose()` au
@@ -80,12 +81,15 @@ class FakeResearchCollectionApi implements ResearchCollectionApi {
     getStatusCalls.add({'tenantId': tenantId, 'jobId': jobId});
     startedStatusCalls++;
     _concurrentStatusCalls++;
-    maxConcurrentStatusCalls =
-        maxConcurrentStatusCalls > _concurrentStatusCalls
-            ? maxConcurrentStatusCalls
-            : _concurrentStatusCalls;
+    maxConcurrentStatusCalls = maxConcurrentStatusCalls > _concurrentStatusCalls
+        ? maxConcurrentStatusCalls
+        : _concurrentStatusCalls;
 
     try {
+      if (statusError != null) {
+        throw statusError!;
+      }
+
       if (statusSequence.isEmpty) {
         throw StateError('statusSequence est vide');
       }
@@ -113,4 +117,3 @@ class FakeResearchCollectionApi implements ResearchCollectionApi {
     }
   }
 }
-

@@ -95,7 +95,7 @@ void main() {
     });
 
     testWidgets(
-        'formulaire d\'itinéraire : échec generic affiche tripErrorGeneric dans la SnackBar (FR et EN)',
+        'formulaire d\'itinéraire : échec generic affiche tripErrorGeneric dans la SnackBar',
         (tester) async {
       final api = FakeTripsApi(failGenerate: true);
       final trips = TripProvider(tripsApi: api);
@@ -113,7 +113,7 @@ void main() {
     });
 
     testWidgets(
-        'formulaire d\'itinéraire : échec network affiche tripErrorNetwork dans la SnackBar (FR et EN)',
+        'formulaire d\'itinéraire : échec network affiche tripErrorNetwork dans la SnackBar',
         (tester) async {
       final api = FakeTripsApi(generateError: const SocketException('offline'));
       final trips = TripProvider(tripsApi: api);

@@ -7,13 +7,6 @@ import '../providers/tenant_provider.dart';
 import '../providers/trip_provider.dart';
 import 'trip_timeline_screen.dart';
 
-/// Trip generation form — the mobile counterpart of the web trip form:
-/// interests (multi-select), number of days, budget level.
-///
-/// The interest catalog comes from [TenantProvider.categories]
-/// (fetched from GET /tenants/categories/), falling back to
-/// [AppConfig.tripInterestOptions] when the provider hasn't loaded yet —
-/// never hardcoded market content (CLAUDE.md principle 1).
 /// Localized label for a trip budget level ('low', 'medium', 'high').
 String budgetLabel(AppLocalizations loc, String level) {
   switch (level) {
@@ -28,12 +21,15 @@ String budgetLabel(AppLocalizations loc, String level) {
   }
 }
 
+/// Trip generation form — the mobile counterpart of the web trip form:
+/// interests (multi-select), number of days, budget level.
+///
+/// The interest catalog comes from [TenantProvider.categories]
+/// (fetched from GET /tenants/categories/), falling back to
+/// [AppConfig.tripInterestOptions] when the provider hasn't loaded yet —
+/// never hardcoded market content (CLAUDE.md principle 1).
 class TripFormScreen extends StatefulWidget {
   const TripFormScreen({super.key, this.initialInterests = const <String>{}});
-
-  /// Static helper delegating to [budgetLabel] for convenience.
-  static String formatBudget(AppLocalizations loc, String level) =>
-      budgetLabel(loc, level);
 
   /// Interests pre-selected on open (home travel-type grid shortcut).
   /// Values that are not in the catalog actually displayed are ignored, so a

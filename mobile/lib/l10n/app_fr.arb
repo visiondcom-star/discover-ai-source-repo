@@ -185,8 +185,10 @@
       "Réservez un hôtel, une table ou une visite depuis la fiche d'un lieu — chaque étape demandera votre confirmation explicite.",
   "bookingStatusPendingConsent": "En attente de consentement",
   "bookingStatusAwaitingPartner": "En attente du prestataire",
+  "bookingStatusConfirmed": "Confirmée",
   "bookingStatusDeclined": "Refusée par le prestataire",
   "bookingStatusExpired": "Demande expirée",
+  "bookingStatusCancelled": "Annulée",
   "bookingPartnerLabel": "Prestataire : {provider}",
   "bookingPrice": "{price} {currency}",
   "@bookingPrice": {

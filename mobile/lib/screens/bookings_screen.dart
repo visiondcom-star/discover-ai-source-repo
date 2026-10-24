@@ -160,7 +160,8 @@ BookingStatusStyle styleFor(
         loc.bookingStatusAwaitingPartner, scheme.secondaryContainer);
   }
   if (booking.isConfirmed) {
-    return BookingStatusStyle(booking.status, scheme.primaryContainer);
+    return BookingStatusStyle(
+        loc.bookingStatusConfirmed, scheme.primaryContainer);
   }
   if (booking.isDeclined) {
     return BookingStatusStyle(loc.bookingStatusDeclined, scheme.errorContainer);
@@ -170,7 +171,8 @@ BookingStatusStyle styleFor(
         loc.bookingStatusExpired, scheme.errorContainer.withAlpha(150));
   }
   if (booking.isCancelled) {
-    return BookingStatusStyle(booking.status, scheme.errorContainer);
+    return BookingStatusStyle(
+        loc.bookingStatusCancelled, scheme.errorContainer);
   }
   // Unknown status: render the raw text, never crash.
   return BookingStatusStyle(booking.status, scheme.secondaryContainer);

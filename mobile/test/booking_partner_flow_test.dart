@@ -140,7 +140,8 @@ void main() {
     await provider.loadBookings();
     await tester.pumpAndSettle();
 
-    expect(find.text('confirmed'), findsOneWidget);
+    expect(
+        find.text(AppLocalizationsFr().bookingStatusConfirmed), findsOneWidget);
     expect(find.byKey(const Key('booking_ref_b-1')), findsOneWidget);
     expect(find.byKey(const Key('booking_cancel_b-1')), findsNothing);
   });

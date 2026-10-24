@@ -184,8 +184,10 @@
       "Book a hotel, a table or a visit from a place page — every step asks for your explicit confirmation.",
   "bookingStatusPendingConsent": "Awaiting your confirmation",
   "bookingStatusAwaitingPartner": "Awaiting the provider",
+  "bookingStatusConfirmed": "Confirmed",
   "bookingStatusDeclined": "Declined by the provider",
   "bookingStatusExpired": "Request expired",
+  "bookingStatusCancelled": "Cancelled",
   "bookingPartnerLabel": "Provider: {provider}",
   "bookingPrice": "{price} {currency}",
   "@bookingPrice": {

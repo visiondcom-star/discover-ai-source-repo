@@ -138,12 +138,8 @@ class ResearchProvider extends ChangeNotifier {
         _error = ResearchError.network;
         _pollTimer?.cancel();
         notifyListeners();
-      } on FormatException catch (_) {
-        _error = ResearchError.generic;
-        _pollTimer?.cancel();
-        notifyListeners();
       } catch (_) {
-        _error = ResearchError.pollFailed;
+        _error = ResearchError.generic;
         _pollTimer?.cancel();
         notifyListeners();
       }

@@ -516,7 +516,7 @@ void main() {
       await _waitFor(() => provider.error != null);
       await _pause();
 
-      expect(provider.error, ResearchCollectionError.pollFailed);
+      expect(provider.error, ResearchCollectionError.generic);
       final calls = fake.calls;
       await _pause();
       expect(fake.calls, calls, reason: 'polling arrêté après erreur');

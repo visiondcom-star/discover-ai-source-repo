@@ -201,17 +201,12 @@ class ResearchCollectionProvider extends ChangeNotifier {
         _error = ResearchCollectionError.network;
         _pollTimer?.cancel();
         notifyListeners();
-      } on FormatException catch (_) {
+      } catch (_) {
+        // Toute autre erreur (FormatException, ArgumentError sur statut inconnu,
+        // TypeError…) : generic, et on arrête le timer pour ne pas le laisser
+        // tourner indéfiniment.
         if (gen != _generation) return;
         _error = ResearchCollectionError.generic;
-        _pollTimer?.cancel();
-        notifyListeners();
-      } catch (_) {
-        // FormatException est déjà attrapé au-dessus ; ce bloc couvre les
-        // autres erreurs (ex. ArgumentError sur statut inconnu) afin de ne pas
-        // laisser le timer tourner indéfiniment.
-        if (gen != _generation) return;
-        _error = ResearchCollectionError.pollFailed;
         _pollTimer?.cancel();
         notifyListeners();
       } finally {

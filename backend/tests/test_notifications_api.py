@@ -165,7 +165,7 @@ async def test_notifications_pagination_and_ordering(client, test_tenant, user_a
     assert p1.status_code == 200
     data_p1 = p1.json()
     assert len(data_p1["notifications"]) == 2
-    assert data_p1["total"] == 2
+    assert data_p1["total"] == 5
     assert data_p1["unread_count"] == 5
 
     # Page 2: limit 2, offset 2
@@ -173,6 +173,7 @@ async def test_notifications_pagination_and_ordering(client, test_tenant, user_a
     assert p2.status_code == 200
     data_p2 = p2.json()
     assert len(data_p2["notifications"]) == 2
+    assert data_p2["total"] == 5
     # Disjoint IDs
     p1_ids = {n["id"] for n in data_p1["notifications"]}
     p2_ids = {n["id"] for n in data_p2["notifications"]}
@@ -232,3 +233,69 @@ async def test_mark_all_read_real_count(client, test_tenant, user_a, db_session)
     # Subsequent call returns 0
     resp_again = await client.post("/api/v1/context/notifications/read-all", headers=headers)
     assert resp_again.json()["marked_as_read"] == 0
+
+
+@pytest.mark.asyncio
+async def test_notifications_render_in_current_user_locale(client, test_tenant, user_a, db_session):
+    """Notification rendered in current_user.locale, not the stored locale."""
+    # Stored with locale='fr'
+    n = Notification(
+        tenant_id=test_tenant.id,
+        user_id=user_a.id,
+        type="booking_confirmed",
+        payload={"poi_name": "Casbah"},
+        locale="fr",
+    )
+    db_session.add(n)
+    await db_session.commit()
+
+    headers = _auth_headers_for(user_a, test_tenant.slug)
+
+    # User locale is initially 'fr'
+    resp_fr = await client.get("/api/v1/context/notifications", headers=headers)
+    assert resp_fr.status_code == 200
+    assert resp_fr.json()["notifications"][0]["title"] == "Réservation confirmée"
+
+    # Update user locale to 'en'
+    user_a.locale = "en"
+    db_session.add(user_a)
+    await db_session.commit()
+
+    # GET /notifications should now render in 'en'
+    resp_en = await client.get("/api/v1/context/notifications", headers=headers)
+    assert resp_en.status_code == 200
+    assert resp_en.json()["notifications"][0]["title"] == "Booking confirmed"
+
+
+@pytest.mark.asyncio
+async def test_notifications_ordering_stable_created_at_and_id(client, test_tenant, user_a, db_session):
+    """Notifications order is stably created_at DESC, id DESC."""
+    from app.models import utcnow
+    same_time = utcnow()
+    n1 = Notification(
+        tenant_id=test_tenant.id,
+        user_id=user_a.id,
+        type="booking_confirmed",
+        payload={"order": 1},
+        locale="fr",
+        created_at=same_time,
+    )
+    n2 = Notification(
+        tenant_id=test_tenant.id,
+        user_id=user_a.id,
+        type="booking_declined",
+        payload={"order": 2},
+        locale="fr",
+        created_at=same_time,
+    )
+    db_session.add_all([n1, n2])
+    await db_session.commit()
+
+    headers = _auth_headers_for(user_a, test_tenant.slug)
+    resp = await client.get("/api/v1/context/notifications", headers=headers)
+    assert resp.status_code == 200
+    items = resp.json()["notifications"]
+    assert len(items) == 2
+    # The one with greater UUID (id DESC) comes first
+    expected_first_id = max(str(n1.id), str(n2.id))
+    assert items[0]["id"] == expected_first_id

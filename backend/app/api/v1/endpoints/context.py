@@ -188,23 +188,28 @@ async def get_notifications(
     if unread_only:
         query_conditions.append(Notification.read_at.is_(None))
 
+    # Nombre total de lignes correspondant aux filtres (indépendant de limit/offset)
+    total_filtered_query = select(func.count()).select_from(Notification).where(and_(*query_conditions))
+    total_filtered_res = await db.execute(total_filtered_query)
+    total_count = total_filtered_res.scalar() or 0
+
     query = (
         select(Notification)
         .where(and_(*query_conditions))
-        .order_by(Notification.created_at.desc())
+        .order_by(Notification.created_at.desc(), Notification.id.desc())
         .offset(offset)
         .limit(limit)
     )
     result = await db.execute(query)
     rows = result.scalars().all()
 
-    # Rendu localisé
-    user_loc = resolve_locale(current_user, tenant)
+    # Rendu localisé avec la locale courante de l'utilisateur
+    current_locale = resolve_locale(current_user, tenant)
     notifications_data = []
     for notif in rows:
         title, msg = render_notification(
             type_=notif.type,
-            locale=notif.locale or user_loc,
+            locale=current_locale,
             payload=notif.payload,
         )
         notifications_data.append(
@@ -223,7 +228,7 @@ async def get_notifications(
     return {
         "notifications": notifications_data,
         "unread_count": total_unread,
-        "total": len(notifications_data),
+        "total": total_count,
         "limit": limit,
         "offset": offset,
     }

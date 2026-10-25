@@ -444,9 +444,11 @@ class Notification(Base):
     read_at = Column(DateTime, nullable=True)
     email_status = Column(String(20), nullable=False, default="pending", server_default="pending")
     email_attempts = Column(Integer, nullable=False, default=0, server_default="0")
+    first_attempt_at = Column(DateTime, nullable=True)
     next_attempt_at = Column(DateTime, nullable=True)
     locked_until = Column(DateTime, nullable=True)
     email_sent_at = Column(DateTime, nullable=True)
+    provider_message_id = Column(String(255), nullable=True)
     last_error = Column(Text, nullable=True)
 
     tenant = relationship("Tenant")

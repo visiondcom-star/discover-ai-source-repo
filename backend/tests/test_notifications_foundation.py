@@ -12,13 +12,14 @@ from app.main import ALEMBIC_INI
 
 @pytest.mark.asyncio
 async def test_migration_upgrade_downgrade_upgrade():
-    """Verify Alembic 0014_notifications upgrades, downgrades and re-upgrades cleanly."""
+    """Verify Alembic 0014 and 0015 upgrades, downgrades and re-upgrades cleanly."""
     def _run_alembic_cycle():
         alembic_cfg = Config(str(ALEMBIC_INI))
         alembic_cfg.attributes["configure_logger"] = False
         command.downgrade(alembic_cfg, "0013_partner_poi_managers")
         command.upgrade(alembic_cfg, "0014_notifications")
-        command.downgrade(alembic_cfg, "0013_partner_poi_managers")
+        command.upgrade(alembic_cfg, "0015_notifications_worker_cols")
+        command.downgrade(alembic_cfg, "0014_notifications")
         command.upgrade(alembic_cfg, "head")
 
     await asyncio.to_thread(_run_alembic_cycle)
@@ -124,3 +125,24 @@ async def test_patch_me_validates_locale(client, auth_headers, db_session, test_
 
     # 3. Verify user response exposes locale
     assert "locale" in get_resp.json()
+
+
+@pytest.mark.asyncio
+async def test_notifications_model_worker_columns(db_session, test_tenant, test_user):
+    """Verify first_attempt_at and provider_message_id persist and reload."""
+    now = utcnow()
+    n = Notification(
+        tenant_id=test_tenant.id,
+        user_id=test_user.id,
+        type="test_columns",
+        payload={"k": "v"},
+        locale="en",
+        first_attempt_at=now,
+        provider_message_id="msg_987",
+    )
+    db_session.add(n)
+    await db_session.commit()
+    await db_session.refresh(n)
+
+    assert n.first_attempt_at == now
+    assert n.provider_message_id == "msg_987"

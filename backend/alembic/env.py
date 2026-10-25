@@ -18,7 +18,7 @@ from app import models  # noqa: E402,F401  (register tables on Base.metadata)
 
 config = context.config
 
-if config.config_file_name is not None:
+if config.config_file_name is not None and config.attributes.get("configure_logger", True):
     fileConfig(config.config_file_name)
 
 # Real URL wins: env var DATABASE_URL > .env via app settings.

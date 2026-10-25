@@ -112,8 +112,6 @@ class UserResponse(BaseModel):
 
 class UserUpdate(BaseModel):
     locale: Optional[str] = None
-    full_name: Optional[str] = None
-    preferences: Optional[Dict[str, Any]] = None
 
 
 # ============= Tenant Category Schemas =============

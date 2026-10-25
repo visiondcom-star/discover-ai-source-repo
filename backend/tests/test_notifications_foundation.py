@@ -128,6 +128,36 @@ async def test_patch_me_validates_locale(client, auth_headers, db_session, test_
 
 
 @pytest.mark.asyncio
+async def test_patch_me_tenant_without_supported_languages(client, auth_headers, db_session, test_tenant, test_user):
+    """If tenant.supported_languages is empty or null, allow [tenant.default_language or 'en']."""
+    test_tenant.supported_languages = []
+    test_tenant.default_language = "fr"
+    db_session.add(test_tenant)
+    await db_session.commit()
+
+    client_headers = dict(auth_headers)
+
+    # fr allowed as tenant.default_language
+    ok_resp = await client.patch("/api/v1/auth/me", headers=client_headers, json={"locale": "fr"})
+    assert ok_resp.status_code == 200
+    assert ok_resp.json()["locale"] == "fr"
+
+    # en refused when default_language is fr
+    bad_resp = await client.patch("/api/v1/auth/me", headers=client_headers, json={"locale": "en"})
+    assert bad_resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_user_update_schema_has_only_locale():
+    """Verify absence of full_name and preferences in UserUpdate schema."""
+    from app.schemas import UserUpdate
+    fields = UserUpdate.model_fields.keys()
+    assert "locale" in fields
+    assert "full_name" not in fields
+    assert "preferences" not in fields
+
+
+@pytest.mark.asyncio
 async def test_notifications_model_worker_columns(db_session, test_tenant, test_user):
     """Verify first_attempt_at and provider_message_id persist and reload."""
     now = utcnow()

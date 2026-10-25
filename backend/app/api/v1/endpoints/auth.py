@@ -138,9 +138,10 @@ async def update_me(
     current_user: User = Depends(get_current_user),
     poi_ids: set = Depends(get_partner_poi_ids),
 ):
-    """Mise à jour du profil (locale, nom, préférences).
+    """Mise à jour du profil (locale uniquement).
 
     La locale doit appartenir à tenant.supported_languages lorsqu'elle est fournie.
+    Si tenant.supported_languages est vide ou nul, autoriser [tenant.default_language ou 'en'].
     """
     tenant = await get_tenant_from_header(x_tenant_slug)
     update_data = data.model_dump(exclude_unset=True)
@@ -148,20 +149,15 @@ async def update_me(
     if "locale" in update_data and update_data["locale"] is not None:
         target_locale = update_data["locale"].strip().lower()
         supported = tenant.supported_languages or []
+        if not supported:
+            supported = [tenant.default_language or "en"]
+
         if target_locale not in supported:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=f"Locale '{target_locale}' not supported. Supported: {supported}",
             )
         current_user.locale = target_locale
-
-    if "full_name" in update_data:
-        current_user.full_name = update_data["full_name"]
-
-    if "preferences" in update_data and update_data["preferences"] is not None:
-        merged = dict(current_user.preferences or {})
-        merged.update(update_data["preferences"])
-        current_user.preferences = merged
 
     db.add(current_user)
     await db.commit()

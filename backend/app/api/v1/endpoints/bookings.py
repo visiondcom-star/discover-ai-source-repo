@@ -11,10 +11,11 @@ from sqlalchemy import select, and_
 from app.constants import BOOKING_CONFIRM_SLA_HOURS, BOOKING_MODES_SUPPORTED
 from app.database import get_db
 from app.services.booking_lifecycle import expire_overdue_requests
-from app.models import Booking, POI, Tenant, utcnow
+from app.models import Booking, POI, Tenant, User, POIManager, utcnow
 from app.schemas import BookingCreate, BookingResponse, ConsentRequest
 from app.core.tenant import get_tenant_from_header
 from app.dependencies import get_current_user
+from app.services.notification_service import create_notification
 
 router = APIRouter()
 
@@ -208,6 +209,11 @@ async def give_consent(
         raise HTTPException(status_code=404, detail="Booking not found")
 
     if data.consent:
+        # Load POI name for notification payload if POI exists
+        poi_res = await db.execute(select(POI).where(POI.id == booking.poi_id))
+        poi_obj = poi_res.scalar_one_or_none()
+        poi_payload = {"poi_name": poi_obj.name} if (poi_obj and poi_obj.name) else {}
+
         if (booking.booking_mode or "request") == "manual_confirm":
             # manual_confirm : le voyageur demande, le partenaire décide.
             if booking.status != "pending":
@@ -216,12 +222,52 @@ async def give_consent(
             booking.consent_timestamp = utcnow()
             booking.status = "requested"
             # Pas d'external_id ici : il sera posé par le partenaire à la confirmation.
+
+            # Notifier chaque gérant du POI (poi_managers pour tenant_id + poi_id)
+            managers_res = await db.execute(
+                select(POIManager).where(
+                    and_(
+                        POIManager.tenant_id == tenant.id,
+                        POIManager.poi_id == booking.poi_id,
+                    )
+                )
+            )
+            managers = managers_res.scalars().all()
+            for mgr in managers:
+                mgr_user_res = await db.execute(select(User).where(User.id == mgr.user_id))
+                mgr_user = mgr_user_res.scalar_one_or_none()
+                notif_payload = dict(poi_payload)
+                notif_payload["booking_mode"] = "manual_confirm"
+                await create_notification(
+                    db=db,
+                    tenant_id=tenant.id,
+                    user_id=mgr.user_id,
+                    type_="booking_request_received",
+                    booking=booking,
+                    payload=notif_payload,
+                    user=mgr_user,
+                    tenant=tenant,
+                )
         else:
             # Autres modes : flux historique inchangé (confirmation immédiate).
             booking.consent_given = True
             booking.consent_timestamp = utcnow()
             booking.status = "confirmed"
             booking.external_id = f"EXT-{booking_id[:8]}"
+
+            # Notifier le voyageur
+            notif_payload = dict(poi_payload)
+            notif_payload["external_id"] = booking.external_id
+            await create_notification(
+                db=db,
+                tenant_id=tenant.id,
+                user_id=current_user.id,
+                type_="booking_confirmed",
+                booking=booking,
+                payload=notif_payload,
+                user=current_user,
+                tenant=tenant,
+            )
     else:
         booking.status = "cancelled"
 

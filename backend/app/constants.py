@@ -95,3 +95,7 @@ BOOKING_TERMINAL_STATUSES = ("confirmed", "declined", "expired", "cancelled")
 # Décisions qu'un partenaire peut prendre sur une demande `requested`.
 PARTNER_RESPONSES = ("confirm", "decline")
 
+
+
+# Notifications email_status
+NOTIFICATION_EMAIL_STATUSES = ("pending", "sending", "sent", "failed", "skipped")

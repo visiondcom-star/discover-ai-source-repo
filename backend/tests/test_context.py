@@ -15,6 +15,7 @@ import types
 from datetime import datetime, timedelta
 
 import pytest
+from app.models import Notification
 
 BASE = "/api/v1/context"
 WEATHER = f"{BASE}/weather"
@@ -205,7 +206,25 @@ async def test_notifications_require_auth(client, test_tenant):
     assert response.status_code in (401, 403)
 
 
-async def test_notifications_shape_and_unread_count(client, auth_headers):
+async def test_notifications_shape_and_unread_count(client, auth_headers, test_user, test_tenant, db_session):
+    # Seed real notifications in database for current test user
+    n1 = Notification(
+        tenant_id=test_tenant.id,
+        user_id=test_user.id,
+        type="booking_confirmed",
+        payload={"poi_name": "Casbah"},
+        locale="fr",
+    )
+    n2 = Notification(
+        tenant_id=test_tenant.id,
+        user_id=test_user.id,
+        type="booking_declined",
+        payload={"poi_name": "Tipaza"},
+        locale="fr",
+    )
+    db_session.add_all([n1, n2])
+    await db_session.commit()
+
     response = await client.get(NOTIFICATIONS, headers=auth_headers)
     assert response.status_code == 200, response.text
     data = response.json()

@@ -200,6 +200,7 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     is_admin = Column(Boolean, default=False)
     preferences = Column(JSON, default=dict)
+    locale = Column(String(10), nullable=True)
     created_at = Column(DateTime, default=utcnow)
 
     tenant = relationship("Tenant", back_populates="users")
@@ -426,6 +427,46 @@ class AnalyticsEvent(Base):
 
     tenant = relationship("Tenant", back_populates="analytics_events")
     user = relationship("User", back_populates="analytics_events")
+
+
+class Notification(Base):
+    """Notification in-app et e-mail par utilisateur au sein d'un tenant."""
+    __tablename__ = "notifications"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    type = Column(String(50), nullable=False)
+    booking_id = Column(UUID(as_uuid=True), ForeignKey("bookings.id", ondelete="SET NULL"), nullable=True)
+    payload = Column(JSON, nullable=False, default=dict)
+    locale = Column(String(10), nullable=False, default="en")
+    created_at = Column(DateTime, default=utcnow)
+    read_at = Column(DateTime, nullable=True)
+    email_status = Column(String(20), nullable=False, default="pending", server_default="pending")
+    email_attempts = Column(Integer, nullable=False, default=0, server_default="0")
+    first_attempt_at = Column(DateTime, nullable=True)
+    next_attempt_at = Column(DateTime, nullable=True)
+    locked_until = Column(DateTime, nullable=True)
+    email_sent_at = Column(DateTime, nullable=True)
+    provider_message_id = Column(String(255), nullable=True)
+    last_error = Column(Text, nullable=True)
+
+    tenant = relationship("Tenant")
+    user = relationship("User")
+    booking = relationship("Booking")
+
+    __table_args__ = (
+        Index("ix_notifications_email_status_next_attempt", "email_status", "next_attempt_at"),
+        Index(
+            "uq_notifications_booking_unique",
+            "tenant_id",
+            "user_id",
+            "booking_id",
+            "type",
+            unique=True,
+            postgresql_where=text("booking_id IS NOT NULL"),
+        ),
+    )
 
 
 class ChatMessage(Base):

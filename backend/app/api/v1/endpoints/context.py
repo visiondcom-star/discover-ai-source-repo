@@ -1,14 +1,17 @@
 """Live context endpoints (weather, events, notifications)."""
 from typing import List, Optional
-from fastapi import APIRouter, Depends, Header, Query
+from uuid import UUID
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, func
+from sqlalchemy import select, and_, func, update
 from datetime import timedelta
 from app.database import get_db
-from app.models import Tenant, utcnow
+from app.models import Notification, Tenant, utcnow
 from app.schemas import WeatherResponse, ContextEventCreate
 from app.core.tenant import get_tenant_from_header
 from app.dependencies import get_current_user
+from app.services.notification_service import resolve_locale
+from app.services.notification_templates import render_notification
 import random
 
 router = APIRouter()
@@ -157,32 +160,78 @@ async def get_notifications(
     x_tenant_slug: str = Header(...),
     current_user = Depends(get_current_user),
     unread_only: bool = False,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
 ):
+    """Lecture des notifications en base pour l'utilisateur courant du tenant.
+
+    - Filtre par tenant_id et user_id (isolation stricte).
+    - Tri par created_at DESC (les plus récentes d'abord).
+    - Pagination limit / offset.
+    - Format de réponse compatible avec le stub existant : id, title, message, type, read, created_at.
+    """
     tenant = await get_tenant_from_header(x_tenant_slug)
 
-    notifications = [
-        {
-            "id": "notif-1",
-            "title": "Nouveau POI ajouté",
-            "message": "Un nouveau site historique a été ajouté à Alger",
-            "type": "poi",
-            "read": False,
-            "created_at": utcnow().isoformat(),
-        },
-        {
-            "id": "notif-2",
-            "title": "Météo : Vent fort prévu",
-            "message": "Des vents forts sont prévus à Constantine demain",
-            "type": "weather",
-            "read": False,
-            "created_at": (utcnow() - timedelta(hours=2)).isoformat(),
-        },
+    base_conditions = [
+        Notification.tenant_id == tenant.id,
+        Notification.user_id == current_user.id,
     ]
 
-    if unread_only:
-        notifications = [n for n in notifications if not n["read"]]
+    # Nombre total non lues
+    unread_count_query = select(func.count()).select_from(Notification).where(
+        and_(*base_conditions, Notification.read_at.is_(None))
+    )
+    unread_res = await db.execute(unread_count_query)
+    total_unread = unread_res.scalar() or 0
 
-    return {"notifications": notifications, "unread_count": len([n for n in notifications if not n["read"]])}
+    query_conditions = list(base_conditions)
+    if unread_only:
+        query_conditions.append(Notification.read_at.is_(None))
+
+    # Nombre total de lignes correspondant aux filtres (indépendant de limit/offset)
+    total_filtered_query = select(func.count()).select_from(Notification).where(and_(*query_conditions))
+    total_filtered_res = await db.execute(total_filtered_query)
+    total_count = total_filtered_res.scalar() or 0
+
+    query = (
+        select(Notification)
+        .where(and_(*query_conditions))
+        .order_by(Notification.created_at.desc(), Notification.id.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    result = await db.execute(query)
+    rows = result.scalars().all()
+
+    # Rendu localisé avec la locale courante de l'utilisateur
+    current_locale = resolve_locale(current_user, tenant)
+    notifications_data = []
+    for notif in rows:
+        title, msg = render_notification(
+            type_=notif.type,
+            locale=current_locale,
+            payload=notif.payload,
+        )
+        notifications_data.append(
+            {
+                "id": str(notif.id),
+                "title": title,
+                "message": msg,
+                "type": notif.type,
+                "read": notif.read_at is not None,
+                "created_at": notif.created_at.isoformat() if notif.created_at else None,
+                "booking_id": str(notif.booking_id) if notif.booking_id else None,
+                "payload": notif.payload,
+            }
+        )
+
+    return {
+        "notifications": notifications_data,
+        "unread_count": total_unread,
+        "total": total_count,
+        "limit": limit,
+        "offset": offset,
+    }
 
 
 @router.post("/notifications/read-all")
@@ -191,4 +240,56 @@ async def mark_all_read(
     x_tenant_slug: str = Header(...),
     current_user = Depends(get_current_user),
 ):
-    return {"marked_as_read": 2}
+    """Marque toutes les notifications non lues de l'utilisateur courant comme lues et renvoie le compte réel."""
+    tenant = await get_tenant_from_header(x_tenant_slug)
+    now = utcnow()
+
+    result = await db.execute(
+        update(Notification)
+        .where(
+            and_(
+                Notification.tenant_id == tenant.id,
+                Notification.user_id == current_user.id,
+                Notification.read_at.is_(None),
+            )
+        )
+        .values(read_at=now)
+    )
+    await db.commit()
+    count = result.rowcount or 0
+    return {"marked_as_read": count}
+
+
+@router.post("/notifications/{notification_id}/read")
+async def mark_notification_read(
+    notification_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    x_tenant_slug: str = Header(...),
+    current_user = Depends(get_current_user),
+):
+    """Marque une notification spécifique comme lue."""
+    tenant = await get_tenant_from_header(x_tenant_slug)
+
+    res = await db.execute(
+        select(Notification).where(
+            and_(
+                Notification.id == notification_id,
+                Notification.tenant_id == tenant.id,
+                Notification.user_id == current_user.id,
+            )
+        )
+    )
+    notif = res.scalar_one_or_none()
+    if not notif:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
+
+    if notif.read_at is None:
+        notif.read_at = utcnow()
+        await db.commit()
+        await db.refresh(notif)
+
+    return {
+        "id": str(notif.id),
+        "read": True,
+        "read_at": notif.read_at.isoformat() if notif.read_at else None,
+    }

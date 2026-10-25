@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from app.database import get_db
 from app.models import User, Tenant
-from app.schemas import UserRegister, UserLogin, Token, UserResponse
+from app.schemas import UserRegister, UserLogin, Token, UserResponse, UserUpdate
 from app.config import get_settings
 from app.core.security import get_password_hash, verify_password, create_access_token
 from app.core.tenant import get_tenant_from_header
@@ -126,5 +126,42 @@ async def get_me(
     les endpoints partenaire — aucune logique de rôle dupliquée. Ce n'est pas un
     attribut ORM de `User` : on l'injecte à la construction de la réponse.
     """
+    response = UserResponse.model_validate(current_user)
+    return response.model_copy(update={"is_partner": bool(poi_ids)})
+
+
+@router.patch("/me", response_model=UserResponse)
+async def update_me(
+    data: UserUpdate,
+    db: AsyncSession = Depends(get_db),
+    x_tenant_slug: str = Header(...),
+    current_user: User = Depends(get_current_user),
+    poi_ids: set = Depends(get_partner_poi_ids),
+):
+    """Mise à jour du profil (locale uniquement).
+
+    La locale doit appartenir à tenant.supported_languages lorsqu'elle est fournie.
+    Si tenant.supported_languages est vide ou nul, autoriser [tenant.default_language ou 'en'].
+    """
+    tenant = await get_tenant_from_header(x_tenant_slug)
+    update_data = data.model_dump(exclude_unset=True)
+
+    if "locale" in update_data and update_data["locale"] is not None:
+        target_locale = update_data["locale"].strip().lower()
+        supported = tenant.supported_languages or []
+        if not supported:
+            supported = [tenant.default_language or "en"]
+
+        if target_locale not in supported:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Locale '{target_locale}' not supported. Supported: {supported}",
+            )
+        current_user.locale = target_locale
+
+    db.add(current_user)
+    await db.commit()
+    await db.refresh(current_user)
+
     response = UserResponse.model_validate(current_user)
     return response.model_copy(update={"is_partner": bool(poi_ids)})

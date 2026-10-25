@@ -78,9 +78,32 @@ async def test_consent_standard_emits_confirmed_notification(client, auth_header
     assert notifs[0].type == "booking_confirmed"
     assert notifs[0].payload["poi_name"] == "Musée du Bardo"
 
-    # Consecutive call / duplicate check: giving consent again or re-running does not produce duplicate
-    # (even though status != pending causes 409 on second consent, let's verify no extra row)
-    assert len(notifs) == 1
+    # Real duplicate test: call create_notification a second time for the exact same booking
+    from app.services.notification_service import create_notification
+    booking_obj = (await db_session.execute(select(Booking).where(Booking.id == booking_id))).scalar_one()
+    second_notif = await create_notification(
+        db=db_session,
+        tenant_id=test_tenant.id,
+        user_id=test_user.id,
+        type_="booking_confirmed",
+        booking=booking_obj,
+        payload={"poi_name": "Musée du Bardo"},
+        user=test_user,
+        tenant=test_tenant,
+    )
+    assert second_notif is None
+    await db_session.commit()
+
+    res_after = await db_session.execute(
+        select(Notification).where(
+            and_(
+                Notification.tenant_id == test_tenant.id,
+                Notification.user_id == test_user.id,
+                Notification.booking_id == booking_id,
+            )
+        )
+    )
+    assert len(res_after.scalars().all()) == 1
 
 
 @pytest.mark.asyncio

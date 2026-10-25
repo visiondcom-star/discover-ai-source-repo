@@ -72,10 +72,14 @@ def render_notification(
         # Ultimate fallback
         tmpl = next(iter(templates_for_type.values()))
 
+    default_poi_name = "votre destination" if loc == "fr" else "your destination"
+    poi_name = (payload or {}).get("poi_name") or default_poi_name
+
     params = {
-        "poi_name": (payload or {}).get("poi_name") or "votre destination",
+        "poi_name": poi_name,
         **(payload or {}),
     }
+    params["poi_name"] = poi_name
 
     try:
         title = tmpl["title"].format(**params)

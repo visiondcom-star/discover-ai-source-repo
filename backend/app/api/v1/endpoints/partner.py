@@ -297,7 +297,7 @@ async def respond_to_booking(
         # Load POI and traveller to build notification
         poi_res = await db.execute(select(POI).where(POI.id == booking.poi_id))
         poi_obj = poi_res.scalar_one_or_none()
-        poi_name = poi_obj.name if poi_obj else "votre destination"
+        poi_payload = {"poi_name": poi_obj.name} if (poi_obj and poi_obj.name) else {}
 
         traveller_res = await db.execute(select(User).where(User.id == booking.user_id))
         traveller = traveller_res.scalar_one_or_none()
@@ -308,25 +308,31 @@ async def respond_to_booking(
             booking.external_id = f"EXT-{str(booking.id)[:8]}"
             # consent_timestamp conservé : le voyageur a déjà consenti.
 
+            notif_payload = dict(poi_payload)
+            if data.note:
+                notif_payload["partner_note"] = data.note
             await create_notification(
                 db=db,
                 tenant_id=tenant.id,
                 user_id=booking.user_id,
                 type_="booking_confirmed",
                 booking=booking,
-                payload={"poi_name": poi_name, "partner_note": data.note},
+                payload=notif_payload,
                 user=traveller,
                 tenant=tenant,
             )
         else:
             booking.status = "declined"
+            notif_payload = dict(poi_payload)
+            if data.note:
+                notif_payload["partner_note"] = data.note
             await create_notification(
                 db=db,
                 tenant_id=tenant.id,
                 user_id=booking.user_id,
                 type_="booking_declined",
                 booking=booking,
-                payload={"poi_name": poi_name, "partner_note": data.note},
+                payload=notif_payload,
                 user=traveller,
                 tenant=tenant,
             )

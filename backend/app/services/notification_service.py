@@ -52,12 +52,6 @@ async def create_notification(
     resolved_loc = resolve_locale(user, tenant)
     norm_payload = dict(payload or {})
 
-    # If poi_name is not provided and booking is available, extract from booking.poi if loaded
-    if "poi_name" not in norm_payload and booking is not None:
-        poi = getattr(booking, "poi", None)
-        if poi is not None and getattr(poi, "name", None):
-            norm_payload["poi_name"] = poi.name
-
     notification = Notification(
         tenant_id=tenant_id,
         user_id=user_id,

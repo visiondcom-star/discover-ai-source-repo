@@ -55,8 +55,9 @@ async def expire_overdue_requests(db: AsyncSession, tenant_id: UUID) -> int:
         booking.status = "expired"
         booking.updated_at = now
 
-        poi_name = booking.poi.name if booking.poi else "votre destination"
-        payload = {"poi_name": poi_name, "reason": "deadline_passed"}
+        payload = {"reason": "deadline_passed"}
+        if booking.poi and booking.poi.name:
+            payload["poi_name"] = booking.poi.name
 
         # Notifier le voyageur
         await create_notification(

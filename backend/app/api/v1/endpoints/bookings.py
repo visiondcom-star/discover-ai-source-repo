@@ -209,10 +209,10 @@ async def give_consent(
         raise HTTPException(status_code=404, detail="Booking not found")
 
     if data.consent:
-        # Load POI name for notification payload if possible
+        # Load POI name for notification payload if POI exists
         poi_res = await db.execute(select(POI).where(POI.id == booking.poi_id))
         poi_obj = poi_res.scalar_one_or_none()
-        poi_name = poi_obj.name if poi_obj else "votre destination"
+        poi_payload = {"poi_name": poi_obj.name} if (poi_obj and poi_obj.name) else {}
 
         if (booking.booking_mode or "request") == "manual_confirm":
             # manual_confirm : le voyageur demande, le partenaire décide.
@@ -236,13 +236,15 @@ async def give_consent(
             for mgr in managers:
                 mgr_user_res = await db.execute(select(User).where(User.id == mgr.user_id))
                 mgr_user = mgr_user_res.scalar_one_or_none()
+                notif_payload = dict(poi_payload)
+                notif_payload["booking_mode"] = "manual_confirm"
                 await create_notification(
                     db=db,
                     tenant_id=tenant.id,
                     user_id=mgr.user_id,
                     type_="booking_request_received",
                     booking=booking,
-                    payload={"poi_name": poi_name, "booking_mode": "manual_confirm"},
+                    payload=notif_payload,
                     user=mgr_user,
                     tenant=tenant,
                 )
@@ -254,13 +256,15 @@ async def give_consent(
             booking.external_id = f"EXT-{booking_id[:8]}"
 
             # Notifier le voyageur
+            notif_payload = dict(poi_payload)
+            notif_payload["external_id"] = booking.external_id
             await create_notification(
                 db=db,
                 tenant_id=tenant.id,
                 user_id=current_user.id,
                 type_="booking_confirmed",
                 booking=booking,
-                payload={"poi_name": poi_name, "external_id": booking.external_id},
+                payload=notif_payload,
                 user=current_user,
                 tenant=tenant,
             )

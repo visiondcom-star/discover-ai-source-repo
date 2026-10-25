@@ -52,10 +52,27 @@ def test_templates_fr_and_en_for_all_types():
         assert "message" in NOTIFICATION_TEMPLATES[t]["en"]
 
 
+def test_render_notification_default_poi_name_fr_and_en():
+    """Default poi_name is localized: 'votre destination' for fr, 'your destination' for en."""
+    # French
+    title_fr, msg_fr = render_notification("booking_confirmed", "fr", {})
+    assert "votre destination" in msg_fr
+
+    title_fr_none, msg_fr_none = render_notification("booking_confirmed", "fr", {"poi_name": None})
+    assert "votre destination" in msg_fr_none
+
+    # English
+    title_en, msg_en = render_notification("booking_confirmed", "en", {})
+    assert "your destination" in msg_en
+
+    title_en_none, msg_en_none = render_notification("booking_confirmed", "en", {"poi_name": None})
+    assert "your destination" in msg_en_none
+
+
 def test_render_notification_fallback_locale():
-    """Unsupported locale falls back to 'en'."""
+    """Unsupported locale falls back to 'en' and renders exact 'Booking confirmed'."""
     title, msg = render_notification("booking_confirmed", "de", {"poi_name": "Casbah"})
-    assert "confirmed" in title.lower() or "bestätigt" in title.lower()
+    assert title == "Booking confirmed"
     assert "Casbah" in msg
 
 

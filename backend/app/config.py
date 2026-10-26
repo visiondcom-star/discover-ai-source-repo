@@ -53,6 +53,17 @@ class Settings(BaseSettings):
     # Default tenant
     DEFAULT_TENANT_SLUG: str = "algeria"
 
+    # Email
+    EMAIL_PROVIDER: str = "console"
+    RESEND_API_KEY: str = ""
+    EMAIL_FROM_ADDRESS: str = "notifications@discoverai.local"
+    EMAIL_FROM_NAME: str = "Discover AI"
+    EMAIL_WORKER_ENABLED: bool = False
+    EMAIL_WORKER_INTERVAL_SECONDS: int = 15
+    EMAIL_BATCH_SIZE: int = 20
+    EMAIL_HTTP_TIMEOUT_SECONDS: int = 15
+    EMAIL_LOCK_SECONDS: int = 600
+
     # Comma-separated list of origins allowed by the browser CORS policy,
     # e.g. "https://your-domain.com,https://admin.your-domain.com".
     # The literal "*" keeps local development frictionless but is refused at

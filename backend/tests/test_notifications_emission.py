@@ -305,7 +305,7 @@ async def test_expire_overdue_requests_notifies_both_once_and_respects_tenant_is
     await db_session.refresh(overdue_other)
     assert overdue_other.status == "requested"
 
-    # Check test_tenant notifications: 1 for traveller, 1 for partner
+    # Check test_tenant notifications: 1 for traveller (email pending), 1 for partner (email skipped)
     res_trav = await db_session.execute(
         select(Notification).where(
             and_(
@@ -315,7 +315,9 @@ async def test_expire_overdue_requests_notifies_both_once_and_respects_tenant_is
             )
         )
     )
-    assert len(res_trav.scalars().all()) == 1
+    trav_list = res_trav.scalars().all()
+    assert len(trav_list) == 1
+    assert trav_list[0].email_status == "pending"
 
     res_partner = await db_session.execute(
         select(Notification).where(
@@ -326,7 +328,9 @@ async def test_expire_overdue_requests_notifies_both_once_and_respects_tenant_is
             )
         )
     )
-    assert len(res_partner.scalars().all()) == 1
+    part_list = res_partner.scalars().all()
+    assert len(part_list) == 1
+    assert part_list[0].email_status == "skipped"
 
     # Re-running expire_overdue_requests immediately afterwards: returns 0 and creates no duplicates
     repeat_count = await expire_overdue_requests(db_session, test_tenant.id)

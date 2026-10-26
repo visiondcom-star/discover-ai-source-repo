@@ -176,3 +176,29 @@ async def test_notifications_model_worker_columns(db_session, test_tenant, test_
 
     assert n.first_attempt_at == now
     assert n.provider_message_id == "msg_987"
+
+
+@pytest.mark.asyncio
+async def test_migration_0016_backfill_skipped(db_session, test_tenant, test_user):
+    """Migration 0016 backfills existing pending notifications to skipped."""
+    # Insert a notification with pending status
+    n = Notification(
+        tenant_id=test_tenant.id,
+        user_id=test_user.id,
+        type="pre_worker_notif",
+        payload={"legacy": True},
+        email_status="pending",
+    )
+    db_session.add(n)
+    await db_session.commit()
+    await db_session.refresh(n)
+    assert n.email_status == "pending"
+
+    # Simulate migration 0016 SQL update directly in session
+    await db_session.execute(
+        text("UPDATE notifications SET email_status = 'skipped' WHERE email_status = 'pending'")
+    )
+    await db_session.commit()
+
+    await db_session.refresh(n)
+    assert n.email_status == "skipped"

@@ -41,11 +41,13 @@ async def create_notification(
     payload: Optional[Dict[str, Any]] = None,
     user: Optional[User] = None,
     tenant: Optional[Tenant] = None,
+    email: bool = True,
 ) -> Optional[Notification]:
     """Create a notification in the caller's session/transaction.
 
     - Resolves locale via resolve_locale(user, tenant)
     - If payload is None, defaults to {}
+    - If email is False, email_status is set to 'skipped', otherwise defaults to 'pending'
     - Gracefully handles duplicates (unique index constraint on tenant_id, user_id, booking_id, type)
       using a SAVEPOINT (`begin_nested()`) so the outer transaction is not aborted.
     """
@@ -59,6 +61,7 @@ async def create_notification(
         booking_id=booking.id if booking else None,
         payload=norm_payload,
         locale=resolved_loc,
+        email_status="pending" if email else "skipped",
     )
 
     try:

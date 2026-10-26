@@ -349,3 +349,100 @@ async def process_one(
             )
         )
         await session.commit()
+
+
+
+async def run_once(
+    session_factory,
+    provider: EmailProvider,
+    settings: Optional[Settings] = None,
+) -> int:
+    """Execute a single cycle of claim_batch + process_one.
+
+    Testable sans boucle. Returns number of processed notifications.
+    """
+    s = settings or get_settings()
+    now = utcnow()
+    batch_size = s.EMAIL_BATCH_SIZE
+    lock_seconds = s.EMAIL_LOCK_SECONDS
+
+    async with session_factory() as session:
+        claimed_ids = await claim_batch(
+            session=session,
+            now=now,
+            limit=batch_size,
+            lock_seconds=lock_seconds,
+        )
+
+    if not claimed_ids:
+        return 0
+
+    for notif_id in claimed_ids:
+        async with session_factory() as session:
+            try:
+                await process_one(
+                    session=session,
+                    notification_id=notif_id,
+                    provider=provider,
+                    now=now,
+                    settings=s,
+                )
+            except Exception as exc:
+                logger.exception("Error processing notification %s in worker: %s", notif_id, exc)
+
+    return len(claimed_ids)
+
+
+async def sweep_overdue_bookings(session_factory) -> int:
+    """Pour chaque tenant actif, appelle expire_overdue_requests(db, tenant.id)."""
+    from app.services.booking_lifecycle import expire_overdue_requests
+
+    total_expired = 0
+    async with session_factory() as session:
+        res = await session.execute(select(Tenant.id).where(Tenant.is_active.is_(True)))
+        tenant_ids = res.scalars().all()
+
+    for tid in tenant_ids:
+        async with session_factory() as session:
+            try:
+                expired = await expire_overdue_requests(session, tid)
+                total_expired += expired
+            except Exception as exc:
+                logger.exception("Error sweeping overdue bookings for tenant %s: %s", tid, exc)
+
+    return total_expired
+
+
+async def email_worker_loop(
+    session_factory,
+    provider: EmailProvider,
+    settings: Optional[Settings] = None,
+) -> None:
+    """Boucle asyncio de fond exécutant run_once et balayage périodique d'expiration toutes les 60s."""
+    import asyncio
+    s = settings or get_settings()
+    interval = float(s.EMAIL_WORKER_INTERVAL_SECONDS)
+    last_sweep = datetime.min
+
+    logger.info("Starting email worker loop (interval=%ss)", interval)
+    try:
+        while True:
+            # 1. Traitement des emails en attente
+            try:
+                await run_once(session_factory, provider, settings=s)
+            except Exception as exc:
+                logger.exception("Unexpected error in worker run_once: %s", exc)
+
+            # 2. Balayage d'expiration toutes les 60s
+            now = utcnow()
+            if (now - last_sweep).total_seconds() >= 60.0:
+                try:
+                    await sweep_overdue_bookings(session_factory)
+                except Exception as exc:
+                    logger.exception("Unexpected error in sweep_overdue_bookings: %s", exc)
+                last_sweep = now
+
+            await asyncio.sleep(interval)
+    except asyncio.CancelledError:
+        logger.info("Email worker loop cancelled, exiting cleanly.")
+        raise

@@ -79,9 +79,35 @@ async def lifespan(app: FastAPI):
     await asyncio.to_thread(_run_migrations)
     await init_db()
     await _fail_orphan_jobs_on_startup()
+
+    worker_task = None
+    if settings.EMAIL_WORKER_ENABLED:
+        from app.database import AsyncSessionLocal
+        from app.services.email.factory import get_email_provider
+        from app.services.notification_worker import email_worker_loop
+
+        email_provider = get_email_provider(settings)
+        worker_task = asyncio.create_task(
+            email_worker_loop(
+                session_factory=AsyncSessionLocal,
+                provider=email_provider,
+                settings=settings,
+            )
+        )
+        logger.info("Email worker background task started.")
+
     yield
     # Shutdown
-    await engine.dispose()
+    if worker_task is not None:
+        worker_task.cancel()
+        try:
+            await worker_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("Email worker background task stopped.")
+
+    if engine is not None:
+        await engine.dispose()
 
 
 app = FastAPI(

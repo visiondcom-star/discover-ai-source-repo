@@ -327,3 +327,139 @@ async def test_concurrent_claim_batch_no_overlap(worker_setup):
     assert len(c1) == 2
     assert len(c2) == 2
     assert set(c1).isdisjoint(set(c2))
+
+
+
+@pytest.mark.asyncio
+async def test_run_once(worker_setup):
+    from tests.conftest import TestSessionLocal
+    from app.services.notification_worker import run_once
+    tenant, user = worker_setup
+    now = utcnow()
+
+    async with TestSessionLocal() as s:
+        s.add(
+            Notification(
+                tenant_id=tenant.id,
+                user_id=user.id,
+                type="booking_confirmed",
+                payload={"poi_name": "Ghardaia"},
+                locale="fr",
+                email_status="pending",
+            )
+        )
+        await s.commit()
+
+    provider = FakeEmailProvider(behavior="success")
+    processed = await run_once(TestSessionLocal, provider)
+    assert processed >= 1
+    assert len(provider.sent_calls) >= 1
+
+
+@pytest.mark.asyncio
+async def test_lifespan_does_not_start_worker_when_disabled(monkeypatch):
+    import asyncio
+    from fastapi import FastAPI
+    import app.main as main_module
+
+    monkeypatch.setattr(main_module.settings, "EMAIL_WORKER_ENABLED", False)
+
+    loop_started = False
+
+    async def fake_loop(*args, **kwargs):
+        nonlocal loop_started
+        loop_started = True
+
+    monkeypatch.setattr("app.services.notification_worker.email_worker_loop", fake_loop)
+    monkeypatch.setattr(main_module, "engine", None)
+    monkeypatch.setattr(main_module, "_run_migrations", lambda: None)
+    monkeypatch.setattr(main_module, "init_db", lambda: asyncio.sleep(0))
+    monkeypatch.setattr(main_module, "_fail_orphan_jobs_on_startup", lambda: asyncio.sleep(0))
+
+    dummy_app = FastAPI(lifespan=main_module.lifespan)
+    async with main_module.lifespan(dummy_app):
+        await asyncio.sleep(0.01)
+
+    assert loop_started is False
+
+
+@pytest.mark.asyncio
+async def test_sweep_overdue_bookings_creates_notification_once(worker_setup):
+    from tests.conftest import TestSessionLocal
+    from app.models import Booking, POI, POIManager
+    from app.services.notification_worker import sweep_overdue_bookings
+    tenant, user = worker_setup
+
+    async with TestSessionLocal() as s:
+        poi = POI(
+            tenant_id=tenant.id,
+            slug="sweep-poi",
+            name="Sweep POI",
+            city="Alger",
+            booking_mode="manual_confirm",
+        )
+        s.add(poi)
+        await s.flush()
+
+        partner = User(
+            tenant_id=tenant.id,
+            email="partner_sweep@example.com",
+            hashed_password="pw",
+            is_active=True,
+        )
+        s.add(partner)
+        await s.flush()
+
+        s.add(POIManager(tenant_id=tenant.id, poi_id=poi.id, user_id=partner.id))
+
+        booking = Booking(
+            tenant_id=tenant.id,
+            user_id=user.id,
+            poi_id=poi.id,
+            adapter_type="tour",
+            status="requested",
+            booking_mode="manual_confirm",
+            respond_by=utcnow() - timedelta(hours=2),
+            currency="DZD",
+        )
+        s.add(booking)
+        await s.commit()
+        booking_id = booking.id
+
+    # 1. Sweep passes requested -> expired and creates notifications
+    expired = await sweep_overdue_bookings(TestSessionLocal)
+    assert expired == 1
+
+    async with TestSessionLocal() as s:
+        b = (await s.execute(select(Booking).where(Booking.id == booking_id))).scalar_one()
+        assert b.status == "expired"
+
+        notifs = (
+            await s.execute(
+                select(Notification).where(
+                    Notification.tenant_id == tenant.id,
+                    Notification.booking_id == booking_id,
+                )
+            )
+        ).scalars().all()
+        # 1 traveller (email pending), 1 partner (email skipped)
+        assert len(notifs) == 2
+        traveller_notif = next(n for n in notifs if n.user_id == user.id)
+        assert traveller_notif.email_status == "pending"
+        partner_notif = next(n for n in notifs if n.user_id == partner.id)
+        assert partner_notif.email_status == "skipped"
+
+    # 2. Second sweep must NOT create duplicate notifications nor re-expire
+    expired_2 = await sweep_overdue_bookings(TestSessionLocal)
+    assert expired_2 == 0
+
+    async with TestSessionLocal() as s:
+        notifs_after = (
+            await s.execute(
+                select(Notification).where(
+                    Notification.tenant_id == tenant.id,
+                    Notification.booking_id == booking_id,
+                )
+            )
+        ).scalars().all()
+        assert len(notifs_after) == 2

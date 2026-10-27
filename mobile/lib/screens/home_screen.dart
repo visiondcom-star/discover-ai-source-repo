@@ -5,9 +5,11 @@ import '../config.dart';
 import '../l10n/app_localizations.dart';
 import '../models/user.dart';
 import '../providers/auth_provider.dart';
+import '../providers/notifications_provider.dart';
 import '../providers/promotion_provider.dart';
 import '../providers/tenant_provider.dart';
 import '../widgets/promo_banner.dart';
+import 'notifications_screen.dart';
 import 'trip_form_screen.dart';
 
 /// Accueil tab — P2 of the UX blueprint ("Discover AI" home mockup):
@@ -122,8 +124,58 @@ class _HomeScreenState extends State<HomeScreen> {
     final interests = categories.isNotEmpty
         ? categories.map((c) => c.slug).toList(growable: false)
         : AppConfig.tripInterestOptions;
+    final notifsProvider = context.watch<NotificationsProvider?>();
+    final unreadCount = notifsProvider?.unreadCount ?? 0;
+    final badgeText = unreadCount > 99 ? '99+' : unreadCount.toString();
+
     return Scaffold(
-      appBar: AppBar(title: Text(loc.appName)),
+      appBar: AppBar(
+        title: Text(loc.appName),
+        actions: [
+          IconButton(
+            key: const Key('notifications_bell'),
+            tooltip: loc.notificationsBellA11y,
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(Icons.notifications_outlined),
+                if (unreadCount > 0)
+                  Positioned(
+                    right: -4,
+                    top: -4,
+                    child: Container(
+                      key: const Key('notifications_badge'),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 1,
+                      ),
+                      decoration: BoxDecoration(
+                        color: scheme.error,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 16,
+                        minHeight: 16,
+                      ),
+                      child: Text(
+                        badgeText,
+                        style: TextStyle(
+                          color: scheme.onError,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+            ),
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
         children: [

@@ -427,5 +427,12 @@
   "adminCollectionErrorPollFailed": "Could not retrieve the collection status.",
   "adminCollectionErrorNetwork": "Could not start collection. Check your connection.",
   "adminCollectionErrorGeneric": "Failed to start collection.",
-  "adminCollectionJobFailed": "Collection failed."
+  "adminCollectionJobFailed": "Collection failed.",
+  "notificationsTitle": "Notifications",
+  "notificationsEmpty": "No notifications yet",
+  "notificationsErrorNetwork": "Could not load notifications. Check your connection.",
+  "notificationsErrorGeneric": "An error occurred while loading notifications.",
+  "notificationsRetry": "Retry",
+  "notificationsMarkAllRead": "Mark all as read",
+  "notificationsBellA11y": "Notifications"
 }

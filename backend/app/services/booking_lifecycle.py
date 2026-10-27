@@ -71,7 +71,7 @@ async def expire_overdue_requests(db: AsyncSession, tenant_id: UUID) -> int:
             tenant=tenant,
         )
 
-        # Notifier les partenaires / gérants du POI
+        # Notifier les partenaires / gérants du POI (sans e-mail : notification in-app seulement)
         mgrs_res = await db.execute(
             select(POIManager).where(
                 and_(
@@ -93,6 +93,7 @@ async def expire_overdue_requests(db: AsyncSession, tenant_id: UUID) -> int:
                 payload=payload,
                 user=mgr_user,
                 tenant=tenant,
+                email=False,
             )
 
     await db.commit()

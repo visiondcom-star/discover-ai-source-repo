@@ -174,3 +174,22 @@ async def test_create_notification_ignores_duplicate_without_breaking_transactio
     rows = result.scalars().all()
     assert len(rows) == 1
     assert rows[0].payload["step"] == 1
+
+
+@pytest.mark.asyncio
+async def test_create_notification_email_false_creates_skipped(db_session, test_tenant, test_user):
+    """create_notification with email=False creates notification with email_status='skipped'."""
+    n = await create_notification(
+        db=db_session,
+        tenant_id=test_tenant.id,
+        user_id=test_user.id,
+        type_="custom_alert",
+        payload={"msg": "in-app only"},
+        email=False,
+    )
+    assert n is not None
+    assert n.email_status == "skipped"
+
+    await db_session.commit()
+    loaded = (await db_session.execute(select(Notification).where(Notification.id == n.id))).scalar_one()
+    assert loaded.email_status == "skipped"

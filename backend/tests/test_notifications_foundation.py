@@ -16,7 +16,7 @@ from app.main import ALEMBIC_INI
 
 @pytest.mark.asyncio
 async def test_migration_upgrade_downgrade_upgrade(monkeypatch):
-    """Verify Alembic migrations run cleanly on a throwaway isolated database."""
+    """Verify Alembic migrations run cleanly on a throwaway isolated database, including 0016 backfill."""
     test_db_url = os.getenv(
         "TEST_DATABASE_URL",
         "postgresql+asyncpg://postgres:postgres@localhost:5432/discoverai_test",
@@ -46,7 +46,7 @@ async def test_migration_upgrade_downgrade_upgrade(monkeypatch):
         finally:
             await tmp_conn.close()
 
-        def _run_alembic_cycle():
+        def _run_alembic_cycle_part1():
             monkeypatch.setenv("DATABASE_URL", tmp_db_url)
             get_settings.cache_clear()
             alembic_cfg = Config(str(ALEMBIC_INI))
@@ -55,12 +55,52 @@ async def test_migration_upgrade_downgrade_upgrade(monkeypatch):
             command.downgrade(alembic_cfg, "0013_partner_poi_managers")
             command.upgrade(alembic_cfg, "0014_notifications")
             command.upgrade(alembic_cfg, "0015_notifications_worker_cols")
-            command.downgrade(alembic_cfg, "0014_notifications")
+
+        await asyncio.to_thread(_run_alembic_cycle_part1)
+
+        # Après upgrade vers 0015_notifications_worker_cols et avant l'upgrade vers 0016 :
+        # insérer par SQL minimal un tenant, un utilisateur et une notification email_status='pending'
+        insert_conn = await asyncpg.connect(
+            user=parsed_url.username,
+            password=parsed_url.password,
+            host=parsed_url.host,
+            port=parsed_url.port,
+            database=tmp_db_name,
+        )
+        try:
+            tid = str(uuid.uuid4())
+            uid = str(uuid.uuid4())
+            nid = str(uuid.uuid4())
+            await insert_conn.execute(
+                f"""
+                INSERT INTO tenants (id, slug, name, default_currency, is_active, created_at)
+                VALUES ('{tid}', 'test-t-migr', 'Test Migr Tenant', 'EUR', true, now())
+                """
+            )
+            await insert_conn.execute(
+                f"""
+                INSERT INTO users (id, tenant_id, email, hashed_password, is_active, created_at)
+                VALUES ('{uid}', '{tid}', 'migr@example.com', 'dummy_hash', true, now())
+                """
+            )
+            await insert_conn.execute(
+                f"""
+                INSERT INTO notifications (id, tenant_id, user_id, type, payload, locale, email_status, created_at)
+                VALUES ('{nid}', '{tid}', '{uid}', 'migr_notif', '{{}}', 'fr', 'pending', now())
+                """
+            )
+        finally:
+            await insert_conn.close()
+
+        # Upgrade head (applique 0016_backfill_skipped_notifs)
+        def _run_alembic_cycle_part2():
+            alembic_cfg = Config(str(ALEMBIC_INI))
+            alembic_cfg.attributes["configure_logger"] = False
             command.upgrade(alembic_cfg, "head")
 
-        await asyncio.to_thread(_run_alembic_cycle)
+        await asyncio.to_thread(_run_alembic_cycle_part2)
 
-        # 5. Check expected tables and columns exist
+        # 5. Check expected tables and columns exist, and verify notification backfilled to 'skipped'
         verify_conn = await asyncpg.connect(
             user=parsed_url.username,
             password=parsed_url.password,
@@ -84,6 +124,12 @@ async def test_migration_upgrade_downgrade_upgrade(monkeypatch):
             assert "locale" in users_cols
             assert "first_attempt_at" in notif_cols
             assert "provider_message_id" in notif_cols
+
+            row = await verify_conn.fetchrow(
+                f"SELECT email_status FROM notifications WHERE id = '{nid}'"
+            )
+            assert row is not None
+            assert row["email_status"] == "skipped"
         finally:
             await verify_conn.close()
 

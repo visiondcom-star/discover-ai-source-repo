@@ -413,6 +413,7 @@ async def test_process_one_render_exception_failed(db_session, worker_setup, mon
 @pytest.mark.asyncio
 async def test_concurrent_claim_batch_no_overlap(worker_setup):
     from tests.conftest import TestSessionLocal
+    from sqlalchemy import or_, and_
     tenant, user = worker_setup
     now = utcnow()
 
@@ -430,15 +431,47 @@ async def test_concurrent_claim_batch_no_overlap(worker_setup):
             )
         await s.commit()
 
-    # Run two claims in separate sessions
-    async with TestSessionLocal() as s1, TestSessionLocal() as s2:
-        c1 = await claim_batch(s1, now=now, limit=2)
-        c2 = await claim_batch(s2, now=now, limit=2)
+    # s1 exécute le SELECT ... FOR UPDATE SKIP LOCKED de claim_batch SANS commit
+    # pendant que s2 appelle claim_batch complet
+    async with TestSessionLocal() as s1:
+        stmt = (
+            select(Notification)
+            .where(
+                or_(
+                    and_(
+                        Notification.email_status == "pending",
+                        or_(
+                            Notification.next_attempt_at.is_(None),
+                            Notification.next_attempt_at <= now,
+                        ),
+                    ),
+                    and_(
+                        Notification.email_status == "sending",
+                        Notification.locked_until.is_not(None),
+                        Notification.locked_until <= now,
+                    ),
+                )
+            )
+            .order_by(Notification.created_at.asc())
+            .limit(2)
+            .with_for_update(skip_locked=True)
+        )
+        res1 = await s1.execute(stmt)
+        rows_s1 = res1.scalars().all()
+        ids_s1 = {n.id for n in rows_s1}
+        assert len(ids_s1) == 2
 
-    assert len(c1) == 2
-    assert len(c2) == 2
-    assert set(c1).isdisjoint(set(c2))
+        # Session s2 appelle claim_batch complet alors que s1 détient le verrou FOR UPDATE sans commit
+        async with TestSessionLocal() as s2:
+            c2 = await claim_batch(s2, now=now, limit=2)
+            ids_s2 = set(c2)
 
+        # Vérifier que les ensembles d'identifiants sont disjoints et que s2 obtient bien les autres lignes
+        assert len(ids_s2) == 2
+        assert ids_s1.isdisjoint(ids_s2)
+
+        # Puis rollback de s1
+        await s1.rollback()
 
 
 @pytest.mark.asyncio
@@ -448,23 +481,29 @@ async def test_run_once(worker_setup):
     tenant, user = worker_setup
     now = utcnow()
 
+    notif = Notification(
+        tenant_id=tenant.id,
+        user_id=user.id,
+        type="booking_confirmed",
+        payload={"poi_name": "Ghardaia"},
+        locale="fr",
+        email_status="pending",
+    )
     async with TestSessionLocal() as s:
-        s.add(
-            Notification(
-                tenant_id=tenant.id,
-                user_id=user.id,
-                type="booking_confirmed",
-                payload={"poi_name": "Ghardaia"},
-                locale="fr",
-                email_status="pending",
-            )
-        )
+        s.add(notif)
         await s.commit()
+        await s.refresh(notif)
+        notif_id = notif.id
 
     provider = FakeEmailProvider(behavior="success")
     processed = await run_once(TestSessionLocal, provider)
     assert processed >= 1
     assert len(provider.sent_calls) >= 1
+
+    # Conserver l'identifiant de la notification créée et vérifier qu'elle est email_status='sent'
+    async with TestSessionLocal() as s:
+        reloaded = (await s.execute(select(Notification).where(Notification.id == notif_id))).scalar_one()
+        assert reloaded.email_status == "sent"
 
 
 @pytest.mark.asyncio

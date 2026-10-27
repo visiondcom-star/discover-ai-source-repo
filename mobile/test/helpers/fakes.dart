@@ -909,3 +909,115 @@ Map<String, dynamic> samplePartnerBookingJson({
             'notes': 'Chambre calme si possible.',
           },
     };
+
+class FakeNotificationsApi implements NotificationsApi {
+  FakeNotificationsApi({
+    List<Map<String, dynamic>>? notifications,
+    this.unreadCount = 0,
+    this.total,
+    this.getNotificationsError,
+    this.markReadError,
+    this.markAllReadError,
+  }) : notifications = notifications ?? [];
+
+  final List<Map<String, dynamic>> notifications;
+  int unreadCount;
+  int? total;
+  Object? getNotificationsError;
+  Object? markReadError;
+  Object? markAllReadError;
+
+  int getNotificationsCalls = 0;
+  int markReadCalls = 0;
+  int markAllReadCalls = 0;
+  final List<String> markedReadIds = [];
+  final List<Map<String, dynamic>> getNotificationsHistory = [];
+
+  @override
+  Future<Map<String, dynamic>> getNotifications({
+    bool unreadOnly = false,
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    getNotificationsCalls++;
+    getNotificationsHistory.add({
+      'unreadOnly': unreadOnly,
+      'limit': limit,
+      'offset': offset,
+    });
+    if (getNotificationsError != null) throw getNotificationsError!;
+
+    var filtered = notifications;
+    if (unreadOnly) {
+      filtered = filtered.where((n) => !(n['read'] as bool? ?? false)).toList();
+    }
+
+    final effectiveTotal = total ?? filtered.length;
+    final paged = filtered.skip(offset).take(limit).toList();
+
+    return {
+      'notifications': paged,
+      'unread_count': unreadCount,
+      'total': effectiveTotal,
+      'limit': limit,
+      'offset': offset,
+    };
+  }
+
+  @override
+  Future<Map<String, dynamic>> markRead(String id) async {
+    markReadCalls++;
+    markedReadIds.add(id);
+    if (markReadError != null) throw markReadError!;
+
+    final index = notifications.indexWhere((n) => n['id'] == id);
+    if (index != -1) {
+      notifications[index]['read'] = true;
+    }
+    if (unreadCount > 0) unreadCount--;
+
+    return {
+      'id': id,
+      'read': true,
+      'read_at': '2026-10-27T10:00:00Z',
+    };
+  }
+
+  @override
+  Future<Map<String, dynamic>> markAllRead() async {
+    markAllReadCalls++;
+    if (markAllReadError != null) throw markAllReadError!;
+
+    int count = 0;
+    for (final n in notifications) {
+      if (!(n['read'] as bool? ?? false)) {
+        n['read'] = true;
+        count++;
+      }
+    }
+    unreadCount = 0;
+
+    return {'marked_as_read': count};
+  }
+}
+
+Map<String, dynamic> sampleNotificationJson({
+  String id = 'notif-1',
+  String title = 'Réservation confirmée',
+  String message = 'Votre réservation pour Casbah a été confirmée.',
+  String type = 'booking_confirmed',
+  bool read = false,
+  String? createdAt = '2026-10-27T10:00:00',
+  String? bookingId = 'b-1',
+  Map<String, dynamic>? payload = const {'poi_name': 'Casbah'},
+}) =>
+    {
+      'id': id,
+      'title': title,
+      'message': message,
+      'type': type,
+      'read': read,
+      'created_at': createdAt,
+      'booking_id': bookingId,
+      'payload': payload,
+    };

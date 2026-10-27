@@ -141,4 +141,24 @@ class AuthProvider extends ChangeNotifier {
     _api.setToken('');
     notifyListeners();
   }
+
+  /// Synchronise la langue de l'appareil avec le profil serveur (PATCH /auth/me).
+  ///
+  /// - Sans effet si non authentifié ou si user.locale == code.
+  /// - En cas de succès, met à jour l'utilisateur local.
+  /// - Toute erreur est avalée silencieusement (pas de blocage ni d'erreur visible),
+  ///   pour être réessayée à la prochaine occasion.
+  Future<void> syncLocale(String code) async {
+    final trimmed = code.trim().toLowerCase();
+    if (_user == null || _token == null || trimmed.isEmpty) return;
+    if (_user!.locale == trimmed) return;
+
+    try {
+      final updatedJson = await _api.updateMe(locale: trimmed);
+      _user = User.fromJson(updatedJson);
+      notifyListeners();
+    } catch (_) {
+      // Échec silencieux, réessayé plus tard
+    }
+  }
 }

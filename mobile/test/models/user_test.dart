@@ -52,4 +52,23 @@ void main() {
     expect(User.fromJson(json).isPartner, isTrue);
     expect(User.fromJson(json).canUsePartnerSpace, isTrue);
   });
+
+  test('locale field parses and round-trips correctly', () {
+    final userWithLocale = User.fromJson({
+      'id': 'u-2',
+      'email': 'user@example.com',
+      'locale': 'en',
+    });
+    expect(userWithLocale.locale, 'en');
+
+    final json = userWithLocale.toJson();
+    expect(json['locale'], 'en');
+    expect(User.fromJson(json).locale, 'en');
+
+    final userWithoutLocale = User.fromJson({
+      'id': 'u-3',
+      'email': 'user3@example.com',
+    });
+    expect(userWithoutLocale.locale, isNull);
+  });
 }

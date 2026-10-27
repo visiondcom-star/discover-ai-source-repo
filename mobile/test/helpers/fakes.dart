@@ -5,11 +5,15 @@ import 'package:discover_ai/models/research_job.dart';
 
 /// Deterministic AuthApi fake for tests.
 class FakeAuthApi implements AuthApi {
-  FakeAuthApi({this.failLogin = false, this.failGetMe = false});
+  FakeAuthApi(
+      {this.failLogin = false, this.failGetMe = false, this.userLocale});
 
   final bool failLogin;
   final bool failGetMe;
+  final String? userLocale;
   int loginCalls = 0;
+  int updateMeCalls = 0;
+  String? lastUpdatedLocale;
   String? lastToken;
 
   @override
@@ -24,6 +28,23 @@ class FakeAuthApi implements AuthApi {
       'id': 'u-1',
       'email': 'demo@discoverai.dz',
       'full_name': 'Demo User',
+      'locale': userLocale,
+      'is_active': true,
+      'is_admin': false,
+      'preferences': <String, dynamic>{},
+      'created_at': '2026-01-01T00:00:00Z',
+    };
+  }
+
+  @override
+  Future<Map<String, dynamic>> updateMe({required String locale}) async {
+    updateMeCalls++;
+    lastUpdatedLocale = locale;
+    return {
+      'id': 'u-1',
+      'email': 'demo@discoverai.dz',
+      'full_name': 'Demo User',
+      'locale': locale,
       'is_active': true,
       'is_admin': false,
       'preferences': <String, dynamic>{},

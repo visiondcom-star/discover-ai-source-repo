@@ -18,6 +18,7 @@ abstract class AuthApi {
     String? fullName,
   });
   Future<Map<String, dynamic>> getMe();
+  Future<Map<String, dynamic>> updateMe({required String locale});
 }
 
 abstract class PoisApi {
@@ -288,6 +289,11 @@ class ApiService
       Map<String, dynamic>.from(await _get('/auth/me') as Map);
 
   @override
+  Future<Map<String, dynamic>> updateMe({required String locale}) async =>
+      Map<String, dynamic>.from(
+          await _patch('/auth/me', {'locale': locale}) as Map);
+
+  @override
   Future<Map<String, dynamic>> login(String email, String password) async =>
       Map<String, dynamic>.from(await _post('/auth/login', {
         'email': email,
@@ -451,8 +457,9 @@ class ApiService
     required String tenantId,
     required String jobId,
   }) async =>
-      Map<String, dynamic>.from(await _get(
-          '/tenants/$tenantId/research/collection/jobs/$jobId') as Map);
+      Map<String, dynamic>.from(
+          await _get('/tenants/$tenantId/research/collection/jobs/$jobId')
+              as Map);
 
   @override
   Future<List<Map<String, dynamic>>> getAllCategories() async {
@@ -465,8 +472,9 @@ class ApiService
     required String categoryId,
     required String status,
   }) async =>
-      Map<String, dynamic>.from(await _patch(
-          '/tenants/categories/$categoryId', {'status': status}) as Map);
+      Map<String, dynamic>.from(
+          await _patch('/tenants/categories/$categoryId', {'status': status})
+              as Map);
 
   // ---- Espace partenaire ---------------------------------------------------
   // Chemins SANS slash final : un slash final ferait répondre FastAPI en 307
@@ -491,7 +499,8 @@ class ApiService
     required String decision,
     String? note,
   }) async =>
-      Map<String, dynamic>.from(await _post('/partner/bookings/$bookingId/respond', {
+      Map<String, dynamic>.from(
+          await _post('/partner/bookings/$bookingId/respond', {
         'decision': decision,
         if (note != null) 'note': note,
       }) as Map);

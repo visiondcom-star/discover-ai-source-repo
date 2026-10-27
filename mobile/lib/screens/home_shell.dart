@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
+import '../providers/auth_provider.dart';
+import '../providers/locale_provider.dart';
 import 'bookings_screen.dart';
 import 'chat_screen.dart';
 import 'home_screen.dart';
@@ -24,6 +27,18 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   int _currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final localeCode = context.read<LocaleProvider?>()?.localeCode;
+      if (localeCode != null && localeCode.isNotEmpty) {
+        context.read<AuthProvider>().syncLocale(localeCode);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

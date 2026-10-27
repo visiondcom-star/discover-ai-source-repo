@@ -1,4 +1,5 @@
 """Resend email provider using HTTP API (https://api.resend.com/emails)."""
+import email.utils
 import json
 import logging
 from typing import Optional
@@ -29,7 +30,7 @@ class ResendEmailProvider(EmailProvider):
         self._client = client
 
     async def send(self, message: EmailMessage, idempotency_key: str) -> EmailSendResult:
-        from_header = f"{message.from_name} <{message.from_address}>" if message.from_name else message.from_address
+        from_header = email.utils.formataddr((message.from_name or "", message.from_address))
         payload = {
             "from": from_header,
             "to": [message.to],

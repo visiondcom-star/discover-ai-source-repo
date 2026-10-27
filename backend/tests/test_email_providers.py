@@ -134,3 +134,29 @@ def test_factory():
     cfg_invalid = Settings(EMAIL_PROVIDER="unknown")
     with pytest.raises(ValueError, match="Unknown EMAIL_PROVIDER"):
         get_email_provider(cfg_invalid)
+
+
+@pytest.mark.asyncio
+async def test_resend_from_header_with_commas_and_quotes():
+    """Sender name containing commas and quotes is correctly RFC-encoded via email.utils.formataddr."""
+    import json
+    recorded_payload = None
+
+    def handler(request: httpx.Request):
+        nonlocal recorded_payload
+        recorded_payload = json.loads(request.content.decode("utf-8"))
+        return httpx.Response(200, json={"id": "re_comma_quotes_123"})
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
+        provider = ResendEmailProvider(api_key="re_secret_test", client=client)
+        msg = EmailMessage(
+            to="user@example.com",
+            subject="Test Quotes",
+            text="Body",
+            from_address="noreply@discoverai.local",
+            from_name='Smith, John "The Boss"',
+        )
+        await provider.send(msg, idempotency_key="notif-comma-quotes")
+        assert recorded_payload is not None
+        assert recorded_payload["from"] == '"Smith, John \\"The Boss\\"" <noreply@discoverai.local>'

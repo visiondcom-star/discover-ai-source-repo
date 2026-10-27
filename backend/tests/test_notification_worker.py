@@ -224,7 +224,10 @@ async def test_process_one_cut_off_at_24_hours(db_session, worker_setup):
 
     await db_session.refresh(notif)
     assert notif.email_status == "failed"
-    assert "Max attempts/age reached" in notif.last_error
+    # Cut off before send triggers "Idempotency window exceeded before send"
+    assert "Idempotency window exceeded before send" in notif.last_error
+    # Provider was not called because guard stopped before send
+    assert len(provider.sent_calls) == 0
 
 
 @pytest.mark.asyncio
@@ -297,6 +300,114 @@ async def test_process_one_inactive_tenant_and_cross_tenant_user(db_session, wor
     await db_session.refresh(notif2)
     assert notif2.email_status == "skipped"
     assert "User missing or does not belong to notification tenant" in notif2.last_error
+
+
+@pytest.mark.asyncio
+async def test_process_one_tenant_email_disabled_skipped(db_session, worker_setup):
+    """Tenant.config['notifications']['email']['enabled'] == False -> skipped."""
+    tenant, user = worker_setup
+    now = utcnow()
+    tenant.config = {"notifications": {"email": {"enabled": False}}}
+    db_session.add(tenant)
+    await db_session.commit()
+
+    notif = Notification(
+        tenant_id=tenant.id,
+        user_id=user.id,
+        type="booking_confirmed",
+        email_status="sending",
+    )
+    db_session.add(notif)
+    await db_session.commit()
+
+    provider = FakeEmailProvider(behavior="success")
+    await process_one(db_session, notif.id, provider, now=now)
+
+    await db_session.refresh(notif)
+    assert notif.email_status == "skipped"
+    assert notif.last_error == "Tenant email notifications disabled in config"
+    assert len(provider.sent_calls) == 0
+
+
+@pytest.mark.asyncio
+async def test_claim_batch_attempts_gte_5_fails_without_send(db_session, worker_setup):
+    """Ligne reprise avec email_attempts >= 5 -> failed sans envoi (FakeEmailProvider.sent_calls vide)."""
+    tenant, user = worker_setup
+    now = utcnow()
+    notif = Notification(
+        tenant_id=tenant.id,
+        user_id=user.id,
+        type="booking_confirmed",
+        email_status="sending",
+        email_attempts=5,
+        locked_until=now - timedelta(seconds=10),
+    )
+    db_session.add(notif)
+    await db_session.commit()
+
+    claimed = await claim_batch(db_session, now=now, limit=10)
+    assert notif.id not in claimed
+
+    await db_session.refresh(notif)
+    assert notif.email_status == "failed"
+    assert "Max attempts (5) exceeded on lease reclaim" in notif.last_error
+
+    provider = FakeEmailProvider(behavior="success")
+    assert len(provider.sent_calls) == 0
+
+
+@pytest.mark.asyncio
+async def test_process_one_guard_24h_before_send(db_session, worker_setup):
+    """Garde 24 h avant envoi : si email_attempts > 1 et now - first_attempt_at >= 24 h -> failed sans envoi."""
+    tenant, user = worker_setup
+    now = utcnow()
+    notif = Notification(
+        tenant_id=tenant.id,
+        user_id=user.id,
+        type="booking_confirmed",
+        email_status="sending",
+        email_attempts=2,
+        first_attempt_at=now - timedelta(hours=25),
+    )
+    db_session.add(notif)
+    await db_session.commit()
+
+    provider = FakeEmailProvider(behavior="success")
+    await process_one(db_session, notif.id, provider, now=now)
+
+    await db_session.refresh(notif)
+    assert notif.email_status == "failed"
+    assert notif.last_error == "Idempotency window exceeded before send"
+    assert len(provider.sent_calls) == 0
+
+
+@pytest.mark.asyncio
+async def test_process_one_render_exception_failed(db_session, worker_setup, monkeypatch):
+    """Exception de rendu -> failed avec last_error 'Render error: <type>' sans envoi."""
+    tenant, user = worker_setup
+    now = utcnow()
+    notif = Notification(
+        tenant_id=tenant.id,
+        user_id=user.id,
+        type="booking_confirmed",
+        email_status="sending",
+        email_attempts=1,
+    )
+    db_session.add(notif)
+    await db_session.commit()
+
+    def mock_render_fail(*args, **kwargs):
+        raise KeyError("missing_template_var")
+
+    monkeypatch.setattr("app.services.notification_worker.render_email", mock_render_fail)
+
+    provider = FakeEmailProvider(behavior="success")
+    await process_one(db_session, notif.id, provider, now=now)
+
+    await db_session.refresh(notif)
+    assert notif.email_status == "failed"
+    assert notif.last_error == "Render error: KeyError"
+    assert len(provider.sent_calls) == 0
 
 
 @pytest.mark.asyncio

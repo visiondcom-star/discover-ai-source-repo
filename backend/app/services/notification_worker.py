@@ -242,8 +242,53 @@ async def process_one(
         await session.commit()
         return
 
-    # 4. Préparation du message et envoi avec idempotency_key = f"notification-{id}"
-    email_msg = render_email(notif, user, tenant, settings=s)
+    # 4. Garde d'idempotence avant l'envoi
+    if (notif.email_attempts or 0) > 1 and notif.first_attempt_at is not None:
+        if (now - notif.first_attempt_at) >= MAX_AGE_WINDOW:
+            await session.execute(
+                update(Notification)
+                .where(
+                    and_(
+                        Notification.id == notification_id,
+                        Notification.email_status == "sending",
+                    )
+                )
+                .values(
+                    email_status="failed",
+                    locked_until=None,
+                    last_error="Idempotency window exceeded before send",
+                )
+            )
+            await session.commit()
+            return
+
+    # 5. Préparation du message (avec capture d'erreur de rendu)
+    try:
+        email_msg = render_email(notif, user, tenant, settings=s)
+    except Exception as exc:
+        render_err = f"Render error: {type(exc).__name__}"
+        logger.warning(
+            "Render error for notification %s: %s",
+            notif.id,
+            type(exc).__name__,
+        )
+        await session.execute(
+            update(Notification)
+            .where(
+                and_(
+                    Notification.id == notification_id,
+                    Notification.email_status == "sending",
+                )
+            )
+            .values(
+                email_status="failed",
+                locked_until=None,
+                last_error=render_err,
+            )
+        )
+        await session.commit()
+        return
+
     idempotency_key = f"notification-{notif.id}"
 
     try:

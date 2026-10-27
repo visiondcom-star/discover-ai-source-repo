@@ -23,10 +23,13 @@ import 'trip_form_screen.dart';
 /// The icon map degrades gracefully (generic activity icon) for config
 /// values it doesn't know, so any tenant catalog renders.
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, this.onExplore});
+  const HomeScreen({super.key, this.onExplore, this.onOpenBookings});
 
   /// Switches the shell to the Explorer tab.
   final VoidCallback? onExplore;
+
+  /// Switches the shell to the Bookings tab.
+  final VoidCallback? onOpenBookings;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -171,7 +174,11 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
             onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+              MaterialPageRoute(
+                builder: (_) => NotificationsScreen(
+                  onOpenBookings: widget.onOpenBookings,
+                ),
+              ),
             ),
           ),
         ],

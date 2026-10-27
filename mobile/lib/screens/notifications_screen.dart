@@ -3,12 +3,18 @@ import 'package:intl/intl.dart' as intl;
 import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
+import '../providers/auth_provider.dart';
 import '../providers/notifications_provider.dart';
+import '../providers/partner_bookings_provider.dart';
+import 'partner_bookings_screen.dart';
 
 /// Notifications screen displaying user notifications with pull-to-refresh,
 /// infinite scrolling pagination, read status toggling, and mark-all-read.
 class NotificationsScreen extends StatefulWidget {
-  const NotificationsScreen({super.key});
+  const NotificationsScreen({super.key, this.onOpenBookings});
+
+  /// Callback to switch shell to the Bookings tab when tapping a booking status notification.
+  final VoidCallback? onOpenBookings;
 
   @override
   State<NotificationsScreen> createState() => _NotificationsScreenState();
@@ -237,6 +243,25 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   onTap: () {
                     if (!notif.read) {
                       provider.markRead(notif.id);
+                    }
+
+                    if (notif.type == 'booking_request_received') {
+                      final user = context.read<AuthProvider?>()?.user;
+                      if (user?.canUsePartnerSpace ?? false) {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => ChangeNotifierProvider(
+                              create: (_) => PartnerBookingsProvider(),
+                              child: const PartnerBookingsScreen(),
+                            ),
+                          ),
+                        );
+                      }
+                    } else if (notif.type == 'booking_confirmed' ||
+                        notif.type == 'booking_declined' ||
+                        notif.type == 'booking_expired') {
+                      Navigator.of(context).pop();
+                      widget.onOpenBookings?.call();
                     }
                   },
                 );

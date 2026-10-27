@@ -16,6 +16,7 @@ import 'package:discover_ai/providers/trip_provider.dart';
 import 'package:discover_ai/screens/home_screen.dart';
 import 'package:discover_ai/screens/home_shell.dart';
 import 'package:discover_ai/screens/notifications_screen.dart';
+import 'package:discover_ai/screens/partner_bookings_screen.dart';
 
 import '../helpers/fakes.dart';
 
@@ -371,6 +372,212 @@ void main() {
       final notifProvider =
           Provider.of<NotificationsProvider>(homeContext, listen: false);
       expect(notifProvider, isNotNull);
+    });
+  });
+
+  group('Notifications tapping navigation according to type', () {
+    testWidgets('booking_request_received opens partner space for partner user',
+        (tester) async {
+      final fakeApi = FakeNotificationsApi(
+        notifications: [
+          sampleNotificationJson(
+            id: 'n-partner',
+            type: 'booking_request_received',
+            read: false,
+          ),
+        ],
+        unreadCount: 1,
+      );
+      final notifProvider = NotificationsProvider(api: fakeApi);
+
+      final authProvider = AuthProvider(
+        api: FakeAuthApi(isPartner: true),
+        tokenStore: InMemoryTokenStore(),
+      );
+      await authProvider.initialized;
+      await authProvider.login('partner@discoverai.dz', 'secret');
+
+      await tester.pumpWidget(_buildTestApp(
+        child: const NotificationsScreen(),
+        notificationsProvider: notifProvider,
+        authProvider: authProvider,
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('notification_tile_n-partner')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(PartnerBookingsScreen), findsOneWidget);
+      expect(fakeApi.markedReadIds, contains('n-partner'));
+    });
+
+    testWidgets(
+        'booking_request_received does NOT open partner space for ordinary user',
+        (tester) async {
+      final fakeApi = FakeNotificationsApi(
+        notifications: [
+          sampleNotificationJson(
+            id: 'n-ordinary',
+            type: 'booking_request_received',
+            read: false,
+          ),
+        ],
+        unreadCount: 1,
+      );
+      final notifProvider = NotificationsProvider(api: fakeApi);
+
+      final authProvider = AuthProvider(
+        api: FakeAuthApi(
+          failLogin: false,
+          failGetMe: false,
+          userLocale: 'fr',
+        ),
+        tokenStore: InMemoryTokenStore(),
+      );
+      await authProvider.initialized;
+      await authProvider.login('traveller@discoverai.dz', 'secret');
+
+      await tester.pumpWidget(_buildTestApp(
+        child: const NotificationsScreen(),
+        notificationsProvider: notifProvider,
+        authProvider: authProvider,
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('notification_tile_n-ordinary')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(PartnerBookingsScreen), findsNothing);
+      expect(fakeApi.markedReadIds, contains('n-ordinary'));
+    });
+
+    testWidgets(
+        'booking_confirmed, declined, expired closes notifications and selects tab_bookings in HomeShell',
+        (tester) async {
+      for (final type in [
+        'booking_confirmed',
+        'booking_declined',
+        'booking_expired'
+      ]) {
+        final fakeApi = FakeNotificationsApi(
+          notifications: [
+            sampleNotificationJson(id: 'n-$type', type: type, read: false),
+          ],
+          unreadCount: 1,
+        );
+        final notifProvider = NotificationsProvider(api: fakeApi);
+
+        final authProvider = AuthProvider(
+          api: FakeAuthApi(),
+          tokenStore: InMemoryTokenStore(),
+        );
+        await authProvider.initialized;
+        await authProvider.login('user@discoverai.dz', 'secret');
+
+        await tester.pumpWidget(
+          MultiProvider(
+            providers: [
+              ChangeNotifierProvider<NotificationsProvider>.value(
+                value: notifProvider,
+              ),
+              ChangeNotifierProvider<AuthProvider>.value(value: authProvider),
+              ChangeNotifierProvider<TenantProvider>(
+                create: (_) => TenantProvider(tenantsApi: FakeTenantsApi()),
+              ),
+              ChangeNotifierProvider<PromotionProvider>(
+                create: (_) =>
+                    PromotionProvider(promotionsApi: FakePromotionsApi()),
+              ),
+              ChangeNotifierProvider<BookingProvider>(
+                create: (_) =>
+                    BookingProvider(bookingsApi: FakeBookingsApi(bookings: [])),
+              ),
+              ChangeNotifierProvider<POIProvider>(
+                create: (_) => POIProvider(poisApi: FakePoisApi()),
+              ),
+              ChangeNotifierProvider<TripProvider>(
+                create: (_) => TripProvider(),
+              ),
+              ChangeNotifierProvider<ChatProvider>(
+                create: (_) => ChatProvider(),
+              ),
+              ChangeNotifierProvider<LocaleProvider>(
+                create: (_) =>
+                    LocaleProvider(localeStore: InMemoryLocaleStore()),
+              ),
+            ],
+            child: MaterialApp(
+              key: UniqueKey(),
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: HomeShell(notificationsProvider: notifProvider),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Initially tab_home is selected (index 0)
+        final navBarBefore =
+            tester.widget<NavigationBar>(find.byType(NavigationBar));
+        expect(navBarBefore.selectedIndex, 0);
+
+        // Open notifications screen
+        await tester.tap(find.byKey(const Key('notifications_bell')));
+        await tester.pumpAndSettle();
+        expect(find.byType(NotificationsScreen), findsOneWidget);
+
+        // Tap the booking notification tile
+        await tester.tap(find.byKey(Key('notification_tile_n-$type')));
+        await tester.pumpAndSettle();
+
+        // NotificationsScreen closed
+        expect(find.byType(NotificationsScreen), findsNothing);
+
+        // Shell switched to tab_bookings (index 2)
+        final navBarAfter =
+            tester.widget<NavigationBar>(find.byType(NavigationBar));
+        expect(navBarAfter.selectedIndex, 2);
+        expect(find.byKey(const Key('tab_bookings')), findsOneWidget);
+
+        // Marked as read
+        expect(fakeApi.markedReadIds, contains('n-$type'));
+      }
+    });
+
+    testWidgets('other notification type marks read without navigation',
+        (tester) async {
+      final fakeApi = FakeNotificationsApi(
+        notifications: [
+          sampleNotificationJson(
+            id: 'n-other',
+            type: 'system_announcement',
+            read: false,
+          ),
+        ],
+        unreadCount: 1,
+      );
+      final notifProvider = NotificationsProvider(api: fakeApi);
+
+      final authProvider = AuthProvider(
+        api: FakeAuthApi(),
+        tokenStore: InMemoryTokenStore(),
+      );
+      await authProvider.initialized;
+      await authProvider.login('user@discoverai.dz', 'secret');
+
+      await tester.pumpWidget(_buildTestApp(
+        child: const NotificationsScreen(),
+        notificationsProvider: notifProvider,
+        authProvider: authProvider,
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('notification_tile_n-other')));
+      await tester.pumpAndSettle();
+
+      // NotificationsScreen stays open, no navigation
+      expect(find.byType(NotificationsScreen), findsOneWidget);
+      expect(fakeApi.markedReadIds, contains('n-other'));
     });
   });
 }

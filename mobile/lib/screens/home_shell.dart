@@ -29,7 +29,7 @@ class HomeShell extends StatefulWidget {
   State<HomeShell> createState() => _HomeShellState();
 }
 
-class _HomeShellState extends State<HomeShell> {
+class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   int _currentIndex = 0;
   late final NotificationsProvider _notificationsProvider;
   late final bool _ownsProvider;
@@ -37,6 +37,7 @@ class _HomeShellState extends State<HomeShell> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     if (widget.notificationsProvider != null) {
       _notificationsProvider = widget.notificationsProvider!;
       _ownsProvider = false;
@@ -54,7 +55,15 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _notificationsProvider.refreshUnreadCount();
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     if (_ownsProvider) {
       _notificationsProvider.dispose();
     }

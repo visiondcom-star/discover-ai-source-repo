@@ -580,4 +580,91 @@ void main() {
       expect(fakeApi.markedReadIds, contains('n-other'));
     });
   });
+
+  group('HomeShell lifecycle resumed unread count refresh', () {
+    testWidgets(
+        'refreshUnreadCount called on resumed, not on paused, not after dispose',
+        (tester) async {
+      final fakeApi = FakeNotificationsApi(unreadCount: 1);
+      final notifProvider = NotificationsProvider(api: fakeApi);
+
+      final authProvider = AuthProvider(
+        api: FakeAuthApi(),
+        tokenStore: InMemoryTokenStore(),
+      );
+      await authProvider.initialized;
+      await authProvider.login('user@discoverai.dz', 'secret');
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<NotificationsProvider>.value(
+              value: notifProvider,
+            ),
+            ChangeNotifierProvider<AuthProvider>.value(value: authProvider),
+            ChangeNotifierProvider<TenantProvider>(
+              create: (_) => TenantProvider(tenantsApi: FakeTenantsApi()),
+            ),
+            ChangeNotifierProvider<PromotionProvider>(
+              create: (_) =>
+                  PromotionProvider(promotionsApi: FakePromotionsApi()),
+            ),
+            ChangeNotifierProvider<BookingProvider>(
+              create: (_) =>
+                  BookingProvider(bookingsApi: FakeBookingsApi(bookings: [])),
+            ),
+            ChangeNotifierProvider<POIProvider>(
+              create: (_) => POIProvider(poisApi: FakePoisApi()),
+            ),
+            ChangeNotifierProvider<TripProvider>(
+              create: (_) => TripProvider(),
+            ),
+            ChangeNotifierProvider<ChatProvider>(
+              create: (_) => ChatProvider(),
+            ),
+            ChangeNotifierProvider<LocaleProvider>(
+              create: (_) => LocaleProvider(localeStore: InMemoryLocaleStore()),
+            ),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: HomeShell(notificationsProvider: notifProvider),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 1. Transition to inactive -> hidden -> paused: no refresh call
+      fakeApi.getNotificationsCalls = 0;
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      expect(fakeApi.getNotificationsCalls, 0);
+
+      // 2. Transition back to hidden -> inactive -> resumed: triggers exactly 1 refresh call
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(fakeApi.getNotificationsCalls, 1);
+
+      // 3. Dispose HomeShell: replace with empty container
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+
+      fakeApi.getNotificationsCalls = 0;
+
+      // 4. Transition to inactive -> hidden -> paused -> hidden -> inactive -> resumed after dispose: no calls
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(fakeApi.getNotificationsCalls, 0);
+    });
+  });
 }

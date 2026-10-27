@@ -2,15 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
+import 'package:discover_ai/l10n/app_localizations.dart';
 import 'package:discover_ai/providers/auth_provider.dart';
 import 'package:discover_ai/providers/booking_provider.dart';
 import 'package:discover_ai/providers/chat_provider.dart';
 import 'package:discover_ai/providers/locale_provider.dart';
+import 'package:discover_ai/providers/notifications_provider.dart';
 import 'package:discover_ai/providers/poi_provider.dart';
 import 'package:discover_ai/providers/promotion_provider.dart';
-import 'package:discover_ai/providers/trip_provider.dart';
 import 'package:discover_ai/providers/tenant_provider.dart';
-import 'package:discover_ai/l10n/app_localizations.dart';
+import 'package:discover_ai/providers/trip_provider.dart';
 import 'package:discover_ai/screens/home_screen.dart';
 import 'package:discover_ai/screens/home_shell.dart';
 
@@ -60,7 +61,11 @@ void main() {
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: locale,
-          home: const HomeShell(),
+          home: HomeShell(
+            notificationsProvider: NotificationsProvider(
+              api: FakeNotificationsApi(unreadCount: 0),
+            ),
+          ),
         ),
       );
 
@@ -168,10 +173,7 @@ void main() {
       for (var i = 0; i < 10; i++) {
         await tester.drag(scrollable.first, const Offset(0, -300));
         await tester.pumpAndSettle();
-        if (find
-            .text('Planifier un voyage')
-            .evaluate()
-            .isNotEmpty) {
+        if (find.text('Planifier un voyage').evaluate().isNotEmpty) {
           break;
         }
       }
@@ -200,8 +202,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Hello, traveller 👋'), findsOneWidget);
-    expect(find.text('What would you like to discover today?'),
-        findsOneWidget);
+    expect(find.text('What would you like to discover today?'), findsOneWidget);
     expect(find.text('Travel type'), findsOneWidget);
     expect(find.text('Culture & medinas'), findsOneWidget);
     Future<void> revealLowerCardsEn() async {

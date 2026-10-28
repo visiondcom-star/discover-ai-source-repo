@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -335,5 +336,89 @@ void main() {
       expect(provider.items.first.read, isFalse);
       expect(provider.error, NotificationsError.network);
     });
+
+    test('loadMore does not run while error != null', () async {
+      final fakeApi = FakeNotificationsApi(
+        notifications: List.generate(
+          25,
+          (i) => sampleNotificationJson(id: 'n-$i'),
+        ),
+        unreadCount: 25,
+        total: 25,
+      );
+      final provider = NotificationsProvider(api: fakeApi);
+      await provider.load();
+      expect(provider.items.length, 20);
+      expect(fakeApi.getNotificationsCalls, 1);
+
+      fakeApi.getNotificationsError = const SocketException('offline');
+      await provider.loadMore();
+      expect(provider.error, NotificationsError.network);
+      expect(fakeApi.getNotificationsCalls, 2);
+
+      // Subsequent call does not call API
+      await provider.loadMore();
+      expect(fakeApi.getNotificationsCalls, 2);
+    });
+
+    test('dispose during inflight refreshUnreadCount does not throw', () async {
+      final completer = Completer<Map<String, dynamic>>();
+      final fakeApi = _DelayedNotificationsApi(completer);
+      final provider = NotificationsProvider(api: fakeApi);
+
+      final future = provider.refreshUnreadCount();
+      provider.dispose();
+
+      completer.complete({'unread_count': 5});
+      await expectLater(future, completes);
+    });
+
+    test('error cleared after successful markRead, markAllRead, loadMore',
+        () async {
+      final fakeApi = FakeNotificationsApi(
+        notifications: [
+          sampleNotificationJson(id: 'n-1', read: false),
+          sampleNotificationJson(id: 'n-2', read: false),
+        ],
+        unreadCount: 2,
+        total: 2,
+      );
+      final provider = NotificationsProvider(api: fakeApi);
+      await provider.load();
+
+      // Trigger error via failed markRead
+      fakeApi.markReadError = const SocketException('offline');
+      await provider.markRead('n-1');
+      expect(provider.error, NotificationsError.network);
+
+      // Successful markRead clears error
+      fakeApi.markReadError = null;
+      await provider.markRead('n-1');
+      expect(provider.error, isNull);
+
+      // Trigger error via failed markAllRead
+      fakeApi.markAllReadError = const SocketException('offline');
+      await provider.markAllRead();
+      expect(provider.error, NotificationsError.network);
+
+      // Successful markAllRead clears error
+      fakeApi.markAllReadError = null;
+      await provider.markAllRead();
+      expect(provider.error, isNull);
+    });
   });
+}
+
+class _DelayedNotificationsApi extends FakeNotificationsApi {
+  _DelayedNotificationsApi(this.completer);
+  final Completer<Map<String, dynamic>> completer;
+
+  @override
+  Future<Map<String, dynamic>> getNotifications({
+    bool unreadOnly = false,
+    int limit = 20,
+    int offset = 0,
+  }) {
+    return completer.future;
+  }
 }

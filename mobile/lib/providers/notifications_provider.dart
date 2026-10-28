@@ -40,6 +40,7 @@ class NotificationsProvider extends ChangeNotifier {
   bool _isLoading = false;
   bool _isLoadingMore = false;
   NotificationsError? _error;
+  bool _disposed = false;
 
   static const int _pageSize = 20;
 
@@ -50,6 +51,18 @@ class NotificationsProvider extends ChangeNotifier {
   bool get isLoadingMore => _isLoadingMore;
   NotificationsError? get error => _error;
   bool get hasMore => _items.length < _total;
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  @override
+  void notifyListeners() {
+    if (_disposed) return;
+    super.notifyListeners();
+  }
 
   void clearError() {
     _error = null;
@@ -87,7 +100,7 @@ class NotificationsProvider extends ChangeNotifier {
 
   /// Offset-based pagination. Appends items without duplicates.
   Future<void> loadMore() async {
-    if (_isLoading || _isLoadingMore || !hasMore) return;
+    if (_isLoading || _isLoadingMore || !hasMore || _error != null) return;
     _isLoadingMore = true;
     notifyListeners();
 
@@ -111,6 +124,7 @@ class NotificationsProvider extends ChangeNotifier {
       }
       _unreadCount = (res['unread_count'] as num?)?.toInt() ?? _unreadCount;
       _total = (res['total'] as num?)?.toInt() ?? _total;
+      _error = null;
     } catch (e) {
       _error = _mapError(e);
     } finally {
@@ -123,6 +137,7 @@ class NotificationsProvider extends ChangeNotifier {
   Future<void> refreshUnreadCount() async {
     try {
       final res = await _api.getNotifications(limit: 1, offset: 0);
+      if (_disposed) return;
       final count = (res['unread_count'] as num?)?.toInt() ?? 0;
       if (count != _unreadCount) {
         _unreadCount = count;
@@ -153,6 +168,7 @@ class NotificationsProvider extends ChangeNotifier {
       if (_unreadCount > 0) {
         _unreadCount--;
       }
+      _error = null;
       notifyListeners();
     } catch (e) {
       _error = _mapError(e);
@@ -169,6 +185,7 @@ class NotificationsProvider extends ChangeNotifier {
       await _api.markAllRead();
       _items = _items.map((n) => n.copyWith(read: true)).toList();
       _unreadCount = 0;
+      _error = null;
       notifyListeners();
     } catch (e) {
       _error = _mapError(e);

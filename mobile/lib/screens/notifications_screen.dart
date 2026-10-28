@@ -41,9 +41,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   void _onScroll() {
+    final provider = context.read<NotificationsProvider>();
+    if (provider.error != null) return;
     if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent - 200) {
-      context.read<NotificationsProvider>().loadMore();
+      provider.loadMore();
     }
   }
 
@@ -157,116 +159,149 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             );
           }
 
-          return RefreshIndicator(
-            onRefresh: () => provider.load(),
-            child: ListView.separated(
-              key: const Key('notifications_list'),
-              controller: _scrollController,
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount:
-                  provider.items.length + (provider.isLoadingMore ? 1 : 0),
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (context, index) {
-                if (index >= provider.items.length) {
-                  return const Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
-
-                final notif = provider.items[index];
-                final formattedDate =
-                    _formatDate(notif.createdAt, loc.localeName);
-
-                return ListTile(
-                  key: Key('notification_tile_${notif.id}'),
-                  leading: Stack(
-                    clipBehavior: Clip.none,
+          return Column(
+            children: [
+              if (provider.error != null)
+                Container(
+                  key: const Key('notifications_error_banner'),
+                  color: scheme.errorContainer,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
                     children: [
-                      CircleAvatar(
-                        backgroundColor: notif.read
-                            ? scheme.surfaceContainerHighest
-                            : scheme.primaryContainer,
-                        child: Icon(
-                          _iconForType(notif.type),
-                          color: notif.read
-                              ? scheme.onSurfaceVariant
-                              : scheme.primary,
+                      Icon(Icons.error_outline, color: scheme.onErrorContainer),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          provider.error == NotificationsError.network
+                              ? loc.notificationsErrorNetwork
+                              : loc.notificationsErrorGeneric,
+                          style: TextStyle(color: scheme.onErrorContainer),
                         ),
                       ),
-                      if (!notif.read)
-                        Positioned(
-                          top: 0,
-                          right: 0,
-                          child: Container(
-                            width: 10,
-                            height: 10,
-                            decoration: BoxDecoration(
-                              color: scheme.primary,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        ),
+                      TextButton(
+                        key: const Key('notifications_banner_retry_button'),
+                        onPressed: () => provider.load(),
+                        child: Text(loc.notificationsRetry),
+                      ),
                     ],
                   ),
-                  title: Text(
-                    notif.title,
-                    style: textTheme.titleSmall?.copyWith(
-                      fontWeight:
-                          notif.read ? FontWeight.normal : FontWeight.bold,
-                    ),
-                  ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (notif.message.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          notif.message,
-                          style: textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                      if (formattedDate != null) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          formattedDate,
-                          style: textTheme.labelSmall?.copyWith(
-                            color: scheme.outline,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  onTap: () {
-                    if (!notif.read) {
-                      provider.markRead(notif.id);
-                    }
-
-                    if (notif.type == 'booking_request_received') {
-                      final user = context.read<AuthProvider?>()?.user;
-                      if (user?.canUsePartnerSpace ?? false) {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => ChangeNotifierProvider(
-                              create: (_) => PartnerBookingsProvider(),
-                              child: const PartnerBookingsScreen(),
-                            ),
-                          ),
+                ),
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: () => provider.load(),
+                  child: ListView.separated(
+                    key: const Key('notifications_list'),
+                    controller: _scrollController,
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    itemCount: provider.items.length +
+                        (provider.isLoadingMore ? 1 : 0),
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      if (index >= provider.items.length) {
+                        return const Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Center(child: CircularProgressIndicator()),
                         );
                       }
-                    } else if (notif.type == 'booking_confirmed' ||
-                        notif.type == 'booking_declined' ||
-                        notif.type == 'booking_expired') {
-                      Navigator.of(context).pop();
-                      widget.onOpenBookings?.call();
-                    }
-                  },
-                );
-              },
-            ),
+
+                      final notif = provider.items[index];
+                      final formattedDate =
+                          _formatDate(notif.createdAt, loc.localeName);
+
+                      return ListTile(
+                        key: Key('notification_tile_${notif.id}'),
+                        leading: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            CircleAvatar(
+                              backgroundColor: notif.read
+                                  ? scheme.surfaceContainerHighest
+                                  : scheme.primaryContainer,
+                              child: Icon(
+                                _iconForType(notif.type),
+                                color: notif.read
+                                    ? scheme.onSurfaceVariant
+                                    : scheme.primary,
+                              ),
+                            ),
+                            if (!notif.read)
+                              Positioned(
+                                top: 0,
+                                right: 0,
+                                child: Container(
+                                  width: 10,
+                                  height: 10,
+                                  decoration: BoxDecoration(
+                                    color: scheme.primary,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        title: Text(
+                          notif.title,
+                          style: textTheme.titleSmall?.copyWith(
+                            fontWeight: notif.read
+                                ? FontWeight.normal
+                                : FontWeight.bold,
+                          ),
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (notif.message.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                notif.message,
+                                style: textTheme.bodySmall?.copyWith(
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                            if (formattedDate != null) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                formattedDate,
+                                style: textTheme.labelSmall?.copyWith(
+                                  color: scheme.outline,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        onTap: () {
+                          if (!notif.read) {
+                            provider.markRead(notif.id);
+                          }
+
+                          if (notif.type == 'booking_request_received') {
+                            final user = context.read<AuthProvider?>()?.user;
+                            if (user?.canUsePartnerSpace ?? false) {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => ChangeNotifierProvider(
+                                    create: (_) => PartnerBookingsProvider(),
+                                    child: const PartnerBookingsScreen(),
+                                  ),
+                                ),
+                              );
+                            }
+                          } else if (notif.type == 'booking_confirmed' ||
+                              notif.type == 'booking_declined' ||
+                              notif.type == 'booking_expired') {
+                            Navigator.of(context).pop();
+                            widget.onOpenBookings?.call();
+                          }
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ],
           );
         },
       ),

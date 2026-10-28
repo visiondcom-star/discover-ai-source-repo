@@ -17,6 +17,7 @@ import 'package:discover_ai/screens/home_screen.dart';
 import 'package:discover_ai/screens/home_shell.dart';
 import 'package:discover_ai/screens/notifications_screen.dart';
 import 'package:discover_ai/screens/partner_bookings_screen.dart';
+import 'package:discover_ai/services/api_service.dart';
 
 import '../helpers/fakes.dart';
 
@@ -665,6 +666,181 @@ void main() {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await tester.pump();
       expect(fakeApi.getNotificationsCalls, 0);
+    });
+  });
+
+  group('Notification error banner tests', () {
+    testWidgets(
+        'error banner appears on reload failure with non-empty list and disappears after retry',
+        (tester) async {
+      final fakeApi = FakeNotificationsApi(
+        notifications: [
+          sampleNotificationJson(id: 'n-1', title: 'Notification 1'),
+        ],
+        unreadCount: 1,
+      );
+      final provider = NotificationsProvider(api: fakeApi);
+
+      await tester.pumpWidget(_buildTestApp(
+        child: const NotificationsScreen(),
+        notificationsProvider: provider,
+        locale: const Locale('fr'),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('notifications_list')), findsOneWidget);
+      expect(find.byKey(const Key('notifications_error_banner')), findsNothing);
+
+      // Trigger reload error
+      fakeApi.getNotificationsError = const SocketException('offline');
+      await provider.load();
+      await tester.pumpAndSettle();
+
+      expect(
+          find.byKey(const Key('notifications_error_banner')), findsOneWidget);
+      expect(find.byKey(const Key('notifications_banner_retry_button')),
+          findsOneWidget);
+      expect(
+          find.text(
+              'Impossible de charger les notifications. Vérifiez votre connexion.'),
+          findsOneWidget);
+      // Items still displayed
+      expect(find.byKey(const Key('notifications_list')), findsOneWidget);
+
+      // Tap retry with working API
+      fakeApi.getNotificationsError = null;
+      await tester
+          .tap(find.byKey(const Key('notifications_banner_retry_button')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('notifications_error_banner')), findsNothing);
+    });
+
+    testWidgets('markRead and markAllRead failures show banner in FR and EN',
+        (tester) async {
+      // 1. markRead failure in FR
+      final fakeApiFr = FakeNotificationsApi(
+        notifications: [
+          sampleNotificationJson(
+            id: 'n-1',
+            title: 'Notif 1',
+            type: 'system',
+            read: false,
+          ),
+        ],
+        unreadCount: 1,
+      );
+      final providerFr = NotificationsProvider(api: fakeApiFr);
+
+      await tester.pumpWidget(_buildTestApp(
+        child: NotificationsScreen(key: UniqueKey()),
+        notificationsProvider: providerFr,
+        locale: const Locale('fr'),
+      ));
+      await tester.pumpAndSettle();
+
+      fakeApiFr.markReadError = const SocketException('offline');
+      await tester.tap(find.byKey(const Key('notification_tile_n-1')));
+      await tester.pumpAndSettle();
+
+      expect(
+          find.byKey(const Key('notifications_error_banner')), findsOneWidget);
+      expect(
+          find.text(
+              'Impossible de charger les notifications. Vérifiez votre connexion.'),
+          findsOneWidget);
+
+      // 2. markRead failure in EN
+      final fakeApiEn = FakeNotificationsApi(
+        notifications: [
+          sampleNotificationJson(
+            id: 'n-2',
+            title: 'Notif 2',
+            type: 'system',
+            read: false,
+          ),
+        ],
+        unreadCount: 1,
+      );
+      final providerEn = NotificationsProvider(api: fakeApiEn);
+
+      await tester.pumpWidget(_buildTestApp(
+        child: NotificationsScreen(key: UniqueKey()),
+        notificationsProvider: providerEn,
+        locale: const Locale('en'),
+      ));
+      await tester.pumpAndSettle();
+
+      fakeApiEn.markReadError = const SocketException('offline');
+      await tester.tap(find.byKey(const Key('notification_tile_n-2')));
+      await tester.pumpAndSettle();
+
+      expect(
+          find.byKey(const Key('notifications_error_banner')), findsOneWidget);
+      expect(find.text('Could not load notifications. Check your connection.'),
+          findsOneWidget);
+
+      // 3. markAllRead failure in FR (generic)
+      final fakeApiAllFr = FakeNotificationsApi(
+        notifications: [
+          sampleNotificationJson(
+            id: 'n-3',
+            title: 'Notif 3',
+            type: 'system',
+            read: false,
+          ),
+        ],
+        unreadCount: 1,
+      );
+      final providerAllFr = NotificationsProvider(api: fakeApiAllFr);
+
+      await tester.pumpWidget(_buildTestApp(
+        child: NotificationsScreen(key: UniqueKey()),
+        notificationsProvider: providerAllFr,
+        locale: const Locale('fr'),
+      ));
+      await tester.pumpAndSettle();
+
+      fakeApiAllFr.markAllReadError = ApiException(500, 'Server error');
+      await tester.tap(find.byKey(const Key('notifications_mark_all_button')));
+      await tester.pumpAndSettle();
+
+      expect(
+          find.byKey(const Key('notifications_error_banner')), findsOneWidget);
+      expect(
+          find.text(
+              'Une erreur est survenue lors du chargement des notifications.'),
+          findsOneWidget);
+
+      // 4. markAllRead failure in EN (generic)
+      final fakeApiAllEn = FakeNotificationsApi(
+        notifications: [
+          sampleNotificationJson(
+            id: 'n-4',
+            title: 'Notif 4',
+            type: 'system',
+            read: false,
+          ),
+        ],
+        unreadCount: 1,
+      );
+      final providerAllEn = NotificationsProvider(api: fakeApiAllEn);
+
+      await tester.pumpWidget(_buildTestApp(
+        child: NotificationsScreen(key: UniqueKey()),
+        notificationsProvider: providerAllEn,
+        locale: const Locale('en'),
+      ));
+      await tester.pumpAndSettle();
+
+      fakeApiAllEn.markAllReadError = ApiException(500, 'Server error');
+      await tester.tap(find.byKey(const Key('notifications_mark_all_button')));
+      await tester.pumpAndSettle();
+
+      expect(
+          find.byKey(const Key('notifications_error_banner')), findsOneWidget);
+      expect(find.text('An error occurred while loading notifications.'),
+          findsOneWidget);
     });
   });
 }

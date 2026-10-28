@@ -132,6 +132,98 @@ void main() {
       expect(find.text('Nouvelle alerte'), findsOneWidget);
     });
 
+    testWidgets('error state with retry button recovers cleanly in EN',
+        (tester) async {
+      final fakeApi = FakeNotificationsApi(
+        getNotificationsError: const SocketException('No network'),
+      );
+      final provider = NotificationsProvider(api: fakeApi);
+
+      await tester.pumpWidget(_buildTestApp(
+        child: const NotificationsScreen(),
+        notificationsProvider: provider,
+        locale: const Locale('en'),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('notifications_error')), findsOneWidget);
+      expect(find.text('Could not load notifications. Check your connection.'),
+          findsOneWidget);
+      expect(
+          find.byKey(const Key('notifications_retry_button')), findsOneWidget);
+      expect(find.text('Retry'), findsOneWidget);
+
+      fakeApi.getNotificationsError = null;
+      fakeApi.notifications.add(sampleNotificationJson(
+        id: 'n-1',
+        title: 'New alert',
+      ));
+
+      await tester.tap(find.byKey(const Key('notifications_retry_button')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('notifications_error')), findsNothing);
+      expect(find.byKey(const Key('notification_tile_n-1')), findsOneWidget);
+      expect(find.text('New alert'), findsOneWidget);
+    });
+
+    testWidgets(
+        'notifications list renders items, dates, and tapping marks as read in EN',
+        (tester) async {
+      final fakeApi = FakeNotificationsApi(
+        notifications: [
+          sampleNotificationJson(
+            id: 'notif-1',
+            title: 'Casbah Booking',
+            message: 'Confirmed for 2 guests.',
+            type: 'system',
+            read: false,
+            createdAt: '2026-10-27T10:00:00',
+          ),
+          sampleNotificationJson(
+            id: 'notif-2',
+            title: 'Request received',
+            message: 'For restaurant.',
+            type: 'system',
+            read: true,
+            createdAt: null,
+          ),
+        ],
+        unreadCount: 1,
+      );
+      final provider = NotificationsProvider(api: fakeApi);
+
+      await tester.pumpWidget(_buildTestApp(
+        child: const NotificationsScreen(),
+        notificationsProvider: provider,
+        locale: const Locale('en'),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('notifications_list')), findsOneWidget);
+      expect(
+          find.byKey(const Key('notification_tile_notif-1')), findsOneWidget);
+      expect(
+          find.byKey(const Key('notification_tile_notif-2')), findsOneWidget);
+      expect(find.text('Casbah Booking'), findsOneWidget);
+      expect(find.text('Confirmed for 2 guests.'), findsOneWidget);
+      expect(find.textContaining('Oct 27, 2026'), findsOneWidget);
+      expect(
+          find.descendant(
+            of: find.byKey(const Key('notification_tile_notif-2')),
+            matching: find.textContaining('2026'),
+          ),
+          findsNothing);
+
+      await tester.tap(find.byKey(const Key('notification_tile_notif-1')));
+      await tester.pumpAndSettle();
+
+      expect(fakeApi.markReadCalls, 1);
+      expect(fakeApi.markedReadIds, contains('notif-1'));
+      expect(provider.items.first.read, isTrue);
+      expect(provider.unreadCount, 0);
+    });
+
     testWidgets(
         'notifications list renders items, dates, and tapping marks as read',
         (tester) async {
@@ -172,6 +264,13 @@ void main() {
           find.byKey(const Key('notification_tile_notif-2')), findsOneWidget);
       expect(find.text('Réservation Casbah'), findsOneWidget);
       expect(find.text('Confirmée pour 2 personnes.'), findsOneWidget);
+      expect(find.textContaining('27 oct. 2026'), findsOneWidget);
+      expect(
+          find.descendant(
+            of: find.byKey(const Key('notification_tile_notif-2')),
+            matching: find.textContaining('2026'),
+          ),
+          findsNothing);
 
       // Tap unread notification tile marks as read
       await tester.tap(find.byKey(const Key('notification_tile_notif-1')));
@@ -204,6 +303,36 @@ void main() {
       final markAllFinder =
           find.byKey(const Key('notifications_mark_all_button'));
       expect(markAllFinder, findsOneWidget);
+      await tester.tap(markAllFinder);
+      await tester.pumpAndSettle();
+
+      expect(fakeApi.markAllReadCalls, 1);
+      expect(provider.unreadCount, 0);
+      expect(provider.items.every((n) => n.read), isTrue);
+    });
+
+    testWidgets('mark all as read button triggers provider.markAllRead in EN',
+        (tester) async {
+      final fakeApi = FakeNotificationsApi(
+        notifications: [
+          sampleNotificationJson(id: 'n-1', read: false),
+          sampleNotificationJson(id: 'n-2', read: false),
+        ],
+        unreadCount: 2,
+      );
+      final provider = NotificationsProvider(api: fakeApi);
+
+      await tester.pumpWidget(_buildTestApp(
+        child: const NotificationsScreen(),
+        notificationsProvider: provider,
+        locale: const Locale('en'),
+      ));
+      await tester.pumpAndSettle();
+
+      final markAllFinder =
+          find.byKey(const Key('notifications_mark_all_button'));
+      expect(markAllFinder, findsOneWidget);
+      expect(find.text('Mark all as read'), findsOneWidget);
       await tester.tap(markAllFinder);
       await tester.pumpAndSettle();
 
@@ -704,6 +833,51 @@ void main() {
           find.text(
               'Impossible de charger les notifications. Vérifiez votre connexion.'),
           findsOneWidget);
+      // Items still displayed
+      expect(find.byKey(const Key('notifications_list')), findsOneWidget);
+
+      // Tap retry with working API
+      fakeApi.getNotificationsError = null;
+      await tester
+          .tap(find.byKey(const Key('notifications_banner_retry_button')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('notifications_error_banner')), findsNothing);
+    });
+
+    testWidgets(
+        'error banner appears on reload failure with non-empty list and disappears after retry in EN',
+        (tester) async {
+      final fakeApi = FakeNotificationsApi(
+        notifications: [
+          sampleNotificationJson(id: 'n-1', title: 'Notification 1'),
+        ],
+        unreadCount: 1,
+      );
+      final provider = NotificationsProvider(api: fakeApi);
+
+      await tester.pumpWidget(_buildTestApp(
+        child: const NotificationsScreen(),
+        notificationsProvider: provider,
+        locale: const Locale('en'),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('notifications_list')), findsOneWidget);
+      expect(find.byKey(const Key('notifications_error_banner')), findsNothing);
+
+      // Trigger reload error
+      fakeApi.getNotificationsError = const SocketException('offline');
+      await provider.load();
+      await tester.pumpAndSettle();
+
+      expect(
+          find.byKey(const Key('notifications_error_banner')), findsOneWidget);
+      expect(find.byKey(const Key('notifications_banner_retry_button')),
+          findsOneWidget);
+      expect(find.text('Could not load notifications. Check your connection.'),
+          findsOneWidget);
+      expect(find.text('Retry'), findsOneWidget);
       // Items still displayed
       expect(find.byKey(const Key('notifications_list')), findsOneWidget);
 

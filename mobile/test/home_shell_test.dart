@@ -84,16 +84,17 @@ void main() {
             ChangeNotifierProvider<LocaleProvider>(
               create: (_) => LocaleProvider(localeStore: InMemoryLocaleStore()),
             ),
+          ChangeNotifierProvider<NotificationsProvider>(
+            create: (_) => NotificationsProvider(
+              api: FakeNotificationsApi(unreadCount: 0),
+            ),
+          ),
         ],
         child: MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: locale,
-          home: HomeShell(
-            notificationsProvider: NotificationsProvider(
-              api: FakeNotificationsApi(unreadCount: 0),
-            ),
-          ),
+          home: const HomeShell(),
         ),
       );
 

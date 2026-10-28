@@ -18,6 +18,7 @@ import 'package:discover_ai/screens/home_shell.dart';
 import 'package:discover_ai/screens/notifications_screen.dart';
 import 'package:discover_ai/screens/partner_bookings_screen.dart';
 import 'package:discover_ai/services/api_service.dart';
+import 'package:discover_ai/user_scope.dart';
 
 import '../helpers/fakes.dart';
 
@@ -486,10 +487,12 @@ void main() {
               create: (_) => LocaleProvider(localeStore: InMemoryLocaleStore()),
             ),
           ],
-          child: const MaterialApp(
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            home: HomeShell(),
+          child: const UserScope(
+            child: MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: HomeShell(),
+            ),
           ),
         ),
       );
@@ -538,6 +541,11 @@ void main() {
             ),
             ChangeNotifierProvider<LocaleProvider>(
               create: (_) => LocaleProvider(localeStore: InMemoryLocaleStore()),
+            ),
+            ChangeNotifierProvider<NotificationsProvider>(
+              create: (_) => NotificationsProvider(
+                api: FakeNotificationsApi(unreadCount: 0),
+              ),
             ),
           ],
           child: const MaterialApp(
@@ -692,7 +700,7 @@ void main() {
               key: UniqueKey(),
               localizationsDelegates: AppLocalizations.localizationsDelegates,
               supportedLocales: AppLocalizations.supportedLocales,
-              home: HomeShell(notificationsProvider: notifProvider),
+              home: const HomeShell(),
             ),
           ),
         );
@@ -808,10 +816,10 @@ void main() {
               create: (_) => LocaleProvider(localeStore: InMemoryLocaleStore()),
             ),
           ],
-          child: MaterialApp(
+          child: const MaterialApp(
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
-            home: HomeShell(notificationsProvider: notifProvider),
+            home: HomeShell(),
           ),
         ),
       );

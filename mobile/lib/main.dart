@@ -10,6 +10,7 @@ import 'providers/auth_provider.dart';
 import 'providers/booking_provider.dart';
 import 'providers/chat_provider.dart';
 import 'providers/locale_provider.dart';
+import 'providers/notifications_provider.dart';
 import 'providers/poi_provider.dart';
 import 'providers/promotion_provider.dart';
 import 'providers/research_collection_provider.dart';
@@ -17,16 +18,9 @@ import 'providers/research_provider.dart';
 import 'providers/tenant_provider.dart';
 import 'providers/trip_provider.dart';
 import 'services/api_service.dart';
+import 'user_scope.dart';
 
-/// Providers fournis à l'arbre applicatif.
-///
-/// Extrait de [main] pour que les tests puissent vérifier qu'un provider
-/// réellement consommé par un écran y figure. C'est la garantie qui manquait :
-/// `AdminResearchScreen` fait `context.watch<ResearchProvider>()` et est
-/// atteignable depuis le Profil (« Recherche IA — destination »). Tant que
-/// l'entrée n'était pas enregistrée ici, le premier tap levait une
-/// ProviderNotFoundException sur un appareil réel — alors que les tests
-/// d'écran passaient, puisqu'ils injectent leur propre provider.
+/// Providers globaux indépendants de l'utilisateur connecté.
 List<SingleChildWidget> appProviders() => [
       ChangeNotifierProvider(create: (_) => AuthProvider()),
       // LocaleProvider early: DiscoverAIApp watches it for `MaterialApp.locale`
@@ -38,10 +32,16 @@ List<SingleChildWidget> appProviders() => [
           ..loadCategories(),
       ),
       ChangeNotifierProvider(create: (_) => POIProvider()),
+      ChangeNotifierProvider(create: (_) => PromotionProvider()),
+    ];
+
+/// Providers instanciés par utilisateur (ou session anonyme), recréés
+/// automatiquement à chaque changement d'utilisateur via [UserScope].
+List<SingleChildWidget> userScopedProviders() => [
       ChangeNotifierProvider(create: (_) => TripProvider()),
       ChangeNotifierProvider(create: (_) => ChatProvider()),
       ChangeNotifierProvider(create: (_) => BookingProvider()),
-      ChangeNotifierProvider(create: (_) => PromotionProvider()),
+      ChangeNotifierProvider(create: (_) => NotificationsProvider()),
       // AdminCategoriesProvider est déclaré AVANT ResearchProvider : le
       // `onJobDone` de celui-ci fait `ctx.read<AdminCategoriesProvider>()`, et
       // le `ctx` fourni à `create` ne voit que les providers déjà déclarés
@@ -92,7 +92,9 @@ void main() {
   runApp(
     MultiProvider(
       providers: appProviders(),
-      child: const DiscoverAIApp(),
+      child: const UserScope(
+        child: DiscoverAIApp(),
+      ),
     ),
   );
 }

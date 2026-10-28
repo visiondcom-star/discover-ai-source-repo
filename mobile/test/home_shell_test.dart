@@ -1,33 +1,59 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
+import 'package:discover_ai/l10n/app_localizations.dart';
 import 'package:discover_ai/providers/auth_provider.dart';
 import 'package:discover_ai/providers/booking_provider.dart';
 import 'package:discover_ai/providers/chat_provider.dart';
 import 'package:discover_ai/providers/locale_provider.dart';
+import 'package:discover_ai/providers/notifications_provider.dart';
 import 'package:discover_ai/providers/poi_provider.dart';
 import 'package:discover_ai/providers/promotion_provider.dart';
-import 'package:discover_ai/providers/trip_provider.dart';
 import 'package:discover_ai/providers/tenant_provider.dart';
-import 'package:discover_ai/l10n/app_localizations.dart';
+import 'package:discover_ai/providers/trip_provider.dart';
 import 'package:discover_ai/screens/home_screen.dart';
 import 'package:discover_ai/screens/home_shell.dart';
+import 'package:discover_ai/services/locale_store.dart';
 
 import 'helpers/fakes.dart';
+
+class _DelayedLocaleStore implements LocaleStore {
+  _DelayedLocaleStore(this.completer);
+  final Completer<String?> completer;
+
+  @override
+  Future<void> deleteLocaleCode() async {}
+
+  @override
+  Future<String?> readLocaleCode() => completer.future;
+
+  @override
+  Future<void> writeLocaleCode(String code) async {}
+}
 
 /// HomeShell tab navigation — all five tabs stay alive across switches
 /// (IndexedStack) and expose the stable `tab_*` Keys used by the
 /// integration suite for navigation.
 void main() {
-  Widget boot({Locale locale = const Locale('fr')}) => MultiProvider(
+  Widget boot({
+    Locale locale = const Locale('fr'),
+    AuthProvider? authProvider,
+    LocaleProvider? localeProvider,
+  }) =>
+      MultiProvider(
         providers: [
-          ChangeNotifierProvider<AuthProvider>(
-            create: (_) => AuthProvider(
-              api: FakeAuthApi(),
-              tokenStore: InMemoryTokenStore(),
+          if (authProvider != null)
+            ChangeNotifierProvider<AuthProvider>.value(value: authProvider)
+          else
+            ChangeNotifierProvider<AuthProvider>(
+              create: (_) => AuthProvider(
+                api: FakeAuthApi(),
+                tokenStore: InMemoryTokenStore(),
+              ),
             ),
-          ),
           ChangeNotifierProvider<POIProvider>(
             create: (_) => POIProvider(poisApi: FakePoisApi()),
           ),
@@ -52,15 +78,22 @@ void main() {
           ),
           // Profil hosts the language selector; IndexedStack mounts every tab,
           // so LocaleProvider must be present or the selector throws.
-          ChangeNotifierProvider<LocaleProvider>(
-            create: (_) => LocaleProvider(localeStore: InMemoryLocaleStore()),
-          ),
+          if (localeProvider != null)
+            ChangeNotifierProvider<LocaleProvider>.value(value: localeProvider)
+          else
+            ChangeNotifierProvider<LocaleProvider>(
+              create: (_) => LocaleProvider(localeStore: InMemoryLocaleStore()),
+            ),
         ],
         child: MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           locale: locale,
-          home: const HomeShell(),
+          home: HomeShell(
+            notificationsProvider: NotificationsProvider(
+              api: FakeNotificationsApi(unreadCount: 0),
+            ),
+          ),
         ),
       );
 
@@ -168,10 +201,7 @@ void main() {
       for (var i = 0; i < 10; i++) {
         await tester.drag(scrollable.first, const Offset(0, -300));
         await tester.pumpAndSettle();
-        if (find
-            .text('Planifier un voyage')
-            .evaluate()
-            .isNotEmpty) {
+        if (find.text('Planifier un voyage').evaluate().isNotEmpty) {
           break;
         }
       }
@@ -200,8 +230,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Hello, traveller 👋'), findsOneWidget);
-    expect(find.text('What would you like to discover today?'),
-        findsOneWidget);
+    expect(find.text('What would you like to discover today?'), findsOneWidget);
     expect(find.text('Travel type'), findsOneWidget);
     expect(find.text('Culture & medinas'), findsOneWidget);
     Future<void> revealLowerCardsEn() async {
@@ -233,5 +262,83 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  group('HomeShell locale sync', () {
+    testWidgets(
+        'HomeShell synchronise la langue une fois quand user.locale diffère',
+        (tester) async {
+      final fakeApi = FakeAuthApi(userLocale: 'fr');
+      final authProvider =
+          AuthProvider(api: fakeApi, tokenStore: InMemoryTokenStore());
+      await authProvider.initialized;
+      await authProvider.login('demo@discoverai.dz', 'secret');
+
+      final store = InMemoryLocaleStore()..localeCode = 'en';
+      final localeProvider = LocaleProvider(localeStore: store);
+      await localeProvider.initialized;
+
+      await tester.pumpWidget(boot(
+        authProvider: authProvider,
+        localeProvider: localeProvider,
+      ));
+      await tester.pumpAndSettle();
+
+      expect(fakeApi.updateMeCalls, 1);
+      expect(fakeApi.lastUpdatedLocale, 'en');
+      expect(authProvider.user?.locale, 'en');
+    });
+
+    testWidgets(
+        'ne synchronise pas tant que LocaleProvider charge, puis une fois après',
+        (tester) async {
+      final fakeApi = FakeAuthApi(userLocale: 'fr');
+      final authProvider =
+          AuthProvider(api: fakeApi, tokenStore: InMemoryTokenStore());
+      await authProvider.initialized;
+      await authProvider.login('demo@discoverai.dz', 'secret');
+
+      final completer = Completer<String?>();
+      final delayedStore = _DelayedLocaleStore(completer);
+      final localeProvider = LocaleProvider(localeStore: delayedStore);
+      expect(localeProvider.isLoading, isTrue);
+
+      await tester.pumpWidget(boot(
+        authProvider: authProvider,
+        localeProvider: localeProvider,
+      ));
+      await tester.pump();
+      expect(localeProvider.isLoading, isTrue);
+      expect(fakeApi.updateMeCalls, 0);
+
+      completer.complete('en');
+      await tester.pumpAndSettle();
+
+      expect(localeProvider.isLoading, isFalse);
+      expect(fakeApi.updateMeCalls, 1);
+      expect(fakeApi.lastUpdatedLocale, 'en');
+      expect(authProvider.user?.locale, 'en');
+    });
+
+    testWidgets('ne synchronise pas quand user.locale est déjà égale',
+        (tester) async {
+      final fakeApi = FakeAuthApi(userLocale: 'fr');
+      final authProvider =
+          AuthProvider(api: fakeApi, tokenStore: InMemoryTokenStore());
+      await authProvider.initialized;
+      await authProvider.login('demo@discoverai.dz', 'secret');
+
+      final store = InMemoryLocaleStore()..localeCode = 'fr';
+      final localeProvider = LocaleProvider(localeStore: store);
+      await localeProvider.initialized;
+
+      await tester.pumpWidget(boot(
+        authProvider: authProvider,
+        localeProvider: localeProvider,
+      ));
+      await tester.pumpAndSettle();
+
+      expect(fakeApi.updateMeCalls, 0);
+    });
   });
 }

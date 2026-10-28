@@ -349,6 +349,10 @@ class FakePartnerMeApi implements AuthApi {
   Future<Map<String, dynamic>> register(String email, String password,
           {String? fullName}) async =>
       getMe();
+
+  @override
+  Future<Map<String, dynamic>> updateMe({required String locale}) async =>
+      getMe();
 }
 
 /// Pumps Profil with an already-authenticated user of the given role.

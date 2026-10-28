@@ -122,7 +122,8 @@ void main() {
     expect(auth.loginError, isNull);
   });
 
-  testWidgets('email and password validators render EN messages', (tester) async {
+  testWidgets('email and password validators render EN messages',
+      (tester) async {
     await pumpLogin(tester, locale: const Locale('en'), failStatus: 401);
 
     // Trigger field-level validation: empty / invalid fields.
@@ -144,7 +145,8 @@ void main() {
   testWidgets('5 shell tab labels switch to EN after locale switch',
       (tester) async {
     final store = InMemoryLocaleStore();
-    final first = LocaleProvider(localeStore: store, deviceLocaleCode: () => 'fr');
+    final first =
+        LocaleProvider(localeStore: store, deviceLocaleCode: () => 'fr');
     await first.initialized;
 
     await tester.pumpWidget(
@@ -227,23 +229,32 @@ void main() {
     expect(first.localeCode, 'en');
     expect(store.localeCode, 'en');
     expect(
-      find.descendant(of: find.byKey(const Key('tab_home')), matching: find.text('Home')),
+      find.descendant(
+          of: find.byKey(const Key('tab_home')), matching: find.text('Home')),
       findsOneWidget,
     );
     expect(
-      find.descendant(of: find.byKey(const Key('tab_explore')), matching: find.text('Explore')),
+      find.descendant(
+          of: find.byKey(const Key('tab_explore')),
+          matching: find.text('Explore')),
       findsOneWidget,
     );
     expect(
-      find.descendant(of: find.byKey(const Key('tab_bookings')), matching: find.text('Bookings')),
+      find.descendant(
+          of: find.byKey(const Key('tab_bookings')),
+          matching: find.text('Bookings')),
       findsOneWidget,
     );
     expect(
-      find.descendant(of: find.byKey(const Key('tab_assistant')), matching: find.text('Assistant')),
+      find.descendant(
+          of: find.byKey(const Key('tab_assistant')),
+          matching: find.text('Assistant')),
       findsOneWidget,
     );
     expect(
-      find.descendant(of: find.byKey(const Key('tab_profile')), matching: find.text('Profile')),
+      find.descendant(
+          of: find.byKey(const Key('tab_profile')),
+          matching: find.text('Profile')),
       findsOneWidget,
     );
   });
@@ -269,6 +280,10 @@ class _FailingAuthApi implements AuthApi {
   Future<Map<String, dynamic>> register(String email, String password,
           {String? fullName}) async =>
       throw ApiException(status, '{"detail":"nope"}');
+
+  @override
+  Future<Map<String, dynamic>> updateMe({required String locale}) async =>
+      throw ApiException(status, '{"detail":"nope"}');
 }
 
 /// Minimal MaterialApp wrapper used by the shell tab label tests.
@@ -282,7 +297,8 @@ class _Harness extends StatelessWidget {
   Widget build(BuildContext context) {
     // Watch LocaleProvider so MaterialApp.locale rebuilds on setLocale.
     final localeProvider = context.watch<LocaleProvider>();
-    final locale = localeProvider.isLoading ? null : Locale(localeProvider.localeCode);
+    final locale =
+        localeProvider.isLoading ? null : Locale(localeProvider.localeCode);
     return MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,

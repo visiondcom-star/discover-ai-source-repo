@@ -5,6 +5,7 @@ class User {
     required this.id,
     required this.email,
     this.fullName,
+    this.locale,
     this.isActive = true,
     this.isAdmin = false,
     this.isPartner = false,
@@ -15,6 +16,7 @@ class User {
   final String id;
   final String email;
   final String? fullName;
+  final String? locale;
   final bool isActive;
   final bool isAdmin;
 
@@ -35,6 +37,7 @@ class User {
         id: json['id'] as String? ?? '',
         email: json['email'] as String? ?? '',
         fullName: json['full_name'] as String?,
+        locale: json['locale'] as String?,
         isActive: json['is_active'] as bool? ?? true,
         isAdmin: json['is_admin'] as bool? ?? false,
         isPartner: json['is_partner'] as bool? ?? false,
@@ -49,6 +52,7 @@ class User {
         'id': id,
         'email': email,
         'full_name': fullName,
+        'locale': locale,
         'is_active': isActive,
         'is_admin': isAdmin,
         'is_partner': isPartner,

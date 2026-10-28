@@ -143,6 +143,43 @@ void main() {
       expect(find.text('Language'), findsNothing);
     },
   );
+
+  testWidgets(
+    'language switch in profile triggers AuthProvider.syncLocale',
+    (tester) async {
+      final store = InMemoryLocaleStore();
+      final localeProvider =
+          LocaleProvider(localeStore: store, deviceLocaleCode: () => 'fr');
+      await localeProvider.initialized;
+
+      final fakeApi = FakeAuthApi(userLocale: 'fr');
+      final authProvider = AuthProvider(
+        api: fakeApi,
+        tokenStore: InMemoryTokenStore(),
+      );
+      await authProvider.initialized;
+      await authProvider.login('user@discoverai.dz', 'secret');
+
+      expect(fakeApi.updateMeCalls, 0);
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<LocaleProvider>.value(value: localeProvider),
+            ChangeNotifierProvider<AuthProvider>.value(value: authProvider),
+          ],
+          child: const _Harness(child: ProfileScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('language_en')));
+      await tester.pumpAndSettle();
+
+      expect(fakeApi.updateMeCalls, 1);
+      expect(fakeApi.lastUpdatedLocale, 'en');
+    },
+  );
 }
 
 /// Minimal MaterialApp wrapper used by the two tests above. Equivalent to

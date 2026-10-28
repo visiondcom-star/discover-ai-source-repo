@@ -207,8 +207,11 @@ class _LanguageTile extends StatelessWidget {
                 ),
               ],
               selected: {locale.localeCode},
-              onSelectionChanged: (codes) =>
-                  context.read<LocaleProvider>().setLocale(codes.first),
+              onSelectionChanged: (codes) {
+                final chosen = codes.first;
+                context.read<LocaleProvider>().setLocale(chosen);
+                context.read<AuthProvider>().syncLocale(chosen);
+              },
             ),
           ],
         ),

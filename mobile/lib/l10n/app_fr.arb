@@ -429,5 +429,12 @@
   "adminCollectionErrorPollFailed": "Impossible de récupérer le statut de la collecte.",
   "adminCollectionErrorNetwork": "Impossible de lancer la collecte. Vérifiez votre connexion.",
   "adminCollectionErrorGeneric": "Échec du lancement de la collecte.",
-  "adminCollectionJobFailed": "La collecte a échoué."
+  "adminCollectionJobFailed": "La collecte a échoué.",
+  "notificationsTitle": "Notifications",
+  "notificationsEmpty": "Aucune notification pour le moment",
+  "notificationsErrorNetwork": "Impossible de charger les notifications. Vérifiez votre connexion.",
+  "notificationsErrorGeneric": "Une erreur est survenue lors du chargement des notifications.",
+  "notificationsRetry": "Réessayer",
+  "notificationsMarkAllRead": "Tout marquer comme lu",
+  "notificationsBellA11y": "Notifications"
 }

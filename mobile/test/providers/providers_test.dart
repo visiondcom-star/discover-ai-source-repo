@@ -57,6 +57,16 @@ class _FormatThrowingAuthApi extends FakeAuthApi {
   }
 }
 
+class _UpdateMeThrowingAuthApi extends FakeAuthApi {
+  _UpdateMeThrowingAuthApi() : super(userLocale: 'fr');
+
+  @override
+  Future<Map<String, dynamic>> updateMe({required String locale}) async {
+    updateMeCalls++;
+    throw const SocketException('offline');
+  }
+}
+
 class _SocketThrowingTripsApi extends FakeTripsApi {
   @override
   Future<Map<String, dynamic>> generateTrip({
@@ -179,6 +189,56 @@ void main() {
       expect(ok, isFalse);
       expect(auth.isAuthenticated, isFalse);
       expect(auth.loginError, AuthError.generic);
+    });
+
+    test('syncLocale calls updateMe when user.locale differs', () async {
+      final fakeApi = FakeAuthApi(userLocale: 'fr');
+      final auth = AuthProvider(api: fakeApi, tokenStore: InMemoryTokenStore());
+      await auth.initialized;
+      await auth.login('demo@discoverai.dz', 'secret');
+
+      expect(auth.user?.locale, 'fr');
+      expect(fakeApi.updateMeCalls, 0);
+
+      await auth.syncLocale('en');
+
+      expect(fakeApi.updateMeCalls, 1);
+      expect(fakeApi.lastUpdatedLocale, 'en');
+      expect(auth.user?.locale, 'en');
+    });
+
+    test('syncLocale does nothing when not authenticated or locale equals',
+        () async {
+      final fakeApi = FakeAuthApi(userLocale: 'fr');
+      final auth = AuthProvider(api: fakeApi, tokenStore: InMemoryTokenStore());
+      await auth.initialized;
+
+      // Not authenticated
+      await auth.syncLocale('fr');
+      expect(fakeApi.updateMeCalls, 0);
+
+      await auth.login('demo@discoverai.dz', 'secret');
+      expect(auth.user?.locale, 'fr');
+
+      // Locale equals
+      await auth.syncLocale('fr');
+      expect(fakeApi.updateMeCalls, 0);
+    });
+
+    test('syncLocale swallows errors silently without crashing', () async {
+      final fakeApi = _UpdateMeThrowingAuthApi();
+      final auth = AuthProvider(api: fakeApi, tokenStore: InMemoryTokenStore());
+      await auth.initialized;
+      await auth.login('demo@discoverai.dz', 'secret');
+
+      expect(auth.user?.locale, 'fr');
+
+      // Network error is swallowed silently
+      await auth.syncLocale('en');
+
+      expect(fakeApi.updateMeCalls, 1);
+      // User stays unchanged
+      expect(auth.user?.locale, 'fr');
     });
   });
 

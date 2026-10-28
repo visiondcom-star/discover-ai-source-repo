@@ -18,6 +18,7 @@ abstract class AuthApi {
     String? fullName,
   });
   Future<Map<String, dynamic>> getMe();
+  Future<Map<String, dynamic>> updateMe({required String locale});
 }
 
 abstract class PoisApi {
@@ -183,6 +184,22 @@ abstract class AdminCategoriesApi {
   });
 }
 
+/// Seam des notifications utilisateur — miroir de :
+/// - GET /context/notifications (avec unread_only, limit, offset)
+/// - POST /context/notifications/read-all
+/// - POST /context/notifications/{id}/read
+abstract class NotificationsApi {
+  Future<Map<String, dynamic>> getNotifications({
+    bool unreadOnly = false,
+    int limit = 20,
+    int offset = 0,
+  });
+
+  Future<Map<String, dynamic>> markAllRead();
+
+  Future<Map<String, dynamic>> markRead(String id);
+}
+
 /// HTTP failure carrying status code and body.
 class ApiException implements Exception {
   ApiException(this.statusCode, this.body);
@@ -212,7 +229,8 @@ class ApiService
         TenantsApi,
         ResearchApi,
         ResearchCollectionApi,
-        AdminCategoriesApi {
+        AdminCategoriesApi,
+        NotificationsApi {
   ApiService._internal()
       : baseUrl = AppConfig.apiBaseUrl,
         tenantSlug = AppConfig.tenantSlug;
@@ -286,6 +304,11 @@ class ApiService
   @override
   Future<Map<String, dynamic>> getMe() async =>
       Map<String, dynamic>.from(await _get('/auth/me') as Map);
+
+  @override
+  Future<Map<String, dynamic>> updateMe({required String locale}) async =>
+      Map<String, dynamic>.from(
+          await _patch('/auth/me', {'locale': locale}) as Map);
 
   @override
   Future<Map<String, dynamic>> login(String email, String password) async =>
@@ -451,8 +474,9 @@ class ApiService
     required String tenantId,
     required String jobId,
   }) async =>
-      Map<String, dynamic>.from(await _get(
-          '/tenants/$tenantId/research/collection/jobs/$jobId') as Map);
+      Map<String, dynamic>.from(
+          await _get('/tenants/$tenantId/research/collection/jobs/$jobId')
+              as Map);
 
   @override
   Future<List<Map<String, dynamic>>> getAllCategories() async {
@@ -465,8 +489,9 @@ class ApiService
     required String categoryId,
     required String status,
   }) async =>
-      Map<String, dynamic>.from(await _patch(
-          '/tenants/categories/$categoryId', {'status': status}) as Map);
+      Map<String, dynamic>.from(
+          await _patch('/tenants/categories/$categoryId', {'status': status})
+              as Map);
 
   // ---- Espace partenaire ---------------------------------------------------
   // Chemins SANS slash final : un slash final ferait répondre FastAPI en 307
@@ -491,8 +516,37 @@ class ApiService
     required String decision,
     String? note,
   }) async =>
-      Map<String, dynamic>.from(await _post('/partner/bookings/$bookingId/respond', {
+      Map<String, dynamic>.from(
+          await _post('/partner/bookings/$bookingId/respond', {
         'decision': decision,
         if (note != null) 'note': note,
       }) as Map);
+
+  @override
+  Future<Map<String, dynamic>> getNotifications({
+    bool unreadOnly = false,
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    final queryParams = <String, String>{
+      if (unreadOnly) 'unread_only': 'true',
+      'limit': limit.toString(),
+      'offset': offset.toString(),
+    };
+    final queryString = queryParams.entries
+        .map((e) =>
+            '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}')
+        .join('&');
+    return Map<String, dynamic>.from(
+        await _get('/context/notifications?$queryString') as Map);
+  }
+
+  @override
+  Future<Map<String, dynamic>> markAllRead() async => Map<String, dynamic>.from(
+      await _post('/context/notifications/read-all', {}) as Map);
+
+  @override
+  Future<Map<String, dynamic>> markRead(String id) async =>
+      Map<String, dynamic>.from(
+          await _post('/context/notifications/$id/read', {}) as Map);
 }

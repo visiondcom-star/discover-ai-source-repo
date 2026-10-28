@@ -33,6 +33,8 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   int _currentIndex = 0;
   late final NotificationsProvider _notificationsProvider;
   late final bool _ownsProvider;
+  LocaleProvider? _observedLocaleProvider;
+  VoidCallback? _localeSyncListener;
 
   @override
   void initState() {
@@ -47,11 +49,37 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final localeCode = context.read<LocaleProvider?>()?.localeCode;
-      if (localeCode != null && localeCode.isNotEmpty) {
-        context.read<AuthProvider>().syncLocale(localeCode);
-      }
+      _initLocaleSync();
     });
+  }
+
+  void _initLocaleSync() {
+    final localeProvider = context.read<LocaleProvider?>();
+    if (localeProvider == null) return;
+    if (!localeProvider.isLoading) {
+      _doSyncLocale(localeProvider.localeCode);
+    } else {
+      _observedLocaleProvider = localeProvider;
+      void onLocaleChanged() {
+        if (!localeProvider.isLoading) {
+          localeProvider.removeListener(onLocaleChanged);
+          _observedLocaleProvider = null;
+          _localeSyncListener = null;
+          if (mounted) {
+            _doSyncLocale(localeProvider.localeCode);
+          }
+        }
+      }
+
+      _localeSyncListener = onLocaleChanged;
+      localeProvider.addListener(onLocaleChanged);
+    }
+  }
+
+  void _doSyncLocale(String code) {
+    if (code.isNotEmpty) {
+      context.read<AuthProvider>().syncLocale(code);
+    }
   }
 
   @override
@@ -64,6 +92,11 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    if (_localeSyncListener != null && _observedLocaleProvider != null) {
+      _observedLocaleProvider!.removeListener(_localeSyncListener!);
+      _localeSyncListener = null;
+      _observedLocaleProvider = null;
+    }
     if (_ownsProvider) {
       _notificationsProvider.dispose();
     }

@@ -173,13 +173,20 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
               ],
             ),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => NotificationsScreen(
-                  onOpenBookings: widget.onOpenBookings,
+            onPressed: () {
+              final notifsProvider = context.read<NotificationsProvider>();
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) =>
+                      ChangeNotifierProvider<NotificationsProvider>.value(
+                    value: notifsProvider,
+                    child: NotificationsScreen(
+                      onOpenBookings: widget.onOpenBookings,
+                    ),
+                  ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
         ],
       ),

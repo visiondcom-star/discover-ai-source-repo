@@ -449,6 +449,58 @@ void main() {
 
       expect(find.byType(NotificationsScreen), findsOneWidget);
     });
+
+    testWidgets(
+        'tapping notifications_bell in real HomeShell provides NotificationsProvider to pushed route',
+        (tester) async {
+      final authProvider =
+          AuthProvider(api: FakeAuthApi(), tokenStore: InMemoryTokenStore());
+      await authProvider.initialized;
+      await authProvider.login('test@example.com', 'pw');
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<AuthProvider>.value(value: authProvider),
+            ChangeNotifierProvider<TenantProvider>(
+              create: (_) => TenantProvider(tenantsApi: FakeTenantsApi()),
+            ),
+            ChangeNotifierProvider<PromotionProvider>(
+              create: (_) =>
+                  PromotionProvider(promotionsApi: FakePromotionsApi()),
+            ),
+            ChangeNotifierProvider<BookingProvider>(
+              create: (_) =>
+                  BookingProvider(bookingsApi: FakeBookingsApi(bookings: [])),
+            ),
+            ChangeNotifierProvider<POIProvider>(
+              create: (_) => POIProvider(poisApi: FakePoisApi()),
+            ),
+            ChangeNotifierProvider<TripProvider>(
+              create: (_) => TripProvider(),
+            ),
+            ChangeNotifierProvider<ChatProvider>(
+              create: (_) => ChatProvider(),
+            ),
+            ChangeNotifierProvider<LocaleProvider>(
+              create: (_) => LocaleProvider(localeStore: InMemoryLocaleStore()),
+            ),
+          ],
+          child: const MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: HomeShell(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('notifications_bell')));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(NotificationsScreen), findsOneWidget);
+    });
   });
 
   group('HomeShell provides NotificationsProvider', () {

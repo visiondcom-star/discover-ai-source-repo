@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/chat_message.dart';
 import '../services/api_service.dart';
+import 'safe_notifier.dart';
 
 /// Locale-agnostic failure codes for chat message delivery. The provider has
 /// no `BuildContext`, so it never renders text itself — the screen maps these
@@ -20,7 +21,7 @@ enum ChatError {
 /// Same injectable-seam pattern as [POIProvider]/[TripProvider]: tests run
 /// against a fake [ChatApi], never the network. The conversation history
 /// lives only in memory — content comes exclusively from POST /chat/.
-class ChatProvider extends ChangeNotifier {
+class ChatProvider extends ChangeNotifier with SafeNotifier {
   ChatProvider({ChatApi? chatApi}) : _api = chatApi ?? ApiService();
 
   final ChatApi _api;

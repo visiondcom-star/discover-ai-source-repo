@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/tenant_category.dart';
 import '../services/api_service.dart';
+import 'safe_notifier.dart';
 
 /// Locale-agnostic failure codes for admin category queue operations.
 enum AdminCategoriesError {
@@ -17,7 +18,7 @@ enum AdminCategoriesError {
 ///
 /// Distinct de [TenantProvider.categories], qui ne porte que les catégories
 /// `active` visibles par les voyageurs.
-class AdminCategoriesProvider extends ChangeNotifier {
+class AdminCategoriesProvider extends ChangeNotifier with SafeNotifier {
   AdminCategoriesProvider(this._api, {this.onChanged});
 
   final AdminCategoriesApi _api;
@@ -39,7 +40,6 @@ class AdminCategoriesProvider extends ChangeNotifier {
   bool isUpdating(String id) => _pending.contains(id);
 
   int _loadSeq = 0;
-  bool _disposed = false;
 
   Future<void> load() async {
     final seq = ++_loadSeq;
@@ -48,24 +48,24 @@ class AdminCategoriesProvider extends ChangeNotifier {
     notifyListeners();
     try {
       final raw = await _api.getAllCategories();
-      if (_disposed || seq != _loadSeq) return;
+      if (disposed || seq != _loadSeq) return;
       _categories = raw.map(TenantCategory.fromJson).toList();
     } on ApiException catch (e) {
-      if (_disposed || seq != _loadSeq) return;
+      if (disposed || seq != _loadSeq) return;
       _error = e.statusCode == null
           ? AdminCategoriesError.network
           : AdminCategoriesError.generic;
     } on SocketException catch (_) {
-      if (_disposed || seq != _loadSeq) return;
+      if (disposed || seq != _loadSeq) return;
       _error = AdminCategoriesError.network;
     } on TimeoutException catch (_) {
-      if (_disposed || seq != _loadSeq) return;
+      if (disposed || seq != _loadSeq) return;
       _error = AdminCategoriesError.network;
     } on http.ClientException catch (_) {
-      if (_disposed || seq != _loadSeq) return;
+      if (disposed || seq != _loadSeq) return;
       _error = AdminCategoriesError.network;
     } catch (_) {
-      if (_disposed || seq != _loadSeq) return;
+      if (disposed || seq != _loadSeq) return;
       // On garde la liste précédente : un admin ne doit pas la perdre sur
       // un incident réseau.
       _error = AdminCategoriesError.generic;
@@ -84,40 +84,34 @@ class AdminCategoriesProvider extends ChangeNotifier {
         categoryId: category.id,
         status: status,
       ));
-      if (_disposed) return;
+      if (disposed) return;
       _categories = [
         for (final c in _categories) c.id == updated.id ? updated : c,
       ];
       ok = true;
     } on ApiException catch (e) {
-      if (_disposed) return;
+      if (disposed) return;
       _error = e.statusCode == null
           ? AdminCategoriesError.network
           : AdminCategoriesError.generic;
     } on SocketException catch (_) {
-      if (_disposed) return;
+      if (disposed) return;
       _error = AdminCategoriesError.network;
     } on TimeoutException catch (_) {
-      if (_disposed) return;
+      if (disposed) return;
       _error = AdminCategoriesError.network;
     } on http.ClientException catch (_) {
-      if (_disposed) return;
+      if (disposed) return;
       _error = AdminCategoriesError.network;
     } catch (_) {
-      if (_disposed) return;
+      if (disposed) return;
       _error = AdminCategoriesError.generic;
     } finally {
-      if (!_disposed) {
+      if (!disposed) {
         _pending.remove(category.id);
         notifyListeners();
       }
     }
     if (ok) onChanged?.call();
-  }
-
-  @override
-  void dispose() {
-    _disposed = true;
-    super.dispose();
   }
 }

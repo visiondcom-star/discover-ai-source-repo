@@ -8,6 +8,7 @@ import '../models/booking.dart';
 import '../models/booking_details.dart';
 import '../services/api_service.dart';
 import '../utils/idempotency.dart';
+import 'safe_notifier.dart';
 
 /// Locale-agnostic failure codes for the initial listings (bookings list /
 /// adapters). The provider has no `BuildContext`, so it never renders text
@@ -108,7 +109,7 @@ enum BookingCancelError {
 /// create → pending → explicit consent (true → confirmed + `EXT-…`
 /// reference, false → cancelled) → optional cancel.
 /// The API seam is injectable so tests run without network.
-class BookingProvider extends ChangeNotifier {
+class BookingProvider extends ChangeNotifier with SafeNotifier {
   BookingProvider({BookingsApi? bookingsApi})
       : _api = bookingsApi ?? ApiService();
 

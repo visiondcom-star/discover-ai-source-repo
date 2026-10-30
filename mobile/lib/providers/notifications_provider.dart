@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/app_notification.dart';
 import '../services/api_service.dart';
+import 'safe_notifier.dart';
 
 /// Locale-agnostic failure codes for notifications operations.
 enum NotificationsError {
@@ -29,7 +30,7 @@ NotificationsError _mapError(Object e) {
 }
 
 /// Provider managing notification list, pagination, unread badge, and read actions.
-class NotificationsProvider extends ChangeNotifier {
+class NotificationsProvider extends ChangeNotifier with SafeNotifier {
   NotificationsProvider({NotificationsApi? api}) : _api = api ?? ApiService();
 
   final NotificationsApi _api;
@@ -40,7 +41,6 @@ class NotificationsProvider extends ChangeNotifier {
   bool _isLoading = false;
   bool _isLoadingMore = false;
   NotificationsError? _error;
-  bool _disposed = false;
 
   static const int _pageSize = 20;
 
@@ -51,18 +51,6 @@ class NotificationsProvider extends ChangeNotifier {
   bool get isLoadingMore => _isLoadingMore;
   NotificationsError? get error => _error;
   bool get hasMore => _items.length < _total;
-
-  @override
-  void dispose() {
-    _disposed = true;
-    super.dispose();
-  }
-
-  @override
-  void notifyListeners() {
-    if (_disposed) return;
-    super.notifyListeners();
-  }
 
   void clearError() {
     _error = null;
@@ -137,7 +125,7 @@ class NotificationsProvider extends ChangeNotifier {
   Future<void> refreshUnreadCount() async {
     try {
       final res = await _api.getNotifications(limit: 1, offset: 0);
-      if (_disposed) return;
+      if (disposed) return;
       final count = (res['unread_count'] as num?)?.toInt() ?? 0;
       if (count != _unreadCount) {
         _unreadCount = count;

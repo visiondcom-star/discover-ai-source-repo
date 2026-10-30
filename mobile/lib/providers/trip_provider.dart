@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/trip.dart';
 import '../services/api_service.dart';
+import 'safe_notifier.dart';
 
 /// Locale-agnostic failure codes for trip planning operations. The provider has
 /// no `BuildContext`, so it never renders text itself — the screen maps these
@@ -17,7 +18,7 @@ enum TripError {
 
 /// Trip planning state. Same injectable-seam pattern as [POIProvider]:
 /// tests run against a fake [TripsApi], never the network.
-class TripProvider extends ChangeNotifier {
+class TripProvider extends ChangeNotifier with SafeNotifier {
   TripProvider({TripsApi? tripsApi}) : _api = tripsApi ?? ApiService();
 
   final TripsApi _api;

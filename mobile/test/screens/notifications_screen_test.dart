@@ -18,6 +18,7 @@ import 'package:discover_ai/screens/home_shell.dart';
 import 'package:discover_ai/screens/notifications_screen.dart';
 import 'package:discover_ai/screens/partner_bookings_screen.dart';
 import 'package:discover_ai/services/api_service.dart';
+import 'package:discover_ai/user_scope.dart';
 
 import '../helpers/fakes.dart';
 
@@ -449,6 +450,60 @@ void main() {
 
       expect(find.byType(NotificationsScreen), findsOneWidget);
     });
+
+    testWidgets(
+        'tapping notifications_bell in real HomeShell provides NotificationsProvider to pushed route',
+        (tester) async {
+      final authProvider =
+          AuthProvider(api: FakeAuthApi(), tokenStore: InMemoryTokenStore());
+      await authProvider.initialized;
+      await authProvider.login('test@example.com', 'pw');
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<AuthProvider>.value(value: authProvider),
+            ChangeNotifierProvider<TenantProvider>(
+              create: (_) => TenantProvider(tenantsApi: FakeTenantsApi()),
+            ),
+            ChangeNotifierProvider<PromotionProvider>(
+              create: (_) =>
+                  PromotionProvider(promotionsApi: FakePromotionsApi()),
+            ),
+            ChangeNotifierProvider<BookingProvider>(
+              create: (_) =>
+                  BookingProvider(bookingsApi: FakeBookingsApi(bookings: [])),
+            ),
+            ChangeNotifierProvider<POIProvider>(
+              create: (_) => POIProvider(poisApi: FakePoisApi()),
+            ),
+            ChangeNotifierProvider<TripProvider>(
+              create: (_) => TripProvider(),
+            ),
+            ChangeNotifierProvider<ChatProvider>(
+              create: (_) => ChatProvider(),
+            ),
+            ChangeNotifierProvider<LocaleProvider>(
+              create: (_) => LocaleProvider(localeStore: InMemoryLocaleStore()),
+            ),
+          ],
+          child: const UserScope(
+            child: MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: HomeShell(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('notifications_bell')));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(NotificationsScreen), findsOneWidget);
+    });
   });
 
   group('HomeShell provides NotificationsProvider', () {
@@ -486,6 +541,11 @@ void main() {
             ),
             ChangeNotifierProvider<LocaleProvider>(
               create: (_) => LocaleProvider(localeStore: InMemoryLocaleStore()),
+            ),
+            ChangeNotifierProvider<NotificationsProvider>(
+              create: (_) => NotificationsProvider(
+                api: FakeNotificationsApi(unreadCount: 0),
+              ),
             ),
           ],
           child: const MaterialApp(
@@ -640,7 +700,7 @@ void main() {
               key: UniqueKey(),
               localizationsDelegates: AppLocalizations.localizationsDelegates,
               supportedLocales: AppLocalizations.supportedLocales,
-              home: HomeShell(notificationsProvider: notifProvider),
+              home: const HomeShell(),
             ),
           ),
         );
@@ -756,10 +816,10 @@ void main() {
               create: (_) => LocaleProvider(localeStore: InMemoryLocaleStore()),
             ),
           ],
-          child: MaterialApp(
+          child: const MaterialApp(
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
-            home: HomeShell(notificationsProvider: notifProvider),
+            home: HomeShell(),
           ),
         ),
       );

@@ -11,6 +11,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/research_job.dart';
 import '../services/api_service.dart';
+import 'safe_notifier.dart';
 
 /// Locale-agnostic failure codes for destination research operations.
 enum ResearchError {
@@ -20,7 +21,7 @@ enum ResearchError {
   generic,
 }
 
-class ResearchProvider extends ChangeNotifier {
+class ResearchProvider extends ChangeNotifier with SafeNotifier {
   final ResearchApi _api;
   final Duration pollInterval;
 

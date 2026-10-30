@@ -6,8 +6,10 @@ import 'package:provider/provider.dart';
 
 import 'package:discover_ai/main.dart';
 import 'package:discover_ai/providers/admin_categories_provider.dart';
+import 'package:discover_ai/providers/research_collection_provider.dart';
 import 'package:discover_ai/providers/research_provider.dart';
 import 'package:discover_ai/providers/tenant_provider.dart';
+import 'package:discover_ai/user_scope.dart';
 
 void main() {
   group('appProviders', () {
@@ -22,7 +24,9 @@ void main() {
       await tester.pumpWidget(
         MultiProvider(
           providers: appProviders(),
-          child: const MaterialApp(home: SizedBox()),
+          child: const UserScope(
+            child: MaterialApp(home: SizedBox()),
+          ),
         ),
       );
 
@@ -45,7 +49,9 @@ void main() {
       await tester.pumpWidget(
         MultiProvider(
           providers: appProviders(),
-          child: const MaterialApp(home: SizedBox()),
+          child: const UserScope(
+            child: MaterialApp(home: SizedBox()),
+          ),
         ),
       );
 
@@ -62,6 +68,32 @@ void main() {
           isA<TenantProvider>());
       expect(Provider.of<AdminCategoriesProvider>(context, listen: false),
           isA<AdminCategoriesProvider>());
+    });
+
+    testWidgets(
+        'déclenche onJobDone et onPipelineChained et vérifie qu\'ils se résolvent sans ProviderNotFoundException dans UserScope',
+        (tester) async {
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: appProviders(),
+          child: const UserScope(
+            child: MaterialApp(home: SizedBox()),
+          ),
+        ),
+      );
+
+      final context = tester.element(find.byType(SizedBox));
+      final research = Provider.of<ResearchProvider>(context, listen: false);
+      final collection =
+          Provider.of<ResearchCollectionProvider>(context, listen: false);
+
+      expect(research.onJobDone, isNotNull);
+      expect(() => research.onJobDone!(), returnsNormally);
+
+      expect(collection.onPipelineChained, isNotNull);
+      expect(() => collection.onPipelineChained!('tenant-1', 'job-1'),
+          returnsNormally);
+      research.reset();
     });
   });
 }

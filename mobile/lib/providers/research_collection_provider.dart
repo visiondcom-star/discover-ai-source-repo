@@ -12,6 +12,7 @@ import 'package:http/http.dart' as http;
 import '../models/research_collection_job.dart';
 import '../models/research_job.dart';
 import '../services/api_service.dart';
+import 'safe_notifier.dart';
 
 /// Locale-agnostic failure codes for research collection operations.
 enum ResearchCollectionError {
@@ -27,7 +28,7 @@ enum ResearchCollectionError {
 typedef PipelineChainedCallback = void Function(
     String tenantId, String researchJobId);
 
-class ResearchCollectionProvider extends ChangeNotifier {
+class ResearchCollectionProvider extends ChangeNotifier with SafeNotifier {
   final ResearchCollectionApi _api;
   final Duration pollInterval;
 

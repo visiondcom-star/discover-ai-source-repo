@@ -33,17 +33,22 @@
    - **Condition :** Applicable exclusivement si `booking.booking_mode == "manual_confirm"`. Si le statut n'est pas `pending`, une exception HTTP 409 est levée (`backend/app/api/v1/endpoints/bookings.py:220`).
    - **Effets :** `booking.consent_given = True`, `booking.consent_timestamp = utcnow()`, `booking.status = "requested"`. Aucun `external_id` n'est attribué à ce stade. Émission d'une notification `booking_request_received` aux gestionnaires du POI (`poi_managers`).
 
-3. **Confirmation immédiate voyageur (`pending` → `confirmed` ou n'importe quel statut) :**
+3. **Confirmation immédiate voyageur (`pending` → `confirmed` ou depuis `cancelled`/`confirmed`) :**
    - **Fichier / Ligne :** `backend/app/api/v1/endpoints/bookings.py:251-270`.
    - **Acteur :** Voyageur authentifié (`current_user`).
    - **Endpoint :** `POST /api/v1/bookings/{booking_id}/consent` avec `data.consent = True`.
    - **Faiblesse critique de contrôle de statut :** Contrairement à la branche `manual_confirm` qui vérifie explicitement `if booking.status != "pending": raise HTTPException(status_code=409)` (`backend/app/api/v1/endpoints/bookings.py:219-220`), la branche `else` (autres modes tels que `request` ou `pay_on_site`) ne comporte **strictement aucun contrôle d'état préalable**.
-   - **Conséquence :** Un appel à `give_consent` avec `consent=True` sur une réservation hors `manual_confirm` force `booking.status = "confirmed"`, écrase `booking.external_id = f"EXT-{booking_id[:8]}"` et émet la notification `booking_confirmed`, **quel que soit l'état actuel de la réservation** (y compris si elle était `cancelled`, `expired`, `declined` ou déjà `confirmed`).
+   - **Statuts atteignables et effets réels :**
+     - Hors `manual_confirm`, les seuls statuts atteignables dans le cycle de vie sont `pending`, `confirmed` et `cancelled` (les statuts `declined` et `expired` n'existent qu'en mode `manual_confirm`, où `consent=True` renvoie déjà une HTTP 409 si `status != "pending"`).
+     - Par conséquent, hors `manual_confirm`, `consent=True` n'a d'effet anormal que depuis deux statuts :
+       - Depuis `cancelled` : **résurrection** d'une réservation annulée en `confirmed` ;
+       - Depuis `confirmed` : émission d'une notification `booking_confirmed` en double sur une réservation déjà confirmée.
+     - La valeur de `booking.external_id = f"EXT-{booking_id[:8]}"` étant déterministe (dérivée des 8 premiers caractères de l'UUID), elle reste identique et n'est pas remplacée par un identifiant différent.
    - **Couverture par les tests existants :**
      - Les tests existants (`backend/tests/test_bookings.py:146-181` `test_give_consent` et `backend/tests/test_booking_modes.py:53-73` `test_consent_flow_request_mode`) testent uniquement le passage nominal depuis `status="pending"`.
-     - **Aucun test existant** ne teste l'appel de `give_consent` avec `consent=True` sur une réservation déjà `cancelled`, `expired`, `declined` ou `confirmed` pour un mode hors `manual_confirm`.
+     - **Aucun test existant** ne teste l'appel de `give_consent` avec `consent=True` sur une réservation déjà `cancelled` ou `confirmed` pour un mode hors `manual_confirm`.
 
-4. **Annulation par refus de consentement (`pending` → `cancelled` ou n'importe quel statut) :**
+4. **Annulation par refus de consentement (tous statuts → `cancelled`) :**
    - **Fichier / Ligne :** `backend/app/api/v1/endpoints/bookings.py:271-273`.
    - **Acteur :** Voyageur authentifié (`current_user`).
    - **Endpoint :** `POST /api/v1/bookings/{booking_id}/consent` avec `data.consent = False`.
@@ -53,7 +58,10 @@
          booking.status = "cancelled"
      ```
      Cette affectation est exécutée sans **aucun contrôle de statut ni de mode**.
-   - **Conséquence :** Alors que l'endpoint dédié `POST /bookings/{id}/cancel` protège formellement les états terminaux en renvoyant une HTTP 409 si la réservation est `confirmed` ou `cancelled` (`backend/app/api/v1/endpoints/bookings.py:309-313`), un appel à `give_consent` avec `consent=False` **écrase immédiatement le statut à `"cancelled"`**, y compris sur une réservation déjà confirmée (`confirmed`), contournant ainsi totalement la protection du endpoint `/cancel`.
+   - **Statuts atteignables et alignement avec `/cancel` :**
+     - L'endpoint officiel `POST /api/v1/bookings/{id}/cancel` refuse en HTTP 409 tout statut hors `("pending", "requested", "expired")` (`backend/app/api/v1/endpoints/bookings.py:309-313`), ce qui exclut `confirmed` et `cancelled`, mais aussi **`declined`**.
+     - En revanche, `POST /api/v1/bookings/{booking_id}/consent` avec `consent=False` passe depuis **TOUS les statuts** (`confirmed`, `declined`, `expired`, `requested`, `cancelled`), tous modes confondus.
+     - **Conséquence :** Un voyageur peut faire passer en `cancelled` une réservation déjà `confirmed` ou `declined`, contournant totalement le verrou HTTP 409 de `/cancel`.
    - **Couverture par les tests existants :**
      - Seul le cas nominal de refus depuis `pending` est testé indirectement ou documenté.
      - **Aucun test existant** dans `backend/tests/` ne vérifie le refus ou le comportement d'un `consent=False` sur une réservation au statut `confirmed`, `requested`, `declined` ou `expired`.
@@ -81,7 +89,7 @@
    - **Fichier / Ligne :** `backend/app/api/v1/endpoints/bookings.py:309-318`.
    - **Acteur :** Voyageur authentifié (`current_user`).
    - **Endpoint :** `POST /api/v1/bookings/{booking_id}/cancel`.
-   - **Garde :** Le backend refuse en HTTP 409 toute annulation si le statut n'est pas parmi `("pending", "requested", "expired")` (`backend/app/api/v1/endpoints/bookings.py:309`). Les statuts terminaux `confirmed` et `cancelled` ne peuvent plus être annulés par cet endpoint.
+   - **Garde :** Le backend refuse en HTTP 409 toute annulation si le statut n'est pas parmi `("pending", "requested", "expired")` (`backend/app/api/v1/endpoints/bookings.py:309`). Tout statut hors de ce tuple — donc `confirmed`, `cancelled`, mais aussi **`declined`** — est refusé avec HTTP 409. Les réservations confirmées ne peuvent donc pas être annulées par cet endpoint.
 
 ### 1.3 Consommateurs des statuts
 
@@ -483,12 +491,17 @@ Afin de respecter le principe de non-régression et de préserver le fonctionnem
 
 - **Arbitrage requis :** La confirmation d'exécution du service (déclenchant la commission) est-elle générée automatiquement à la date de réservation, ou nécessite-t-elle une validation manuelle explicite du partenaire dans son espace ?
 
-### 🟡 Urgence 4 (Moyen terme - Préparation V2) : Choix du pays de l'entité européenne et premier PSP
+### 🔴 Urgence 4 (Structurant V1 / Politiques d'annulation) : Annulation d'une réservation confirmée
+
+- **Arbitrage requis :** Dans le code actuel, l'endpoint officiel `/cancel` interdit avec HTTP 409 toute annulation d'une réservation `confirmed` (constats §1.2 et §17.2). Faut-il ouvrir un flux explicite d'annulation d'une réservation confirmée (côté voyageur, partenaire ou administrateur), et selon quelles règles (délai de prévenance, motif, pénalités) ?
+- _Impact :_ Indispensable pour implémenter les politiques d'annulation versionnées (section 2.6 de `PAYMENT_ARCHITECTURE_V3.md`), déterminer si la commission Discover AI reste due en cas de désistement ou de no-show en V1, et piloter les remboursements en V2.
+
+### 🟡 Urgence 5 (Moyen terme - Préparation V2) : Choix du pays de l'entité européenne et premier PSP
 
 - **Arbitrage requis :** Quel est le pays d'immatriculation cible pour Discover AI Europe et quel PSP sera retenu en premier (Stripe en Europe ou Chargily Pay en Algérie) ?
 - _Impact :_ Détermine les capacités à modéliser dans la matrice des adaptateurs (autorisation/capture vs encaissement direct).
 
-### 🟢 Urgence 5 (Politique commerciale V1) : Grille et taux de commission par défaut
+### 🟢 Urgence 6 (Politique commerciale V1) : Grille et taux de commission par défaut
 
 - **Arbitrage requis :** Quel modèle de commission appliquer par défaut (pourcentage fixe, palier, montant fixe par réservation) ?
 
@@ -564,11 +577,14 @@ Cet addendum consigne les conclusions critiques issues de la relecture approfond
 - **Faiblesse constatée :** Dans `backend/app/api/v1/endpoints/bookings.py:251-276` :
   - La branche `manual_confirm` vérifie formellement `if booking.status != "pending": raise HTTPException(status_code=409)`.
   - En revanche, la branche `else` (modes `request`, `pay_on_site`, etc.) ne comporte **aucun contrôle sur `booking.status`**.
-  - Si `data.consent == True` : la réservation est basculée à `"confirmed"`, `consent_given` passe à `True`, et un nouvel `external_id` lui est assigné, **même si la réservation était préalablement `cancelled`, `declined`, `expired` ou déjà `confirmed`**.
-  - Si `data.consent == False` (`backend/app/api/v1/endpoints/bookings.py:271-273`) : la réservation est basculée directement à `status = "cancelled"`, **sans aucun contrôle de statut ni de mode**.
+  - Si `data.consent == True` : la réservation passe à `"confirmed"`, `consent_given` passe à `True`. La valeur de `booking.external_id = f"EXT-{booking_id[:8]}"` étant déterministe (dérivée des 8 premiers caractères de l'UUID), elle reste identique et n'est pas écrasée par une nouvelle valeur.
+  - **Précision sur les statuts atteignables :** Hors `manual_confirm`, les seuls statuts possibles dans le cycle de vie sont `pending`, `confirmed` et `cancelled` (`declined` et `expired` n'existent qu'en `manual_confirm`, où `consent=True` renvoie déjà 409 si `status != "pending"`). Les effets anormaux réels de `consent=True` ne se produisent donc que depuis deux statuts :
+    - La **résurrection** d'une réservation `cancelled` en `confirmed` ;
+    - L'émission d'une notification `booking_confirmed` en double sur une réservation déjà `confirmed`.
+  - Si `data.consent == False` (`backend/app/api/v1/endpoints/bookings.py:271-273`) : la réservation est basculée directement à `status = "cancelled"`, sans aucun contrôle de statut ni de mode. `consent=False` passe ainsi depuis **TOUS les statuts** (`confirmed`, `declined`, `expired`, `requested`, `cancelled`), tous modes confondus.
 - **Contournement de la sécurité de `/cancel` :**
-  - L'endpoint dédié `POST /api/v1/bookings/{booking_id}/cancel` protège expressément les états terminaux en renvoyant une HTTP 409 si le statut n'est pas parmi `("pending", "requested", "expired")` (`backend/app/api/v1/endpoints/bookings.py:309-313`).
-  - Cependant, un voyageur peut appeler `POST /api/v1/bookings/{booking_id}/consent` avec `{"consent": false}` sur une réservation déjà `confirmed` : le backend exécute `booking.status = "cancelled"` sans restriction, **contournant totalement le verrou 409 de `/cancel`**.
+  - L'endpoint dédié `POST /api/v1/bookings/{booking_id}/cancel` protège les réservations en renvoyant une HTTP 409 pour tout statut hors `("pending", "requested", "expired")` (`backend/app/api/v1/endpoints/bookings.py:309-313`), refusant donc `confirmed` et `cancelled`, mais aussi **`declined`**.
+  - Cependant, un voyageur peut appeler `POST /api/v1/bookings/{booking_id}/consent` avec `{"consent": false}` sur une réservation déjà `confirmed` ou `declined` : le backend exécute `booking.status = "cancelled"` sans restriction, **contournant totalement le verrou 409 de `/cancel`**.
 - **Couverture de tests existante :**
   - Les tests actuels (`backend/tests/test_bookings.py` et `backend/tests/test_booking_modes.py`) vérifient uniquement le cas nominal où `give_consent` est appelé sur une réservation au statut initial `pending`.
   - Aucun test existant ne teste `give_consent` sur une réservation déjà `confirmed`, `cancelled`, `expired` ou `declined`.
@@ -594,7 +610,7 @@ Cet addendum consigne les conclusions critiques issues de la relecture approfond
 ### 17.3 Inadéquation absolue de `Booking.price` (Float) pour la finance
 - Dans `backend/app/models.py:344`, `price = Column(Float, nullable=True)` utilise le type virgule flottante (`FLOAT`/`REAL` SQL).
 - Outre le fait qu'il n'est jamais alimenté par l'API actuelle (section 4), l'usage de nombres à virgule flottante présente des risques d'imprécision binaire inacceptables pour un grand livre financier (ex. `0.1 + 0.2 != 0.3`).
-- **Décision d'architecture confirmée :** `Booking.price` reste un champ dormant non exploité. Toutes les futures tables financières (`service_completions`, `commission_receivables`, `partner_ledger_entries`, `payment_transactions`) utiliseront exclusivement des entiers en unités mineures (centimes) avec métadonnées d'exposant de devise, conformément à la règle 2.4.
+- **Recommandation (à valider) :** `Booking.price` reste un champ dormant non exploité. Toutes les futures tables financières (`service_completions`, `commission_receivables`, `partner_ledger_entries`, `payment_transactions`) utiliseront exclusivement des entiers en unités mineures (centimes) avec métadonnées d'exposant de devise, conformément à la règle 2.4.
 
 ### 17.4 Définition de la partie contractante partenaire : ambiguïté `User` vs `POI` vs `Organisation`
 - Dans la structure actuelle (`backend/app/models.py:366-389`), la relation partenaire est modélisée par `POIManager` liant un `user_id` à un `poi_id`.

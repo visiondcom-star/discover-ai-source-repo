@@ -33,18 +33,30 @@
    - **Condition :** Applicable exclusivement si `booking.booking_mode == "manual_confirm"`. Si le statut n'est pas `pending`, une exception HTTP 409 est levée (`backend/app/api/v1/endpoints/bookings.py:220`).
    - **Effets :** `booking.consent_given = True`, `booking.consent_timestamp = utcnow()`, `booking.status = "requested"`. Aucun `external_id` n'est attribué à ce stade. Émission d'une notification `booking_request_received` aux gestionnaires du POI (`poi_managers`).
 
-3. **Confirmation immédiate voyageur (`pending` → `confirmed`) :**
+3. **Confirmation immédiate voyageur (`pending` → `confirmed` ou n'importe quel statut) :**
    - **Fichier / Ligne :** `backend/app/api/v1/endpoints/bookings.py:251-270`.
    - **Acteur :** Voyageur authentifié (`current_user`).
    - **Endpoint :** `POST /api/v1/bookings/{booking_id}/consent` avec `data.consent = True`.
-   - **Condition :** Applicable pour les modes historiques autres que `manual_confirm` (notamment `request` et `pay_on_site`).
-   - **Effets :** `booking.consent_given = True`, `booking.consent_timestamp = utcnow()`, `booking.status = "confirmed"`, `booking.external_id = f"EXT-{booking_id[:8]}"`. Émission d'une notification `booking_confirmed` au voyageur.
+   - **Faiblesse critique de contrôle de statut :** Contrairement à la branche `manual_confirm` qui vérifie explicitement `if booking.status != "pending": raise HTTPException(status_code=409)` (`backend/app/api/v1/endpoints/bookings.py:219-220`), la branche `else` (autres modes tels que `request` ou `pay_on_site`) ne comporte **strictement aucun contrôle d'état préalable**.
+   - **Conséquence :** Un appel à `give_consent` avec `consent=True` sur une réservation hors `manual_confirm` force `booking.status = "confirmed"`, écrase `booking.external_id = f"EXT-{booking_id[:8]}"` et émet la notification `booking_confirmed`, **quel que soit l'état actuel de la réservation** (y compris si elle était `cancelled`, `expired`, `declined` ou déjà `confirmed`).
+   - **Couverture par les tests existants :**
+     - Les tests existants (`backend/tests/test_bookings.py:146-181` `test_give_consent` et `backend/tests/test_booking_modes.py:53-73` `test_consent_flow_request_mode`) testent uniquement le passage nominal depuis `status="pending"`.
+     - **Aucun test existant** ne teste l'appel de `give_consent` avec `consent=True` sur une réservation déjà `cancelled`, `expired`, `declined` ou `confirmed` pour un mode hors `manual_confirm`.
 
-4. **Annulation par refus de consentement (`pending` → `cancelled`) :**
+4. **Annulation par refus de consentement (`pending` → `cancelled` ou n'importe quel statut) :**
    - **Fichier / Ligne :** `backend/app/api/v1/endpoints/bookings.py:271-273`.
    - **Acteur :** Voyageur authentifié (`current_user`).
    - **Endpoint :** `POST /api/v1/bookings/{booking_id}/consent` avec `data.consent = False`.
-   - **Effets :** `booking.status = "cancelled"`.
+   - **Faiblesse critique et contournement du 409 :** Dans `backend/app/api/v1/endpoints/bookings.py:271-273` :
+     ```python
+     else:
+         booking.status = "cancelled"
+     ```
+     Cette affectation est exécutée sans **aucun contrôle de statut ni de mode**.
+   - **Conséquence :** Alors que l'endpoint dédié `POST /bookings/{id}/cancel` protège formellement les états terminaux en renvoyant une HTTP 409 si la réservation est `confirmed` ou `cancelled` (`backend/app/api/v1/endpoints/bookings.py:309-313`), un appel à `give_consent` avec `consent=False` **écrase immédiatement le statut à `"cancelled"`**, y compris sur une réservation déjà confirmée (`confirmed`), contournant ainsi totalement la protection du endpoint `/cancel`.
+   - **Couverture par les tests existants :**
+     - Seul le cas nominal de refus depuis `pending` est testé indirectement ou documenté.
+     - **Aucun test existant** dans `backend/tests/` ne vérifie le refus ou le comportement d'un `consent=False` sur une réservation au statut `confirmed`, `requested`, `declined` ou `expired`.
 
 5. **Confirmation par le partenaire (`requested` → `confirmed`) :**
    - **Fichier / Ligne :** `backend/app/api/v1/endpoints/partner.py:305-323`.
@@ -84,10 +96,11 @@
 
 ### 1.4 Écarts entre le code existant et les documents d'entrée
 
-- Le document d'entrée V1 (`PAYMENT ARCHITECTURE V1.md`, section 5) mentionnait un tableau théorique de statuts comprenant `accepted` et `completed` :
-  - `accepted` : **N'EXISTE PAS** dans le code. Le statut réel équivalent en attente de réponse partenaire est `requested`.
-  - `completed` : **N'EXISTE PAS** dans `Booking.status`. Le backend n'a pas d'état matérialisant la fin de la prestation touristique.
-  - `rejected` : **N'EXISTE PAS** sous ce nom. Le statut réel en base est `declined`.
+- Le document d'entrée V1 (`PAYMENT ARCHITECTURE V1.md`, section 5) mentionnait un tableau théorique de statuts comprenant `accepted`, `completed` et `rejected` :
+  - **Correction de la correspondance `accepted` :** Dans le document de cadrage initial, `accepted` désignait l'état où le partenaire avait accepté la demande. Or, dans le code réel, **l'acceptation par le partenaire mène directement à `confirmed`** (`backend/app/api/v1/endpoints/partner.py:306`), tandis que `requested` désigne l'attente de réponse du partenaire (`backend/app/api/v1/endpoints/bookings.py:223`).
+  - **Conséquence directe :** Dans l'état actuel de l'application, **`confirmed` n'implique absolument pas que la réservation a été payée**. Une réservation `confirmed` signifie uniquement que la disponibilité a été validée (automatiquement ou par le partenaire).
+  - `completed` : **N'EXISTE PAS** dans `Booking.status`. Le backend n'a pas d'état matérialisant la fin de la prestation touristique (cela devra faire l'objet de la table `service_completions` en V1).
+  - `rejected` : **N'EXISTE PAS** sous ce nom. Le statut réel en base est `declined` (`backend/app/api/v1/endpoints/partner.py:325`).
 - **Conclusion d'architecture :** Conformément à la règle 2.1 de `PAYMENT_ARCHITECTURE_V3.md`, les statuts réels `("pending", "requested", "confirmed", "declined", "expired", "cancelled")` sont immuables. Le domaine Payment aura sa propre machine d'états sans modifier ces valeurs.
 
 ---
@@ -171,6 +184,7 @@
 - **Constat dans le modèle :**
   - `Booking.price` existe dans `backend/app/models.py:344` sous le type `Column(Float, nullable=True)`.
   - `Booking.currency` existe dans `backend/app/models.py:345` sous le type `Column(String(10))`.
+  - **Inadéquation du type Float :** La présence de `Column(Float)` contredit frontalement la règle 2.4 de `PAYMENT_ARCHITECTURE_V3.md` (« All monetary amounts must be stored as integers in the currency's minor units. Never use floating-point values »). **`Booking.price` ne doit en aucun cas être réutilisé pour les calculs financiers, commissions ou transactions**. Tout montant financier devra être stocké en centimes/unités mineures entières dans les tables financières dédiées.
 - **Réalité de l'alimentation au runtime :**
   - `Booking.currency` est systématiquement alimenté depuis `tenant.default_currency` à la création (`backend/app/api/v1/endpoints/bookings.py:120`).
   - **`Booking.price` N'EST JAMAIS ALIMENTÉ.** Lors de la création (`POST /api/v1/bookings/`), le champ `price` n'est pas passé au constructeur `Booking(...)` (`backend/app/api/v1/endpoints/bookings.py:113-126`). Il reste donc toujours `NULL` en base de données.
@@ -321,20 +335,21 @@ Puisqu'aucun montant fiable n'est stocké à ce jour, aucune commission ni trans
 ## 11. Couverture des tests existants et infrastructure de CI
 
 ### 11.1 Fichiers et volumétrie des tests liés à la réservation et aux partenaires
+*(Note méthodologique : Les décomptes ci-dessous sont issus d'un recensement par expression régulière dans le code source ; seule une collecte d'arborescence pytest fait foi au moment de l'exécution).*
 
 - **Réservation et consentement :**
-  - `backend/tests/test_bookings.py` : **14 tests** (création, flux de consentement, annulation, idempotence des requêtes, gestion des conflits).
-  - `backend/tests/test_booking_modes.py` : **11 tests** (modes `info_only`, `request`, `manual_confirm`, `pay_on_site`, rejet des modes non supportés `deposit` et `online_payment`).
+  - `backend/tests/test_bookings.py` : ~14 fonctions de test (création, flux de consentement, annulation, idempotence des requêtes, gestion des conflits).
+  - `backend/tests/test_booking_modes.py` : ~11 fonctions de test (modes `info_only`, `request`, `manual_confirm`, `pay_on_site`, rejet des modes non supportés `deposit` et `online_payment`).
 - **Gestion partenaire et autorisations :**
-  - `backend/tests/test_partner_manual_confirm.py` : **24 tests** (décision confirm/decline, notes partenaires, contrôle d'accès, SLA de réponse, expiration, concurrence de ligne).
-  - `backend/tests/test_partner_bookings_n_plus_1.py` : **2 tests** (optimisation des requêtes partenaires).
-  - `backend/tests/test_auth_is_partner.py` : **5 tests** (calcul du statut `is_partner` via `poi_managers`).
+  - `backend/tests/test_partner_manual_confirm.py` : ~24 fonctions de test (décision confirm/decline, notes partenaires, contrôle d'accès, SLA de réponse, expiration, concurrence de ligne).
+  - `backend/tests/test_partner_bookings_n_plus_1.py` : ~2 fonctions de test (optimisation des requêtes partenaires).
+  - `backend/tests/test_auth_is_partner.py` : ~5 fonctions de test (calcul du statut `is_partner` via `poi_managers`).
 - **Expiration et cycle de vie :**
-  - `backend/tests/test_notifications_emission.py` : **5 tests** (dont test unitaire complet de `expire_overdue_requests`).
-  - `backend/tests/test_notification_worker.py` : **16 tests** (dont balayage `sweep_overdue_bookings`).
-- **Total du périmètre Réservation / Partenaire / Notifications :** **77 tests ciblés**, tous au vert.
-- **Total global du backend :** **472 tests** répartis dans le dossier `backend/tests/`.
-- **Total global mobile :** **155 tests** Flutter dans `mobile/test/`.
+  - `backend/tests/test_notifications_emission.py` : ~5 fonctions de test (dont test unitaire complet de `expire_overdue_requests`).
+  - `backend/tests/test_notification_worker.py` : ~16 fonctions de test (dont balayage `sweep_overdue_bookings`).
+- **Périmètre Réservation / Partenaire / Notifications :** ~77 tests ciblés (approximatif, grep).
+- **Total global du backend :** ~472 fonctions `test_` recensées dans `backend/tests/` (approximatif, grep).
+- **Total global mobile :** 155 tests unitaires et widget collectés dans `mobile/test/`.
 
 ### 11.2 Fixtures partagées
 
@@ -456,16 +471,24 @@ Afin de respecter le principe de non-régression et de préserver le fonctionnem
 - **Arbitrage requis :** Pour le parcours A (Intermédiation) en V1, Discover AI doit-il s'appuyer sur le **montant déclaré par le partenaire à la confirmation / fin de prestation** (Option A), ou imposer la création préalable d'un **catalogue tarifé fixe à la réservation** (Option B) ?
 - _Impact :_ Sans cette décision, la formule de calcul de la créance de commission ne peut être figée.
 
-### 🔴 Urgence 2 (Structurant pour la modélisation V1) : Forme de la confirmation de prestation
+### 🔴 Urgence 2 (Structurant pour la modélisation V1) : Partie contractante du partenaire
+
+- **Arbitrage requis :** Quelle est l'entité juridique exacte qui contracte avec Discover AI et à qui est imputée la créance de commission ?
+  - Un utilisateur individuel (`user_id`) ?
+  - Un établissement / point d'intérêt (`poi_id`) ?
+  - Une nouvelle entité « Organisation / Entreprise partenaire » (`partner_legal_entity_id`) regroupant plusieurs POI et plusieurs gestionnaires ?
+- _Justification / Impact :_ Comme constaté au point 5.1, la table `POIManager` (`backend/app/models.py:366-389`) permet à un POI d'avoir **plusieurs gestionnaires** (`UniqueConstraint("tenant_id", "poi_id", "user_id")`) et à un utilisateur de gérer plusieurs POI. Si la commission est rattachée au seul `user_id`, quel partenaire reçoit la facture quand ils sont trois ? Si elle est rattachée au `poi_id`, comment facturer globalement un partenaire hôtelier multi-établissements ?
+
+### 🔴 Urgence 3 (Structurant pour la modélisation V1) : Forme de la confirmation de prestation
 
 - **Arbitrage requis :** La confirmation d'exécution du service (déclenchant la commission) est-elle générée automatiquement à la date de réservation, ou nécessite-t-elle une validation manuelle explicite du partenaire dans son espace ?
 
-### 🟡 Urgence 3 (Moyen terme - Préparation V2) : Choix du pays de l'entité européenne et premier PSP
+### 🟡 Urgence 4 (Moyen terme - Préparation V2) : Choix du pays de l'entité européenne et premier PSP
 
 - **Arbitrage requis :** Quel est le pays d'immatriculation cible pour Discover AI Europe et quel PSP sera retenu en premier (Stripe en Europe ou Chargily Pay en Algérie) ?
 - _Impact :_ Détermine les capacités à modéliser dans la matrice des adaptateurs (autorisation/capture vs encaissement direct).
 
-### 🟢 Urgence 4 (Politique commerciale V1) : Grille et taux de commission par défaut
+### 🟢 Urgence 5 (Politique commerciale V1) : Grille et taux de commission par défaut
 
 - **Arbitrage requis :** Quel modèle de commission appliquer par défaut (pourcentage fixe, palier, montant fixe par réservation) ?
 
@@ -529,3 +552,56 @@ grep -rn "styleFor" mobile/lib/
 sed -n '148,180p' mobile/lib/screens/bookings_screen.dart
 grep -rn "DEMO_BOOKINGS" frontend/src/
 ```
+
+
+---
+
+## 17. Addendum de relecture
+
+Cet addendum consigne les conclusions critiques issues de la relecture approfondie du code source et de l'analyse des interactions croisées entre réservation, consentement, annulation et paiement.
+
+### 17.1 Absence de contrôle d'état dans `give_consent` hors `manual_confirm` et contournement du endpoint `/cancel`
+- **Faiblesse constatée :** Dans `backend/app/api/v1/endpoints/bookings.py:251-276` :
+  - La branche `manual_confirm` vérifie formellement `if booking.status != "pending": raise HTTPException(status_code=409)`.
+  - En revanche, la branche `else` (modes `request`, `pay_on_site`, etc.) ne comporte **aucun contrôle sur `booking.status`**.
+  - Si `data.consent == True` : la réservation est basculée à `"confirmed"`, `consent_given` passe à `True`, et un nouvel `external_id` lui est assigné, **même si la réservation était préalablement `cancelled`, `declined`, `expired` ou déjà `confirmed`**.
+  - Si `data.consent == False` (`backend/app/api/v1/endpoints/bookings.py:271-273`) : la réservation est basculée directement à `status = "cancelled"`, **sans aucun contrôle de statut ni de mode**.
+- **Contournement de la sécurité de `/cancel` :**
+  - L'endpoint dédié `POST /api/v1/bookings/{booking_id}/cancel` protège expressément les états terminaux en renvoyant une HTTP 409 si le statut n'est pas parmi `("pending", "requested", "expired")` (`backend/app/api/v1/endpoints/bookings.py:309-313`).
+  - Cependant, un voyageur peut appeler `POST /api/v1/bookings/{booking_id}/consent` avec `{"consent": false}` sur une réservation déjà `confirmed` : le backend exécute `booking.status = "cancelled"` sans restriction, **contournant totalement le verrou 409 de `/cancel`**.
+- **Couverture de tests existante :**
+  - Les tests actuels (`backend/tests/test_bookings.py` et `backend/tests/test_booking_modes.py`) vérifient uniquement le cas nominal où `give_consent` est appelé sur une réservation au statut initial `pending`.
+  - Aucun test existant ne teste `give_consent` sur une réservation déjà `confirmed`, `cancelled`, `expired` ou `declined`.
+- **Impact sur le système de paiement :**
+  - Il est impératif que le domaine Payment ne se fie pas uniquement à `Booking.status` pour déclencher ou annuler un flux financier. Si un voyageur peut annuler une réservation confirmée via `give_consent(consent=False)` en contournant `/cancel`, le système de paiement risquerait de déclencher des remboursements indus ou de corrompre l'état des autorisations bancaires.
+
+### 17.2 Impossibilité d'annuler une réservation confirmée via `/cancel` : impact sur la politique d'annulation et les remboursements
+- **Constat dans le code :**
+  - Dans `backend/app/api/v1/endpoints/bookings.py:309-313` :
+    ```python
+    if booking.status not in ("pending", "requested", "expired"):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot cancel a booking in status '{booking.status}'",
+        )
+    ```
+  - Une réservation `confirmed` **ne peut pas être annulée par le voyageur via le endpoint normal `/cancel`**.
+- **Conséquences majeures pour le projet Paiement :**
+  - Les politiques d'annulation (section 2.6 de `PAYMENT_ARCHITECTURE_V3.md` : délai d'annulation gratuite, heure limite, remboursement partiel/total) s'appliquent typiquement à des réservations qui ont été **confirmées**.
+  - Or, dans l'architecture actuelle, une fois qu'une réservation est `confirmed`, le voyageur est totalement bloqué pour annuler via l'API officielle.
+  - Pour supporter des politiques d'annulation et d'éventuels remboursements (V2/V3), le domaine Payment et les endpoints de réservation devront définir un nouveau flux d'annulation post-confirmation contrôlé par les règles financières de la politique d'annulation associée, sans rupture du contrat existant.
+
+### 17.3 Inadéquation absolue de `Booking.price` (Float) pour la finance
+- Dans `backend/app/models.py:344`, `price = Column(Float, nullable=True)` utilise le type virgule flottante (`FLOAT`/`REAL` SQL).
+- Outre le fait qu'il n'est jamais alimenté par l'API actuelle (section 4), l'usage de nombres à virgule flottante présente des risques d'imprécision binaire inacceptables pour un grand livre financier (ex. `0.1 + 0.2 != 0.3`).
+- **Décision d'architecture confirmée :** `Booking.price` reste un champ dormant non exploité. Toutes les futures tables financières (`service_completions`, `commission_receivables`, `partner_ledger_entries`, `payment_transactions`) utiliseront exclusivement des entiers en unités mineures (centimes) avec métadonnées d'exposant de devise, conformément à la règle 2.4.
+
+### 17.4 Définition de la partie contractante partenaire : ambiguïté `User` vs `POI` vs `Organisation`
+- Dans la structure actuelle (`backend/app/models.py:366-389`), la relation partenaire est modélisée par `POIManager` liant un `user_id` à un `poi_id`.
+- **Problème d'imputation financière :**
+  - Un POI peut avoir 3 gérants distincts dans `POIManager`. Si une commission est due pour une prestation réalisée dans ce POI, à quel `user_id` la facture de commission doit-elle être adressée ?
+  - Inversement, un partenaire professionnel exploitant une chaîne de 5 hôtels ou plusieurs activités touristiques aura plusieurs POI.
+  - La V1 du domaine Payment doit donc définir sans ambiguïté si le débiteur contractuel de Discover AI est :
+    1. L'utilisateur qui confirme la prestation (`responded_by`),
+    2. L'établissement (`poi_id`),
+    3. Ou une entité légale partenaire dédiée (`partner_legal_entities`), regroupant les POIs sous une même raison sociale et un même compte de facturation.

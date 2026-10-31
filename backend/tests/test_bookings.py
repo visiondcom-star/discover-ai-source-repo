@@ -219,3 +219,176 @@ async def test_list_adapters(client, auth_headers):
     response = await client.get("/api/v1/bookings/adapters/available", headers=auth_headers)
     assert response.status_code == 200
     assert "adapters" in response.json()
+
+
+# ---- Helpers pour les tests de consentement ---------------------------------
+
+async def _poi(db_session, tenant, slug, mode="request"):
+    from app.models import POI
+
+    poi = POI(
+        tenant_id=tenant.id,
+        slug=slug,
+        name=f"POI {slug}",
+        city="Alger",
+        categories=["culture"],
+        is_active=True,
+        booking_mode=mode,
+    )
+    db_session.add(poi)
+    await db_session.commit()
+    await db_session.refresh(poi)
+    return poi
+
+
+async def _booking(db_session, tenant, user, poi, status="pending", consent_given=False, mode="request"):
+    from app.models import Booking
+
+    booking = Booking(
+        tenant_id=tenant.id,
+        user_id=user.id,
+        poi_id=poi.id,
+        adapter_type="hotel",
+        status=status,
+        consent_given=consent_given,
+        currency="DZD",
+        booking_mode=mode,
+    )
+    db_session.add(booking)
+    await db_session.commit()
+    await db_session.refresh(booking)
+    return booking
+
+
+async def _consent(client, auth_headers, booking_id, consent=True):
+    return await client.post(
+        f"/api/v1/bookings/{booking_id}/consent",
+        headers=auth_headers,
+        json={"consent": consent},
+    )
+
+
+async def _notif_count(db_session, tenant_id, booking_id=None):
+    from sqlalchemy import func, select
+    from app.models import Notification
+
+    stmt = select(func.count()).select_from(Notification).where(Notification.tenant_id == tenant_id)
+    if booking_id is not None:
+        stmt = stmt.where(Notification.booking_id == booking_id)
+    res = await db_session.execute(stmt)
+    return res.scalar_one()
+
+
+# ---- Tests des gardes de statut sur give_consent -----------------------------
+
+@pytest.mark.asyncio
+async def test_consent_true_on_cancelled_booking_rejected(client, auth_headers, db_session, test_tenant, test_user):
+    poi = await _poi(db_session, test_tenant, "cancelled-consent-poi", mode="request")
+    booking = await _booking(
+        db_session, test_tenant, test_user, poi, status="cancelled", consent_given=False, mode="request"
+    )
+
+    notifs_before = await _notif_count(db_session, test_tenant.id, booking.id)
+
+    response = await _consent(client, auth_headers, booking.id, consent=True)
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Booking cannot be consented in its current state"
+
+    await db_session.refresh(booking)
+    assert booking.status == "cancelled"
+    assert booking.consent_given is False
+
+    notifs_after = await _notif_count(db_session, test_tenant.id, booking.id)
+    assert notifs_after == notifs_before
+
+
+@pytest.mark.asyncio
+async def test_consent_true_on_confirmed_booking_rejected(client, auth_headers, db_session, test_tenant, test_user):
+    poi = await _poi(db_session, test_tenant, "confirmed-consent-poi", mode="request")
+    booking = await _booking(
+        db_session, test_tenant, test_user, poi, status="confirmed", consent_given=True, mode="request"
+    )
+
+    notifs_before = await _notif_count(db_session, test_tenant.id, booking.id)
+
+    response = await _consent(client, auth_headers, booking.id, consent=True)
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Booking cannot be consented in its current state"
+
+    await db_session.refresh(booking)
+    assert booking.status == "confirmed"
+
+    notifs_after = await _notif_count(db_session, test_tenant.id, booking.id)
+    assert notifs_after == notifs_before
+
+
+@pytest.mark.asyncio
+async def test_consent_false_on_confirmed_booking_rejected(client, auth_headers, db_session, test_tenant, test_user):
+    poi = await _poi(db_session, test_tenant, "confirmed-cancel-consent-poi", mode="request")
+    booking = await _booking(
+        db_session, test_tenant, test_user, poi, status="confirmed", consent_given=True, mode="request"
+    )
+
+    response = await _consent(client, auth_headers, booking.id, consent=False)
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Booking cannot be consented in its current state"
+
+    await db_session.refresh(booking)
+    assert booking.status == "confirmed"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", ["requested", "confirmed", "declined", "expired", "cancelled"])
+async def test_consent_false_on_non_pending_manual_confirm_rejected(
+    client, auth_headers, db_session, test_tenant, test_user, status
+):
+    poi = await _poi(db_session, test_tenant, f"manual-{status}-poi", mode="manual_confirm")
+    booking = await _booking(
+        db_session,
+        test_tenant,
+        test_user,
+        poi,
+        status=status,
+        consent_given=(status in ("requested", "confirmed")),
+        mode="manual_confirm",
+    )
+
+    response = await _consent(client, auth_headers, booking.id, consent=False)
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Booking cannot be consented in its current state"
+
+    await db_session.refresh(booking)
+    assert booking.status == status
+
+
+@pytest.mark.asyncio
+async def test_consent_non_regression_from_pending(client, auth_headers, db_session, test_tenant, test_user):
+    # 1) Mode request: pending -> consent=True -> confirmed
+    poi_req = await _poi(db_session, test_tenant, "nr-req-true", mode="request")
+    b_req_true = await _booking(db_session, test_tenant, test_user, poi_req, status="pending", mode="request")
+    r1 = await _consent(client, auth_headers, b_req_true.id, consent=True)
+    assert r1.status_code == 200
+    assert r1.json()["status"] == "confirmed"
+    assert r1.json()["consent_given"] is True
+
+    # 2) Mode request: pending -> consent=False -> cancelled
+    poi_req_f = await _poi(db_session, test_tenant, "nr-req-false", mode="request")
+    b_req_false = await _booking(db_session, test_tenant, test_user, poi_req_f, status="pending", mode="request")
+    r2 = await _consent(client, auth_headers, b_req_false.id, consent=False)
+    assert r2.status_code == 200
+    assert r2.json()["status"] == "cancelled"
+
+    # 3) Mode manual_confirm: pending -> consent=True -> requested
+    poi_man = await _poi(db_session, test_tenant, "nr-man-true", mode="manual_confirm")
+    b_man_true = await _booking(db_session, test_tenant, test_user, poi_man, status="pending", mode="manual_confirm")
+    r3 = await _consent(client, auth_headers, b_man_true.id, consent=True)
+    assert r3.status_code == 200
+    assert r3.json()["status"] == "requested"
+    assert r3.json()["consent_given"] is True
+
+    # 4) Mode manual_confirm: pending -> consent=False -> cancelled
+    poi_man_f = await _poi(db_session, test_tenant, "nr-man-false", mode="manual_confirm")
+    b_man_false = await _booking(db_session, test_tenant, test_user, poi_man_f, status="pending", mode="manual_confirm")
+    r4 = await _consent(client, auth_headers, b_man_false.id, consent=False)
+    assert r4.status_code == 200
+    assert r4.json()["status"] == "cancelled"

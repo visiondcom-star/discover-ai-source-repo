@@ -208,6 +208,9 @@ async def give_consent(
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
 
+    if booking.status != "pending":
+        raise HTTPException(status_code=409, detail="Booking cannot be consented in its current state")
+
     if data.consent:
         # Load POI name for notification payload if POI exists
         poi_res = await db.execute(select(POI).where(POI.id == booking.poi_id))

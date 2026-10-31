@@ -9,25 +9,28 @@ class AppColors {
   const AppColors._();
 
   /// Base brand green used as the Material 3 seed.
-  static const Color brand = Color(0xFF006233);
+  static const Color brand = Color(0xFF0F4C3A);
+
+  /// Brand ink for pressed states, headings and deep contrast.
+  static const Color brandInk = Color(0xFF063828);
 
   /// Vivid green for selected states and small highlights.
   static const Color brandBright = Color(0xFF1E8B52);
 
   /// Pale green tint — selected chips, soft surfaces.
-  static const Color brandTint = Color(0xFFE6F2EC);
+  static const Color brandTint = Color(0xFFF4F8F5);
 
   /// Warm accent — weather badges, promos, contextual highlights.
-  static const Color accent = Color(0xFFF2A948);
+  static const Color accent = Color(0xFFF4A261);
 
   /// Light app background (light mode scaffold).
-  static const Color background = Color(0xFFF7F6F3);
+  static const Color background = Color(0xFFFAF9F7);
 
   /// Primary text — dark ink.
-  static const Color ink = Color(0xFF222222);
+  static const Color ink = Color(0xFF13221C);
 
   /// Secondary text — muted grey.
-  static const Color inkSoft = Color(0xFF6C757D);
+  static const Color inkSoft = Color(0xFF5A6B63);
 }
 
 /// Central application theme for the Discover AI mobile app.

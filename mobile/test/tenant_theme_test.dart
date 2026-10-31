@@ -38,7 +38,7 @@ void main() {
   });
 
   group('AppTheme.light (fallback)', () {
-    test('still seeds from the Algeria default #006233', () {
+    test('still seeds from the Algeria default #0F4C3A', () {
       expect(AppTheme.light().colorScheme.primary, AppColors.brand);
     });
   });

@@ -30,7 +30,7 @@ class TenantBase(BaseModel):
     default_language: str = "fr"
     supported_languages: List[str] = ["fr", "ar", "en"]
     default_currency: str  # required — each tenant must declare its currency
-    primary_color: str = "#006233"
+    primary_color: str = "#0F4C3A"
     secondary_color: str = "#FFFFFF"
     is_active: bool = True
     config: Dict[str, Any] = {}

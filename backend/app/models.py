@@ -45,7 +45,7 @@ class Tenant(Base):
     default_language = Column(String(10), default="fr")
     supported_languages = Column(ARRAY(String), default=list)
     default_currency = Column(String(10))  # required per-tenant; never a hardcoded literal
-    primary_color = Column(String(7), default="#006233")
+    primary_color = Column(String(7), default="#0F4C3A")
     secondary_color = Column(String(7), default="#FFFFFF")
     is_active = Column(Boolean, default=True)
     country_code = Column(String(2), nullable=True, index=True)

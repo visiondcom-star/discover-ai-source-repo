@@ -206,11 +206,11 @@ Par ailleurs, un POI peut avoir 3 gérants distincts, et un même professionnel 
 - **Architecture de scoping : Option A vs Option B**
   - **Option A (Entité plateforme sans `tenant_id`) :** L'entité légale est globale à la plateforme et référencée par les tenants via `Tenant.config["legal_entity_id"]` ou une table d'association `tenant_legal_entities`.  
     *Avantages :* Évite la duplication si plusieurs tenants partagent la même entité juridique.  
-    *Risques :* Contrevient au principe architectural non négociable énoncé dans `CLAUDE.md:59` (*« tenant_id sur toutes les entités clés... aucune entité globale sans super-admin »*) et complique les filtres de requêtes multi-tenant.
+    *Risques :* Contrevient au principe architectural non négociable 2 de `CLAUDE.md:59` (*« tenant_id auf allen Kernentitäten »* [tenant_id sur toutes les entités clés]) ainsi qu'à la section *Tenant-Administration* de `CLAUDE.md:79` (*« Es gibt bewusst keinen Super-Admin auf Plattformebene »* [Il n'y a délibérément aucun super-admin au niveau plateforme]), et complique les filtres de requêtes multi-tenant.
   - **Option B (Scoping strict par tenant, une ligne par tenant — Recommandation) :** Chaque tenant déclare formellement son entité juridique responsable dans `legal_entities` avec clé étrangère `tenant_id`. En V1, seul le tenant `algeria` possède une entité active (`country_code="DZ"`).  
     *Avantages :* Respecte à 100 % l'isolation multi-tenant stricte (`backend/app/core/tenant.py:1-25`), simplifie les contrôles de sécurité et les cascades de suppression.  
     *Risques :* Duplication de métadonnées si plusieurs tenants partagent une structure juridique future.
-  - > **DÉCISION PROPRIÉTAIRE REQUISE :** Valider l'Option B (scoping strict par tenant avec `tenant_id` sur `legal_entities`) ou l'Option A (entité plateforme globale liée par configuration).
+  - > **DÉCISION PROPRIÉTAIRE REQUISE :** Valider l'Option B (scoping strict par tenant avec `tenant_id` sur `legal_entities`, alignée sur le principe 2 de CLAUDE.md) ou l'Option A (entité plateforme globale liée par configuration).
 - **Colonnes :**
   - `id` : `UUID`, Clé Primaire (`default=uuid.uuid4`).
   - `tenant_id` : `UUID`, Clé Étrangère vers `tenants.id`, non nulle, indexée (sous Option B).
@@ -243,7 +243,8 @@ Par ailleurs, un POI peut avoir 3 gérants distincts, et un même professionnel 
 
 - **Rôle :** Rattachement temporel d'un POI à une entité partenaire responsable de sa gestion financière.
 - **Règle de non-chevauchement temporel :** Un POI donné au sein d'un tenant ne peut être rattaché qu'à un seul profil partenaire à un instant $T$. Deux plages `[valid_from, valid_to[` ne doivent jamais se recouvrir pour un même `poi_id`.  
-  *Mise en œuvre :* Vérification applicative sous verrou pessimiste (`with_for_update()`) lors des écritures, complétée si possible par une contrainte d'exclusion PostgreSQL (`EXCLUDE USING gist (poi_id WITH =, tsrange(valid_from, coalesce(valid_to, 'infinity'::timestamp)) WITH &&)`).
+  *Mise en œuvre :* Vérification applicative sous verrou pessimiste (`with_for_update()`) lors des écritures.  
+  *Contrainte d'exclusion PostgreSQL (`EXCLUDE USING gist`) :* L'expression `EXCLUDE USING gist (poi_id WITH =, tsrange(valid_from, coalesce(valid_to, 'infinity'::timestamp)) WITH &&)` exige l'extension PostgreSQL `btree_gist`. Or, cette extension n'est pas activée aujourd'hui sur le conteneur (`deploy/postgres/init-test-db.sql:8, 13` n'active que l'extension `vector`). L'utilisation de cette contrainte nécessite une migration Alembic exécutant `CREATE EXTENSION IF NOT EXISTS btree_gist;` et une reconstruction éventuelle de l'image de base (`docker compose build postgres` selon `CLAUDE.md:34, 110`). À défaut, la vérification applicative stricte sous transaction sérialisée suffit en V1a.
 - **Colonnes :**
   - `id` : `UUID`, Clé Primaire.
   - `tenant_id` : `UUID`, Clé Étrangère vers `tenants.id`, non nulle, indexée.
@@ -296,8 +297,11 @@ Par ailleurs, un POI peut avoir 3 gérants distincts, et un même professionnel 
   - `disputed_at` : `DateTime`, horodatage de contestation par le voyageur.
   - `supersedes_declaration_id` : `UUID`, Clé Étrangère vers `service_declarations.id`, nullable (identifie la déclaration corrigée).
   - `is_current` : `Boolean`, non nulle, défaut `True` (indique la version active du type de déclaration pour la réservation).
+  - `declared_by_admin` : `Boolean`, non nulle, défaut `False` (drapeau indiquant si l'action émane d'un administrateur).
+  - `declaration_reason` : `Text`, nullable (obligatoire si `declared_by_admin == True` ; le motif est également consigné dans `financial_audit_log.reason`).
   - `created_at` : `DateTime`, défaut `utcnow`.
 - **Contraintes et Index :** 
+  - `CheckConstraint("declared_by_admin = False OR (declared_by_admin = True AND declaration_reason IS NOT NULL)", name="chk_admin_declaration_reason")`.
   - Unicité partielle compatible avec les corrections et les 3 types de déclaration :  
     `CREATE UNIQUE INDEX uq_current_declaration ON service_declarations (tenant_id, booking_id, declaration_type) WHERE is_current = True;`  
     Cette contrainte garantit qu'il ne peut exister qu'une seule déclaration active par type pour une réservation donnée, tout en autorisant l'historique de versions successives via `is_current = False`.
@@ -341,7 +345,7 @@ Par ailleurs, un POI peut avoir 3 gérants distincts, et un même professionnel 
   - *Niveau 2 (Option de verrouillage PostgreSQL direct) :*  
     - Option A : Révocation des privilèges SQL `REVOKE UPDATE, DELETE ON financial_audit_log FROM discoverai_app;` appliquée via migration Alembic.  
     - Option B : Trigger PostgreSQL `BEFORE UPDATE OR DELETE` levant une exception `RAISE EXCEPTION 'financial_audit_log is immutable'`.  
-    *Coûts et risques de migration :* L'Option A exige que l'utilisateur de connexion applicatif PostgreSQL ne soit pas superuser / propriétaire absolu de la base (sinon le REVOKE peut être contourné). L'Option B fonctionne indépendamment des rôles mais introduit un trigger PL/pgSQL nécessitant des tests dédiés dans l'environnement de test SQLite/Postgres.  
+    *Coûts et risques de migration :* L'Option A exige que l'utilisateur de connexion applicatif PostgreSQL ne soit pas superuser / propriétaire absolu de la base (sinon le REVOKE peut être contourné). L'Option B fonctionne indépendamment des rôles mais introduit un trigger PL/pgSQL exécuté sur la base de test PostgreSQL (`discoverai_test`).  
     *Recommandation :* Mettre en œuvre le trigger bloquant (Option B) en plus de la politique logicielle dès la migration V1a.
 - **Colonnes :**
   - `id` : `UUID`, Clé Primaire.
@@ -473,15 +477,20 @@ Conformément à `PAYMENT_DECISIONS_V1.md` §7 :
     *Avantages :* Prudence commerciale en faveur du partenaire, aucune fraction de centime surfacturée.
   - **Option B (Arrondi bancaire au plus proche — Half to Even) :** Arrondi standard demi-pair sur le centime.  
     *Avantages :* Standard comptable limitant les biais d'agrégation statistique.
-  - **Exemple chiffré :**
-    - Montant déclaré TTC = 15 250 DZD (`amount_minor = 1525000` centimes).
-    - TVA documentée = 2 434,87 DZD (`tax_amount_minor = 243487` centimes).
-    - Base HT = $1\,525\,000 - 243\,487 = 1\,281\,513$ centimes (12 815,13 DZD).
-    - Taux de commission = 10,00 % (`rate_bps = 1000`).
-    - Produit brut = $1\,281\,513 \times 1\,000 = 1\,281\,513\,000$.
-    - Division par 10 000 = $128\,151,3$ centimes.
-    - Résultat Option A (Floor) = $128\,151$ centimes (1 281,51 DZD).
-    - Résultat Option B (Half to Even) = $128\,151$ centimes (1 281,51 DZD). (Si le produit avait donné 128 151,5 centimes, l'arrondi au pair donnerait 128 152 centimes).
+  - **Exemple chiffré comparatif :**
+    - **Cas 1 (Le produit brut tombe sur un demi-centime pair) :**
+      - Montant déclaré HT = 12 815,05 DZD (`Base = 1281505` centimes).
+      - Taux de commission = 10,00 % (`rate_bps = 1000`).
+      - Produit brut / 10 000 = $(1\,281\,505 \times 1\,000) / 10\,000 = 128\,150,5$ centimes.
+      - Résultat Option A (Floor) = $128\,150$ centimes (1 281,50 DZD).
+      - Résultat Option B (Half to Even) = $128\,150$ centimes (1 281,50 DZD), car 128 150 est pair.
+    - **Cas 2 (Le produit brut tombe sur un demi-centime impair, illustrant l'écart) :**
+      - Montant déclaré HT = 12 815,15 DZD (`Base = 1281515` centimes).
+      - Taux de commission = 10,00 % (`rate_bps = 1000`).
+      - Produit brut / 10 000 = $(1\,281\,515 \times 1\,000) / 10\,000 = 128\,151,5$ centimes.
+      - Résultat Option A (Floor) = $128\,151$ centimes (1 281,51 DZD).
+      - Résultat Option B (Half to Even) = $128\,152$ centimes (1 281,52 DZD), car 128 152 est le nombre pair le plus proche.
+    - *(Calculs validés avec le module standard Python `decimal.Decimal` et les politiques `ROUND_FLOOR` et `ROUND_HALF_EVEN`).*
 
 > **DÉCISION PROPRIÉTAIRE REQUISE :** Valider la politique d'arrondi explicite (Option A : troncature/floor, ou Option B : arrondi bancaire demi-pair).
 
@@ -569,15 +578,45 @@ Tous les endpoints sont montés avec isolation stricte par tenant via `x_tenant_
 - **Espace partenaire (`mobile/lib/screens/partner_bookings_screen.dart`) :** Sur les réservations confirmées dont la date d'exécution est passée, ajout d'un bouton d'action _"Déclarer la prestation"_ ouvrant une modale de saisie du montant en devise locale.
 - **Écran voyageur (`mobile/lib/screens/bookings_screen.dart`) :** Réception de la notification `service_declaration_received`. La carte de réservation affiche un bandeau invitant à confirmer ou contester le montant sous 72 h.
 
-### 7.3 Mécanisme des rappels périodiques et worker d'arrière-plan
+### 7.3 Mécanisme des rappels périodiques et gestion de l'unicité des notifications
 
+#### Contrainte d'unicité existante sur les notifications
+Dans le code actuel (`backend/app/models.py:460-469`), la table `notifications` porte un index partiel unique strict :
+```python
+Index(
+    "uq_notifications_booking_unique",
+    "tenant_id",
+    "user_id",
+    "booking_id",
+    "type",
+    unique=True,
+    postgresql_where=text("booking_id IS NOT NULL"),
+)
+```
+Dans `backend/app/services/notification_service.py:51, 68-80`, toute tentative d'insérer un doublon levant `IntegrityError` est capturée par un savepoint (`begin_nested()`) et silencieusement ignorée.  
+**Conflits identifiés avec le domaine financier :**
+1. Si un partenaire émet une déclaration de correction (`supersedes_declaration_id`), ou s'il déclare ultérieurement des frais (`late_cancellation_fee` ou `no_show_fee` après une première notification), l'émission d'une notification du type identique `service_declaration_received` pour la même réservation (`booking_id`) sera **rejetée silencieusement par la base** et le voyageur ne sera jamais averti.
+2. De même, si le worker tente d'envoyer un rappel périodique avec le type `service_confirmation_reminder`, il ne pourra en émettre qu'un seul sur toute la durée de vie de la réservation.
+
+#### Options architecturales pour gérer les notifications financières multiples
+- **Option A (Types d'événements distincts et dédiés — Recommandation V1a) :** Conserver l'index unique existant intact (zéro risque de régression sur les notifications système en production) et introduire des types de notification distincts pour chaque événement financier :
+  - Déclaration initiale : `service_declaration_received`
+  - Correction de déclaration : `service_declaration_corrected`
+  - Frais de no-show / annulation : `fee_declaration_received`
+  - Rappel d'échéance : `service_confirmation_reminder`
+- **Option B (Évolution de l'index d'unicité avec clé de déduplication / version) :** Migration Alembic modifiant `uq_notifications_booking_unique` pour inclure une clé discriminante optionnelle `dedup_key` ou `declaration_id`.  
+  *Avantages :* Autorise plusieurs notifications du même type avec clés distinctes.  
+  *Risques :* Migration DDL sur une table centrale en production, risque de régression sur les flux existants de réservation et consentement.
+
+> **DÉCISION PROPRIÉTAIRE REQUISE :** Valider l'Option A (types de notification distincts par événement sans modification de l'index d'unicité) pour la V1a.
+
+#### Fonctionnement du balayage de rappel par le worker
 Conformément à `PAYMENT_DECISIONS_V1.md` §4 et A14, le voyageur dispose d'un délai configurable de 72 heures pour confirmer ou contester la prestation déclarée.  
-Pour éviter que l'échéance n'expire sans visibilité pour le voyageur, un mécanisme de rappels périodiques est prévu en V1a :
 1. **Infrastructure réutilisée :** Le worker d'arrière-plan existant (`backend/app/services/notification_worker.py:91-105`) implémente déjà l'acquisition atomique par lots sans contention via `SELECT FOR UPDATE SKIP LOCKED` (`claim_batch`), les politiques de baux expirables (`locked_until`), et les relances cadencées (`RETRY_DELAYS`, `next_attempt_at`, lignes 19-25).
-2. **Fonctionnement du balayage de rappel :**
+2. **Balayage cadencé :**
    - Une fonction périodique `dispatch_pending_confirmation_reminders(db: AsyncSession)` inspecte les déclarations actives dans `service_declarations` avec `status == "declared"`.
-   - Si le délai restant avant `confirmation_deadline` est compris entre 24 h et 25 h (soit 48 h après la déclaration initiale), et qu'aucune notification de relance n'a encore été envoyée pour cette déclaration, le système émet une notification `service_confirmation_reminder` au voyageur via `create_notification` (`backend/app/services/notification_service.py:35-82`).
-   - L'idempotence de la relance est assurée par l'unicité composite naturelle des notifications (`Notification.tenant_id`, `Notification.user_id`, `Notification.booking_id`, `Notification.type`).
+   - Si le délai restant avant `confirmation_deadline` est compris entre 24 h et 25 h (soit 48 h après la déclaration initiale), et qu'aucune notification de relance n'a encore été envoyée pour cette réservation, le système émet une notification `service_confirmation_reminder` au voyageur via `create_notification` (`backend/app/services/notification_service.py:35-82`).
+   - L'idempotence de la relance est garantie par l'index `uq_notifications_booking_unique` sur le type `service_confirmation_reminder`.
 
 ### 7.4 Script CLI de reporting financier (`app/reporting_finance.py`)
 
@@ -620,7 +659,7 @@ La dernière révision en date sur `main` est `0016_backfill_skipped_notifs.py` 
 ## 9. Stratégie de tests et non-régression
 
 La suite de tests backend doit impérativement demeurer à 100 % passante.  
-*Note de référence de couverture :* Le fichier `CLAUDE.md:11` documente 279 tests unitaires historiques (`279/279 pytest-Tests grün`). Lors de l'exécution complète sur la branche avec l'ensemble des modules additionnels (recherche, notifications, réservations multi-modes), la suite compte 446 tests passants. Tout ajout de migration ou de modèle financier s'accompagnera de tests stricts sans affaiblir aucune assertion existante.
+*Note de référence de couverture :* Le fichier `CLAUDE.md:11` documente 279 tests unitaires historiques (`279/279 pytest-Tests grün`). Le nombre effectif actuel de tests est à mesurer avant l'implémentation (commande : `docker compose exec backend pytest tests/ -q`). L'ensemble des tests s'exécute sur PostgreSQL (`backend/tests/conftest.py:17-22`, base de test `discoverai_test` avec `create_async_engine`). Tout ajout de migration ou de modèle financier s'accompagnera de tests stricts sans affaiblir aucune assertion existante.
 
 ### 9.1 Nouveaux tests unitaires et d'intégration à prévoir (pour l'implémentation)
 
@@ -657,10 +696,11 @@ Ces constats sont consignés à titre d'information architecturale et **ne doive
 
 1. **DÉCISION PROPRIÉTAIRE REQUISE 1 :** Confirmer que seul le mode de réservation `manual_confirm` est éligible à la déclaration de prestation et au calcul de commission en V1a, les modes `request` et `pay_on_site` étant exclus jusqu'à réévaluation en V1b (§2).
 2. **DÉCISION PROPRIÉTAIRE REQUISE 2 :** Valider la création des tables autonomes `partner_profiles` et `partner_poi_assignments` pour isoler la relation contractuelle financière sans dénaturer la table opérationnelle `poi_managers` (§3.1).
-3. **DÉCISION PROPRIÉTAIRE REQUISE 3 :** Arbitrer le modèle d'attachement de `legal_entities` entre l'Option A (entité globale de plateforme sans `tenant_id`) et l'Option B (scoping strict par tenant avec `tenant_id`, recommandée par `CLAUDE.md:59`) (§3.2).
+3. **DÉCISION PROPRIÉTAIRE REQUISE 3 :** Arbitrer le modèle d'attachement de `legal_entities` entre l'Option A (entité globale de plateforme sans `tenant_id`) et l'Option B (scoping strict par tenant avec `tenant_id`, alignée sur le principe 2 de CLAUDE.md) (§3.2).
 4. **DÉCISION PROPRIÉTAIRE REQUISE 4 :** Arbitrer la source de la date de prestation entre l'Option A (saisie par le partenaire à la déclaration, bornée au présent/passé), l'Option B (colonne dédiée ajoutée sur `Booking`), et l'Option C (clé obligatoire dans `booking_data`) (§4.1).
 5. **DÉCISION PROPRIÉTAIRE REQUISE 5 :** Arbitrer le traitement de l'expiration du délai de 72 h alloué au voyageur entre l'Option A (confirmation tacite automatique) et l'Option B (mise en attente `expired_unconfirmed` sans calcul de commission, recommandée par `PAYMENT_DECISIONS_V1.md` §4) (§4.2).
 6. **DÉCISION PROPRIÉTAIRE REQUISE 6 :** Valider la politique d'arrondi explicite de la commission entre l'Option A (arrondi à l'unité mineure inférieure / floor) et l'Option B (arrondi bancaire demi-pair) (§4.3).
 7. **DÉCISION PROPRIÉTAIRE REQUISE 7 :** Arbitrer le rôle de l'administrateur du tenant pour la déclaration de prestation entre l'Option A (interdiction stricte réservée aux gestionnaires de POI) et l'Option B (autorisation en secours avec motif d'audit obligatoire) (§5).
-8. **DÉCISION PROPRIÉTAIRE REQUISE 8 :** Valider l'Option A pour le mécanisme de preuve de prestation en V1a (déclaration partenaire couplée à une confirmation in-app du voyageur), écartant les contraintes matérielles des justificatifs papiers ou scanners QR sur place (§6).
-9. **DÉCISION PROPRIÉTAIRE REQUISE 9 :** Confirmer le gel complet des commissions sur le tenant `morocco` en V1 en application stricte de la règle de sécurité métier pays/entité (§3.3).
+8. **DÉCISION PROPRIÉTAIRE REQUISE 8 :** Valider l'Option A pour la gestion de l'unicité des notifications (types d'événements distincts sans toucher à l'index partiel `uq_notifications_booking_unique` en base) (§7.3).
+9. **DÉCISION PROPRIÉTAIRE REQUISE 9 :** Valider l'Option A pour le mécanisme de preuve de prestation en V1a (déclaration partenaire couplée à une confirmation in-app du voyageur), écartant les contraintes matérielles des justificatifs papiers ou scanners QR sur place (§6).
+10. **DÉCISION PROPRIÉTAIRE REQUISE 10 :** Confirmer le gel complet des commissions sur le tenant `morocco` en V1 en application stricte de la règle de sécurité métier pays/entité (§3.3).

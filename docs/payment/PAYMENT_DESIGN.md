@@ -23,11 +23,11 @@ Conformément à `PAYMENT_DECISIONS_V1.md` §14, la fondation financière repose
 | Entité légale Discover AI unique (Algérie) et propagation de `legal_entity_id`                                                | **V1a** | Une seule ligne en base (`PAYMENT_DECISIONS_V1.md` §8)                                 |
 | Règle de sécurité pays/entité (activation commission si pays partenaire == pays entité)                                       | **V1a** | `Tenant.country_code` (`backend/app/models.py:51`) et pays du profil partenaire        |
 | Configuration du taux de commission (base 1 000 bps = 10 %, surcharges par partenaire)                                        | **V1a** | Stockage en points de base (`Integer`)                                                 |
-| Déclaration de prestation par le partenaire (`service_declarations`) avec montant et devise                                   | **V1a** | Réservation au statut `confirmed`                                                      |
-| Confirmation de prestation par le voyageur (enregistrement date, source, montant)                                             | **V1a** | Notification voyageur in-app / push                                                    |
-| Enregistrement initial de contestation par le voyageur (motif horodaté)                                                       | **V1a** | Suspension du calcul de commission dès l'ouverture (`PAYMENT_DECISIONS_V1.md` §4, A14) |
-| Délai de réponse de 72 h configurable par tenant et rappels périodiques                                                       | **V1a** | Worker de notifications (`backend/app/services/notification_service.py`)               |
-| Calcul et snapshot immuable de la commission (`service_completions`, `commission_receivables`)                                | **V1a** | Uniquement après confirmation du voyageur                                              |
+| Déclaration de prestation par le partenaire (`service_declarations`) avec montant et devise | **V1a** | Réservation au statut `confirmed` |
+| Confirmation de prestation par le voyageur (enregistrement date, source, montant) | **V1a** | Notification voyageur in-app / push |
+| Enregistrement initial de contestation par le voyageur (motif horodaté) | **V1a** | Suspension du calcul de commission dès l'ouverture (`PAYMENT_DECISIONS_V1.md` §4, A14) |
+| Délai de réponse de 72 h configurable par tenant et rappels périodiques | **V1a** | Tâche d'arrière-plan / worker périodique (`backend/app/services/notification_worker.py:91-105`) |
+| Calcul et snapshot immuable de la commission (`service_completions`, `commission_receivables`) | **V1a** | Uniquement après confirmation du voyageur |
 | Journal d'audit financier append-only (`financial_audit_log`)                                                                 | **V1a** | Immuabilité et traçabilité des opérations                                              |
 | Script CLI de consultation financière en lecture seule                                                                        | **V1a** | Modèle `backend/app/create_tenant.py:1-104`                                            |
 | Rôle nominatif `finance_operator` et matrice de permissions fines                                                             | **V1b** | V1a validée                                                                            |
@@ -159,13 +159,18 @@ Par ailleurs, un POI peut avoir 3 gérants distincts, et un même professionnel 
 +--------+----------------------------+             +------------------------+-----------------------+
 |   partner_poi_assignments           |             |           service_declarations                 |
 | id (UUID, PK) | tenant_id (UUID, FK)|             | id (UUID, PK) | tenant_id (UUID, FK)           |
-| partner_profile_id (UUID, FK)       |             | booking_id (UUID, FK, unique)                  |
-| poi_id (UUID, FK)                   |             | partner_profile_id (UUID, FK)                  |
-| valid_from (DateTime)               |             | poi_id (UUID, FK) | declared_by_user_id (UUID) |
-| valid_to (DateTime, opt)            |             | declaration_type (String(30))                  |
-+-------------------------------------+             | amount_minor (BigInteger) | currency (String)  |
+| partner_profile_id (UUID, FK)       |             | booking_id (UUID, FK, index)                   |
+| poi_id (UUID, FK)                   |             | legal_entity_id (UUID, FK, snapshot)           |
+| valid_from (DateTime)               |             | applied_rate_bps (Integer, snapshot)           |
+| valid_to (DateTime, opt)            |             | partner_profile_id (UUID, FK)                  |
++-------------------------------------+             | poi_id (UUID, FK) | declared_by_user_id (UUID) |
+                                                    | declaration_type (String(30))                  |
+                                                    | service_date (Date)                            |
+                                                    | amount_minor (BigInteger) | currency (String)  |
                                                     | tax_amount_minor (BigInteger, opt)             |
                                                     | status (String(30)) | confirmation_deadline    |
+                                                    | supersedes_declaration_id (UUID, FK, opt)      |
+                                                    | is_current (Boolean, default True)             |
                                                     | created_at (DateTime)                          |
                                                     +------------------------------------------------+
                                                                              │
@@ -197,10 +202,18 @@ Par ailleurs, un POI peut avoir 3 gérants distincts, et un même professionnel 
 
 #### 1. Table `legal_entities`
 
-- **Rôle :** Représente l'entité juridique Discover AI émettrice et responsable de l'activité financière. En V1, contient exactement une ligne : Discover AI Algérie.
+- **Rôle :** Représente l'entité juridique Discover AI émettrice et responsable de l'activité financière. En V1, une unique entité Discover AI existe (Algérie, `PAYMENT_DECISIONS_V1.md` §8).
+- **Architecture de scoping : Option A vs Option B**
+  - **Option A (Entité plateforme sans `tenant_id`) :** L'entité légale est globale à la plateforme et référencée par les tenants via `Tenant.config["legal_entity_id"]` ou une table d'association `tenant_legal_entities`.  
+    *Avantages :* Évite la duplication si plusieurs tenants partagent la même entité juridique.  
+    *Risques :* Contrevient au principe architectural non négociable énoncé dans `CLAUDE.md:59` (*« tenant_id sur toutes les entités clés... aucune entité globale sans super-admin »*) et complique les filtres de requêtes multi-tenant.
+  - **Option B (Scoping strict par tenant, une ligne par tenant — Recommandation) :** Chaque tenant déclare formellement son entité juridique responsable dans `legal_entities` avec clé étrangère `tenant_id`. En V1, seul le tenant `algeria` possède une entité active (`country_code="DZ"`).  
+    *Avantages :* Respecte à 100 % l'isolation multi-tenant stricte (`backend/app/core/tenant.py:1-25`), simplifie les contrôles de sécurité et les cascades de suppression.  
+    *Risques :* Duplication de métadonnées si plusieurs tenants partagent une structure juridique future.
+  - > **DÉCISION PROPRIÉTAIRE REQUISE :** Valider l'Option B (scoping strict par tenant avec `tenant_id` sur `legal_entities`) ou l'Option A (entité plateforme globale liée par configuration).
 - **Colonnes :**
   - `id` : `UUID`, Clé Primaire (`default=uuid.uuid4`).
-  - `tenant_id` : `UUID`, Clé Étrangère vers `tenants.id`, non nulle, indexée.
+  - `tenant_id` : `UUID`, Clé Étrangère vers `tenants.id`, non nulle, indexée (sous Option B).
   - `name` : `String(150)`, nom social légal de l'entité Discover AI.
   - `country_code` : `String(2)`, non nulle, code ISO 3166-1 alpha-2 (`DZ` en V1).
   - `registration_number` : `String(100)`, identifiant légal d'enregistrement (ex. Registre de Commerce algérien).
@@ -229,6 +242,8 @@ Par ailleurs, un POI peut avoir 3 gérants distincts, et un même professionnel 
 #### 3. Table `partner_poi_assignments`
 
 - **Rôle :** Rattachement temporel d'un POI à une entité partenaire responsable de sa gestion financière.
+- **Règle de non-chevauchement temporel :** Un POI donné au sein d'un tenant ne peut être rattaché qu'à un seul profil partenaire à un instant $T$. Deux plages `[valid_from, valid_to[` ne doivent jamais se recouvrir pour un même `poi_id`.  
+  *Mise en œuvre :* Vérification applicative sous verrou pessimiste (`with_for_update()`) lors des écritures, complétée si possible par une contrainte d'exclusion PostgreSQL (`EXCLUDE USING gist (poi_id WITH =, tsrange(valid_from, coalesce(valid_to, 'infinity'::timestamp)) WITH &&)`).
 - **Colonnes :**
   - `id` : `UUID`, Clé Primaire.
   - `tenant_id` : `UUID`, Clé Étrangère vers `tenants.id`, non nulle, indexée.
@@ -242,6 +257,9 @@ Par ailleurs, un POI peut avoir 3 gérants distincts, et un même professionnel 
 #### 4. Table `commission_rules`
 
 - **Rôle :** Définition des taux de commission applicables (règle par défaut par tenant, ou règle négociée par partenaire).
+- **Règle de priorité et de non-chevauchement :**
+  1. *Priorité de portée :* Si une règle active existe avec `partner_profile_id` spécifié (règle négociée), elle **l'emporte** sur la règle par défaut du tenant (`partner_profile_id IS NULL`).
+  2. *Unicité temporelle :* Il ne peut exister qu'une seule règle active par portée (par tenant ou par couple tenant/partenaire) à une date donnée ($T \in [valid\_from, valid\_to[$).
 - **Colonnes :**
   - `id` : `UUID`, Clé Primaire.
   - `tenant_id` : `UUID`, Clé Étrangère vers `tenants.id`, non nulle, indexée.
@@ -256,23 +274,33 @@ Par ailleurs, un POI peut avoir 3 gérants distincts, et un même professionnel 
 #### 5. Table `service_declarations`
 
 - **Rôle :** Déclaration de réalisation de la prestation saisie par le partenaire après exécution.
+- **Principe du snapshot immuable :** Les colonnes `legal_entity_id` et `applied_rate_bps` sont figées dès l'insertion de la déclaration dans `service_declarations`. Tout changement ultérieur des règles de commission dans `commission_rules` ou de l'entité juridique n'a **strictement aucun impact rétroactif** sur les déclarations existantes.
+- **Mécanisme de correction (écritures compensatoires) :** Conformément à `PAYMENT_DECISIONS_V1.md` §2 et §5, **aucun `UPDATE` direct du montant ou des taxes n'est autorisé** sur une déclaration validée ou confirmée. Toute modification de montant exige la création d'un **nouvel enregistrement** liant l'ancienne déclaration via `supersedes_declaration_id`. L'ancienne déclaration passe à `is_current = False`.
 - **Colonnes :**
   - `id` : `UUID`, Clé Primaire.
   - `tenant_id` : `UUID`, Clé Étrangère vers `tenants.id`, non nulle, indexée.
-  - `booking_id` : `UUID`, Clé Étrangère vers `bookings.id`, non nulle, **UNIQUE** (une seule déclaration active par réservation).
+  - `booking_id` : `UUID`, Clé Étrangère vers `bookings.id`, non nulle, indexée.
+  - `legal_entity_id` : `UUID`, Clé Étrangère vers `legal_entities.id`, non nulle (snapshot immuable pris à la déclaration).
+  - `applied_rate_bps` : `Integer`, non nulle (snapshot immuable du taux en bps résolu à la déclaration).
   - `partner_profile_id` : `UUID`, Clé Étrangère vers `partner_profiles.id`, non nulle.
   - `poi_id` : `UUID`, Clé Étrangère vers `pois.id`, non nulle.
   - `declared_by_user_id` : `UUID`, Clé Étrangère vers `users.id` (gérant ayant saisi la déclaration).
   - `declaration_type` : `String(30)`, parmi `("service_rendered", "late_cancellation_fee", "no_show_fee")` (`PAYMENT_DECISIONS_V1.md` §2, A13).
+  - `service_date` : `Date`, date effective d'exécution du service (voir section Date de prestation ci-dessous).
   - `amount_minor` : `BigInteger`, montant total encaissé déclaré en unités mineures (centimes), non nul, strictement positif (`> 0`).
   - `currency` : `String(3)`, code devise ISO 4217 identique à `Booking.currency`.
   - `tax_amount_minor` : `BigInteger`, nullable, montant des taxes incluses identifiées et documentées.
-  - `status` : `String(30)`, état de la déclaration : `"declared"`, `"confirmed"`, `"disputed"`, `"expired_unconfirmed"`.
+  - `status` : `String(30)`, état de la déclaration : `"declared"`, `"confirmed"`, `"disputed"`, `"expired_unconfirmed"`, `"superseded"`.
   - `confirmation_deadline` : `DateTime`, échéance de 72 heures allouée au voyageur pour confirmer ou contester.
   - `dispute_reason` : `Text`, motif de contestation renseigné par le voyageur en cas de désaccord.
   - `disputed_at` : `DateTime`, horodatage de contestation par le voyageur.
+  - `supersedes_declaration_id` : `UUID`, Clé Étrangère vers `service_declarations.id`, nullable (identifie la déclaration corrigée).
+  - `is_current` : `Boolean`, non nulle, défaut `True` (indique la version active du type de déclaration pour la réservation).
   - `created_at` : `DateTime`, défaut `utcnow`.
-- **Contraintes :** `UniqueConstraint("tenant_id", "booking_id", name="uq_declaration_per_booking")`.
+- **Contraintes et Index :** 
+  - Unicité partielle compatible avec les corrections et les 3 types de déclaration :  
+    `CREATE UNIQUE INDEX uq_current_declaration ON service_declarations (tenant_id, booking_id, declaration_type) WHERE is_current = True;`  
+    Cette contrainte garantit qu'il ne peut exister qu'une seule déclaration active par type pour une réservation donnée, tout en autorisant l'historique de versions successives via `is_current = False`.
 
 #### 6. Table `service_completions`
 
@@ -281,11 +309,11 @@ Par ailleurs, un POI peut avoir 3 gérants distincts, et un même professionnel 
   - `id` : `UUID`, Clé Primaire.
   - `tenant_id` : `UUID`, Clé Étrangère vers `tenants.id`, non nulle, indexée.
   - `declaration_id` : `UUID`, Clé Étrangère vers `service_declarations.id`, non nulle, **UNIQUE**.
-  - `legal_entity_id` : `UUID`, Clé Étrangère vers `legal_entities.id`, non nulle (snapshot immuable).
+  - `legal_entity_id` : `UUID`, Clé Étrangère vers `legal_entities.id`, non nulle (recopié depuis `service_declarations.legal_entity_id`).
   - `confirmed_at` : `DateTime`, horodatage de validation définitive.
   - `confirmation_source` : `String(50)`, source de confirmation (ex. `"traveller_in_app"`, `"operator_resolution"`, `"tacit_deadline"` si retenu).
   - `final_amount_minor` : `BigInteger`, assiette financière retenue (en centimes).
-  - `applied_commission_bps` : `Integer`, snapshot immuable du taux en points de base appliqué.
+  - `applied_commission_bps` : `Integer`, taux en points de base appliqué (recopié depuis `service_declarations.applied_rate_bps`).
   - `calculated_commission_minor` : `BigInteger`, montant calculé de la commission due à Discover AI en unités mineures.
   - `created_at` : `DateTime`, défaut `utcnow`.
 - **Contraintes :** `UniqueConstraint("tenant_id", "declaration_id", name="uq_completion_per_declaration")`.
@@ -307,19 +335,28 @@ Par ailleurs, un POI peut avoir 3 gérants distincts, et un même professionnel 
 #### 8. Table `financial_audit_log`
 
 - **Rôle :** Journal d'audit append-only immuable consignant chaque événement financier.
+- **Identification des acteurs et traçabilité :** Tout acte manuel doit être nominativement imputable. Si l'action émane d'une session utilisateur interactive, `actor_user_id` est obligatoire (`UUID`). Si l'action est exécutée via un script en ligne de commande (ex. script CLI d'administration ou de maintenance), `actor_user_id` peut être `NULL` mais la colonne `operator_identifier` devient **strictement obligatoire et non nulle** (ex. `cli:sysadmin_ops_01` ou nom du compte système exécutant).
+- **Immuabilité technique (Politique logicielle vs Verrou en base de données) :**
+  - *Niveau 1 (Politique logicielle) :* Aucun endpoint ni repository n'expose de méthode d'altération (`UPDATE` / `DELETE`).
+  - *Niveau 2 (Option de verrouillage PostgreSQL direct) :*  
+    - Option A : Révocation des privilèges SQL `REVOKE UPDATE, DELETE ON financial_audit_log FROM discoverai_app;` appliquée via migration Alembic.  
+    - Option B : Trigger PostgreSQL `BEFORE UPDATE OR DELETE` levant une exception `RAISE EXCEPTION 'financial_audit_log is immutable'`.  
+    *Coûts et risques de migration :* L'Option A exige que l'utilisateur de connexion applicatif PostgreSQL ne soit pas superuser / propriétaire absolu de la base (sinon le REVOKE peut être contourné). L'Option B fonctionne indépendamment des rôles mais introduit un trigger PL/pgSQL nécessitant des tests dédiés dans l'environnement de test SQLite/Postgres.  
+    *Recommandation :* Mettre en œuvre le trigger bloquant (Option B) en plus de la politique logicielle dès la migration V1a.
 - **Colonnes :**
   - `id` : `UUID`, Clé Primaire.
   - `tenant_id` : `UUID`, non nulle, indexée.
-  - `actor_user_id` : `UUID`, nullable (NULL si exécuté par un script système / CLI).
-  - `actor_role` : `String(50)`, rôle de l'acteur (ex. `"partner"`, `"traveller"`, `"cli_operator"`).
-  - `action` : `String(50)`, ex. `"declare_service"`, `"confirm_service"`, `"dispute_service"`, `"expire_declaration"`.
+  - `actor_user_id` : `UUID`, nullable (renseigné si session authentifiée).
+  - `operator_identifier` : `String(100)`, nullable (obligatoire si `actor_user_id IS NULL`, consigne l'opérateur CLI).
+  - `actor_role` : `String(50)`, rôle de l'acteur (ex. `"partner"`, `"traveller"`, `"cli_operator"`, `"admin"`).
+  - `action` : `String(50)`, ex. `"declare_service"`, `"confirm_service"`, `"dispute_service"`, `"supersede_declaration"`.
   - `target_table` : `String(50)`, table visée (ex. `"service_declarations"`).
   - `target_id` : `UUID`, identifiant de la ligne ciblée.
   - `payload_before` : `JSON`, état antérieur (sérialisé).
   - `payload_after` : `JSON`, nouvel état.
   - `reason` : `Text`, motif obligatoire pour toute opération de correction ou résolution manuelle.
   - `created_at` : `DateTime`, non nulle, défaut `utcnow`.
-- **Contraintes :** Table strictement en écriture seule (aucun `UPDATE` ni `DELETE` permis par politique logicielle).
+- **Contraintes :** `CheckConstraint("actor_user_id IS NOT NULL OR operator_identifier IS NOT NULL", name="chk_audit_actor_present")`. Table strictement en écriture seule.
 
 ### 3.3 Source du pays et mise en œuvre de la règle pays/entité
 
@@ -372,15 +409,36 @@ La déclaration financière dispose de sa propre machine d'états sur la table `
 +--------------------------+
 ```
 
-### 4.1 Transitions d'états de la déclaration de prestation
+### 4.1 Date de prestation et conditions de déclaration
+
+#### Absence de colonne de date sur le modèle Booking existant
+Dans le code actuel de `Booking` (`backend/app/models.py:332-364`), le modèle ne comporte **strictement aucune colonne SQL dédiée aux dates de séjour ou de prestation**. Les seules colonnes temporelles présentes sont des métadonnées système : `consent_timestamp`, `respond_by`, `responded_at`, `created_at`, `updated_at` (`backend/app/models.py:343, 348, 353-355`).  
+Les dates souhaitées par le voyageur (ex. `"date"`, `"start_date"`, `"end_date"`) sont stockées de façon non structurée dans le dictionnaire JSON libre et facultatif `booking_data = Column(JSON, default=dict)` (`backend/app/models.py:346`), sans garantie de présence ni de format ISO.
+
+Par conséquent, une condition d'éligibilité du type `end_date <= utcnow().date()` est **techniquement irréalisable sur le modèle actuel** sans convention explicite.
+
+#### Options architecturales pour la date de prestation
+- **Option A (Date de service déclarative saisie par le partenaire — Recommandation V1a) :** Le partenaire renseigne obligatoirement la date de réalisation `service_date` (`Date`) au moment où il appelle `POST /partner/bookings/{id}/declare`. Le backend applique un garde-fou strict : `service_date <= utcnow().date()` (la date ne peut pas être située dans le futur).  
+  *Avantages :* Aucune migration sur la table `bookings`, zéro impact sur le frontend voyageur, compatibilité immédiate avec les réservations existantes.  
+  *Risques :* Déclaration purement déclarative par le partenaire quant au jour exact de réalisation.
+- **Option B (Ajout d'une colonne dédiée sur Booking) :** Migration additive Alembic ajoutant `service_date = Column(Date, nullable=True)` sur `bookings`, alimentée dès la création de réservation.  
+  *Avantages :* Donnée structurée et native dès la réservation.  
+  *Risques :* Nécessite une migration de schéma sur la table centrale `bookings`, des modifications de contrat API sur `POST /bookings/`, et des ajustements sur mobile et web.
+- **Option C (Exigence et validation stricte dans `booking_data`) :** Rendre obligatoire la clé `"date"` ou `"end_date"` au format ISO 8601 dans `booking_data` au niveau du schéma `BookingCreate`.  
+  *Avantages :* Pas de nouvelle colonne SQL.  
+  *Risques :* Rupture de compatibilité avec les clients existants qui n'enverraient pas cette clé avec la casse exacte.
+
+> **DÉCISION PROPRIÉTAIRE REQUISE :** Valider l'Option A (date de prestation déclarée par le partenaire et bornée au présent/passé) pour la V1a, sans modifier la table `bookings`.
+
+### 4.2 Transitions d'états de la déclaration de prestation
 
 1. **Création (`∅` → `declared`) :**
    - **Acteur :** Partenaire autorisé (associé au POI via `partner_poi_assignments`).
-   - **Condition :** `Booking.status == "confirmed"`, `Booking.booking_mode == "manual_confirm"`, date de fin de la réservation dépassée (`end_date <= utcnow().date()`).
-   - **Action :** Enregistrement de `amount_minor`, `currency`, `tax_amount_minor`, calcul de `confirmation_deadline = utcnow() + timedelta(hours=deadline_hours)` (défaut : 72 h). Émission d'une notification voyageur `service_declaration_received`.
+   - **Condition :** `Booking.status == "confirmed"`, `Booking.booking_mode == "manual_confirm"`, date de service déclarée valide (`service_date <= utcnow().date()`).
+   - **Action :** Résolution et snapshot immuable de `legal_entity_id` et `applied_rate_bps`. Enregistrement de `amount_minor`, `currency`, `tax_amount_minor`, calcul de `confirmation_deadline = utcnow() + timedelta(hours=deadline_hours)` (défaut : 72 h). Émission d'une notification voyageur `service_declaration_received`.
 2. **Confirmation voyageur (`declared` → `confirmed`) :**
    - **Acteur :** Voyageur propriétaire de la réservation (`Booking.user_id == current_user.id`).
-   - **Action :** Création synchrone de `service_completions` et de `commission_receivables`. Calcul immuable de la commission due (`amount_minor * rate_bps / 10000`).
+   - **Action :** Création synchrone de `service_completions` et de `commission_receivables`. Calcul immuable de la commission due selon la formule définie au §4.3.
 3. **Contestation voyageur (`declared` → `disputed`) :**
    - **Acteur :** Voyageur propriétaire de la réservation.
    - **Condition :** Avant expiration de `confirmation_deadline`. Saisie d'un motif obligatoire (`dispute_reason`).
@@ -390,13 +448,42 @@ La déclaration financière dispose de sa propre machine d'états sur la table `
    - Point de départ : Horodatage précis UTC de création de la notification voyageur (`service_declarations.created_at`).
    - Deux options s'opposent sur le traitement de la non-réponse :
      - **Option A (Confirmation tacite) :** À l'expiration du délai sans action du voyageur, la prestation est réputée acceptée et bascule automatiquement en `confirmed` (source `"tacit_deadline"`), déclenchant le calcul de la commission.  
-       _Avantages :_ Évite le blocage des flux en cas de négligence du voyageur.  
-       _Risques :_ Risque de contestation ultérieure hors délai, fragilité juridique si le voyageur n'a pas lu la notification.
+       *Avantages :* Évite le blocage des flux en cas de négligence du voyageur.  
+       *Risques :* Risque de contestation ultérieure hors délai, fragilité juridique si le voyageur n'a pas lu la notification.
      - **Option B (Dossier marqué non confirmé sans facturation automatique — Recommandation `PAYMENT_DECISIONS_V1.md` §4) :** À l'expiration, la déclaration bascule en `expired_unconfirmed`. Aucune commission n'est calculée automatiquement. Le dossier est soumis au contrôle humain d'un opérateur financier.  
-       _Avantages :_ Conforme au principe de prudence et au §4 de `PAYMENT_DECISIONS_V1.md` (_« L'absence de réponse n'est pas une preuve de réalisation et aucune facturation automatique n'est déclenchée »_).  
-       _Risques :_ Nécessite une intervention humaine pour débloquer les créances.
+       *Avantages :* Conforme au principe de prudence et au §4 de `PAYMENT_DECISIONS_V1.md` (*« L'absence de réponse n'est pas une preuve de réalisation et aucune facturation automatique n'est déclenchée »*).  
+       *Risques :* Nécessite une intervention humaine pour débloquer les créances.
 
 > **DÉCISION PROPRIÉTAIRE REQUISE :** Trancher formellement entre l'Option A (confirmation tacite après 72 h) et l'Option B (mise en attente `expired_unconfirmed` sans calcul automatique, conforme au §4).
+
+### 4.3 Formule de calcul de la commission et politique d'arrondi
+
+Conformément à `PAYMENT_DECISIONS_V1.md` §7 :
+- **Assiette de calcul (Base) :**
+  $$\text{Base} = \begin{cases} 
+  \text{amount\_minor} - \text{tax\_amount\_minor} & \text{si taxes distinctes, documentées et valides} \\ 
+  \text{amount\_minor} & \text{sinon (montant encaissé déclaré)}
+  \end{cases}$$
+  Contrôles de cohérence obligatoires (`PAYMENT_DECISIONS_V1.md` A9) : $\text{tax\_amount\_minor} \ge 0$ et $\text{tax\_amount\_minor} \le \text{amount\_minor}$.
+- **Calcul de la commission :**
+  $$\text{Commission} = \frac{\text{Base} \times \text{applied\_rate\_bps}}{10\,000}$$
+- **Règle d'arrondi sur les unités mineures (entiers) :**
+  La division par 10 000 d'un entier peut générer un reste fractionnaire de centime. Deux options d'arrondi déterministe sont proposées :
+  - **Option A (Arrondi à l'unité mineure inférieure — Floor) :** Division entière $\lfloor (\text{Base} \times \text{rate\_bps}) / 10\,000 \rfloor$.  
+    *Avantages :* Prudence commerciale en faveur du partenaire, aucune fraction de centime surfacturée.
+  - **Option B (Arrondi bancaire au plus proche — Half to Even) :** Arrondi standard demi-pair sur le centime.  
+    *Avantages :* Standard comptable limitant les biais d'agrégation statistique.
+  - **Exemple chiffré :**
+    - Montant déclaré TTC = 15 250 DZD (`amount_minor = 1525000` centimes).
+    - TVA documentée = 2 434,87 DZD (`tax_amount_minor = 243487` centimes).
+    - Base HT = $1\,525\,000 - 243\,487 = 1\,281\,513$ centimes (12 815,13 DZD).
+    - Taux de commission = 10,00 % (`rate_bps = 1000`).
+    - Produit brut = $1\,281\,513 \times 1\,000 = 1\,281\,513\,000$.
+    - Division par 10 000 = $128\,151,3$ centimes.
+    - Résultat Option A (Floor) = $128\,151$ centimes (1 281,51 DZD).
+    - Résultat Option B (Half to Even) = $128\,151$ centimes (1 281,51 DZD). (Si le produit avait donné 128 151,5 centimes, l'arrondi au pair donnerait 128 152 centimes).
+
+> **DÉCISION PROPRIÉTAIRE REQUISE :** Valider la politique d'arrondi explicite (Option A : troncature/floor, ou Option B : arrondi bancaire demi-pair).
 
 ---
 
@@ -405,16 +492,25 @@ La déclaration financière dispose de sa propre machine d'états sur la table `
 Conformément à l'analyse de l'addendum (`docs/payment/PAYMENT_AUDIT.md` §18.3), un administrateur du tenant (`is_admin == True`) a aujourd'hui le pouvoir d'agir sur toutes les réservations via `_scope_filter` (`backend/app/api/v1/endpoints/partner.py:76-86`). Par conséquent, `Booking.responded_by` peut être un administrateur et non un gérant de terrain.  
 De plus, les gérants de POI (`POIManager`) ne doivent pas accéder aux informations fiscales, aux taux de commission ni aux factures de l'opérateur économique.
 
-| Action                                     | Voyageur                 | Gérant POI (`POIManager`)    | Administrateur Tenant (`is_admin`) | Opérateur Financier (`finance_operator`, V1b) | Opérateur CLI direct        |
-| ------------------------------------------ | ------------------------ | ---------------------------- | ---------------------------------- | --------------------------------------------- | --------------------------- |
-| Gérer le POI (horaires, infos)             | Non                      | **Oui** (sur POI gérés)      | **Oui** (tous POI)                 | Non                                           | **Oui**                     |
-| Déclarer une prestation                    | Non                      | **Oui** (si rattaché au POI) | **Oui** (secours / délégation)     | Non                                           | **Oui** (maintenance)       |
-| Consulter les prestations déclarées        | Ses propres réservations | Prestations de ses POI       | Toutes prestations du tenant       | Prestations de son tenant                     | **Oui** (export CSV)        |
-| Modifier profil contractuel partenaire     | Non                      | Non                          | **Oui** (ou contact facturation)   | Non                                           | **Oui**                     |
-| Consulter taux de commission & créances    | Non                      | Non                          | **Oui**                            | **Oui**                                       | **Oui**                     |
-| Corriger / ajuster une déclaration validée | Non                      | Non                          | Non (interdit silencieusement)     | **Oui** (avec motif journalisé)               | **Oui** (traçabilité audit) |
-| Résoudre une contestation de voyageur      | Non                      | Non                          | Non                                | **Oui** (procédure V1b)                       | **Oui**                     |
-| Reporting financier multi-partenaires      | Non                      | Non                          | Non (pas d'API transversale)       | Relevé de son tenant                          | **Oui** (script CLI isolé)  |
+### Question du rôle de l'administrateur du tenant sur la déclaration de prestation
+L'administrateur du tenant doit-il être autorisé à déclarer une prestation en lieu et place du partenaire de terrain ?
+- **Option A (Interdiction stricte) :** Seuls les utilisateurs expressément rattachés au POI via `partner_poi_assignments` peuvent déclarer une prestation. L'administrateur ne peut pas se substituer au partenaire de terrain.  
+  *Avantages :* Évite tout abus ou déclaration arbitraire sans contact direct avec le voyageur.  
+  *Risques :* Blocage opérationnel si le compte du partenaire est inaccessible ou défaillant.
+- **Option B (Autorisation exceptionnelle avec traçabilité renforcée — Recommandation) :** L'administrateur peut déclarer une prestation en secours, mais cette action exige obligatoirement un motif explicite consigné dans `financial_audit_log` et marque la déclaration d'un drapeau d'audit `declared_by_admin = True`.  
+  *Avantages :* Flexibilité opérationnelle tout en garantissant une traçabilité totale en cas de litige.
+- > **DÉCISION PROPRIÉTAIRE REQUISE :** Valider l'Option B (autorisation de déclaration par l'admin avec motif d'audit obligatoire) ou l'Option A (réservation exclusive aux gérants de POI).
+
+| Action | Voyageur | Gérant POI (`POIManager`) | Administrateur Tenant (`is_admin`) | Opérateur Financier (`finance_operator`, V1b) | Opérateur CLI direct (avec `operator_identifier`) |
+|---|---|---|---|---|---|
+| Gérer le POI (horaires, infos) | Non | **Oui** (sur POI gérés) | **Oui** (tous POI) | Non | **Oui** |
+| Déclarer une prestation | Non | **Oui** (si rattaché au POI) | **Sous réserve Option B** (avec motif journalisé) | Non | **Oui** (maintenance) |
+| Consulter les prestations déclarées | Ses propres réservations | Prestations de ses POI | Toutes prestations du tenant | Prestations de son tenant | **Oui** (export CSV) |
+| Modifier profil contractuel partenaire | Non | Non | **Oui** (ou contact facturation) | Non | **Oui** |
+| Consulter taux de commission & créances | Non | Non | **Oui** | **Oui** | **Oui** |
+| Corriger / ajuster une déclaration validée | Non | Non | Non (interdit silencieusement) | **Oui** (avec motif journalisé) | **Oui** (traçabilité audit) |
+| Résoudre une contestation de voyageur | Non | Non | Non | **Oui** (procédure V1b) | **Oui** |
+| Reporting financier multi-partenaires | Non | Non | Non (pas d'API transversale) | Relevé de son tenant | **Oui** (script CLI isolé) |
 
 ---
 
@@ -453,12 +549,13 @@ Tous les endpoints sont montés avec isolation stricte par tenant via `x_tenant_
      ```json
      {
        "declaration_type": "service_rendered",
+       "service_date": "2026-11-01",
        "amount_minor": 1500000,
        "currency": "DZD",
        "tax_amount_minor": 0
      }
      ```
-   - **Comportement :** Vérifie que la réservation est `confirmed` et terminée, crée la ligne `service_declarations`, programme la notification voyageur et enregistre l'événement dans `financial_audit_log`.
+   - **Comportement :** Vérifie que la réservation est `confirmed` et que `service_date <= utcnow().date()`, résout et fige `legal_entity_id` et `applied_rate_bps`, crée la ligne `service_declarations`, programme la notification voyageur et enregistre l'événement dans `financial_audit_log`.
 2. `POST /api/v1/bookings/{booking_id}/confirm-service` :
    - **Acteur :** Voyageur propriétaire (`current_user`).
    - **Comportement :** Fait passer la déclaration à `confirmed`, génère `service_completions` et `commission_receivables`, notifie le partenaire.
@@ -472,7 +569,17 @@ Tous les endpoints sont montés avec isolation stricte par tenant via `x_tenant_
 - **Espace partenaire (`mobile/lib/screens/partner_bookings_screen.dart`) :** Sur les réservations confirmées dont la date d'exécution est passée, ajout d'un bouton d'action _"Déclarer la prestation"_ ouvrant une modale de saisie du montant en devise locale.
 - **Écran voyageur (`mobile/lib/screens/bookings_screen.dart`) :** Réception de la notification `service_declaration_received`. La carte de réservation affiche un bandeau invitant à confirmer ou contester le montant sous 72 h.
 
-### 7.3 Script CLI de reporting financier (`app/reporting_finance.py`)
+### 7.3 Mécanisme des rappels périodiques et worker d'arrière-plan
+
+Conformément à `PAYMENT_DECISIONS_V1.md` §4 et A14, le voyageur dispose d'un délai configurable de 72 heures pour confirmer ou contester la prestation déclarée.  
+Pour éviter que l'échéance n'expire sans visibilité pour le voyageur, un mécanisme de rappels périodiques est prévu en V1a :
+1. **Infrastructure réutilisée :** Le worker d'arrière-plan existant (`backend/app/services/notification_worker.py:91-105`) implémente déjà l'acquisition atomique par lots sans contention via `SELECT FOR UPDATE SKIP LOCKED` (`claim_batch`), les politiques de baux expirables (`locked_until`), et les relances cadencées (`RETRY_DELAYS`, `next_attempt_at`, lignes 19-25).
+2. **Fonctionnement du balayage de rappel :**
+   - Une fonction périodique `dispatch_pending_confirmation_reminders(db: AsyncSession)` inspecte les déclarations actives dans `service_declarations` avec `status == "declared"`.
+   - Si le délai restant avant `confirmation_deadline` est compris entre 24 h et 25 h (soit 48 h après la déclaration initiale), et qu'aucune notification de relance n'a encore été envoyée pour cette déclaration, le système émet une notification `service_confirmation_reminder` au voyageur via `create_notification` (`backend/app/services/notification_service.py:35-82`).
+   - L'idempotence de la relance est assurée par l'unicité composite naturelle des notifications (`Notification.tenant_id`, `Notification.user_id`, `Notification.booking_id`, `Notification.type`).
+
+### 7.4 Script CLI de reporting financier (`app/reporting_finance.py`)
 
 - Développé selon le standard strict de `backend/app/create_tenant.py:1-104`.
 - **Usage :** `python -m app.reporting_finance --tenant-slug algeria --format csv --output /tmp/commissions_algeria.csv`.
@@ -493,7 +600,7 @@ Tous les endpoints sont montés avec isolation stricte par tenant via `x_tenant_
 La dernière révision en date sur `main` est `0016_backfill_skipped_notifs.py` (`backend/alembic/versions/0016_backfill_skipped_notifs.py:1-30`).
 
 1. **Révision `0017_financial_foundation_entities` :** Création des tables `legal_entities`, `partner_profiles`, `partner_poi_assignments`, `commission_rules`.
-2. **Révision `0018_service_declarations_receivables` :** Création des tables `service_declarations`, `service_completions`, `commission_receivables`, `financial_audit_log`.
+2. **Révision `0018_service_declarations_receivables` :** Création des tables `service_declarations`, `service_completions`, `commission_receivables`, `financial_audit_log` (avec trigger d'immuabilité).
 
 ### 8.3 Date de bascule et gestion du seed existant
 
@@ -512,7 +619,8 @@ La dernière révision en date sur `main` est `0016_backfill_skipped_notifs.py` 
 
 ## 9. Stratégie de tests et non-régression
 
-La suite de tests actuelle (`446 passed in 40.54s` sur le backend) doit impérativement demeurer à 100 % passante.
+La suite de tests backend doit impérativement demeurer à 100 % passante.  
+*Note de référence de couverture :* Le fichier `CLAUDE.md:11` documente 279 tests unitaires historiques (`279/279 pytest-Tests grün`). Lors de l'exécution complète sur la branche avec l'ensemble des modules additionnels (recherche, notifications, réservations multi-modes), la suite compte 446 tests passants. Tout ajout de migration ou de modèle financier s'accompagnera de tests stricts sans affaiblir aucune assertion existante.
 
 ### 9.1 Nouveaux tests unitaires et d'intégration à prévoir (pour l'implémentation)
 
@@ -531,20 +639,28 @@ La suite de tests actuelle (`446 passed in 40.54s` sur le backend) doit impérat
 
 ---
 
-## 10. Écarts connus du domaine réservation (hors périmètre paiement)
+## 10. Écarts connus et conciliation avec les décisions V1
 
-Ces écarts sont consignés à titre d'information architecturale et **ne doivent pas être modifiés** dans le cadre du chantier paiement, afin de ne pas déstabiliser la plateforme :
-
+### 10.1 Écarts du domaine réservation existant (hors périmètre paiement)
+Ces constats sont consignés à titre d'information architecturale et **ne doivent pas être modifiés** dans le cadre du chantier paiement :
 1. **Accesseur mobile `canCancel` :** Dans `mobile/lib/models/booking.dart:81`, `canCancel => isPending || isAwaitingPartner;` n'inclut pas le statut `expired`, alors que le backend `backend/app/api/v1/endpoints/bookings.py:309-313` autorise expressément l'annulation d'une réservation `expired`.
 2. **Double-tap sur le bouton de consentement :** Risque d'envoi concurrent de requêtes de consentement résolu côté serveur par le garde d'état 409 (`backend/app/api/v1/endpoints/bookings.py:211-212`), mais méritant un verrouillage visuel de bouton côté Flutter (`isSubmitting`).
 3. **Message 409 générique :** Le message renvoyé lors d'un consentement sur un état non pending est `"Booking cannot be consented in its current state"`.
+
+### 10.2 Écarts et arbitrages avec PAYMENT_DECISIONS_V1.md
+1. **Écart sur la date d'exécution de la prestation :** `PAYMENT_DECISIONS_V1.md` §2 évoque une déclaration postérieure à la prestation. Le présent document constate formellement l'absence de colonne SQL de date sur `Booking` (`backend/app/models.py:332-364`) et soumet l'arbitrage entre une date déclarée par le partenaire (Option A) ou une nouvelle colonne en base (Option B), au lieu de supposer silencieusement l'existence d'une date de fin native.
+2. **Écart sur la portée de l'unicité de déclaration :** `PAYMENT_DECISIONS_V1.md` A13 introduit trois types de déclaration distincts (`service_rendered`, `late_cancellation_fee`, `no_show_fee`). Une contrainte brute `UNIQUE(booking_id)` interdirait de déclarer des frais après un refus ou une annulation. Le présent design résout cet écart en définissant un index unique partiel sur `(tenant_id, booking_id, declaration_type) WHERE is_current = True`.
 
 ---
 
 ## 11. Risques et questions ouvertes (Décisions Propriétaire Requises)
 
-1. **DÉCISION PROPRIÉTAIRE REQUISE 1 :** Confirmer que seul le mode de réservation `manual_confirm` est éligible à la déclaration de prestation et au calcul de commission en V1a, les modes `request` et `pay_on_site` étant exclus jusqu'à réévaluation en V1b.
-2. **DÉCISION PROPRIÉTAIRE REQUISE 2 :** Valider la création des tables autonomes `partner_profiles` et `partner_poi_assignments` pour isoler la relation contractuelle financière sans dénaturer la table opérationnelle `poi_managers`.
-3. **DÉCISION PROPRIÉTAIRE REQUISE 3 :** Arbitrer le traitement de l'expiration du délai de 72 h alloué au voyageur entre l'Option A (confirmation tacite automatique) et l'Option B (mise en attente `expired_unconfirmed` sans calcul de commission, recommandée par `PAYMENT_DECISIONS_V1.md` §4).
-4. **DÉCISION PROPRIÉTAIRE REQUISE 4 :** Valider l'Option A pour le mécanisme de preuve de prestation en V1a (déclaration partenaire couplée à une confirmation in-app du voyageur), écartant les contraintes matérielles des justificatifs papiers ou scanners QR sur place.
-5. **DÉCISION PROPRIÉTAIRE REQUISE 5 :** Confirmer le gel complet des commissions sur le tenant `morocco` en V1 en application stricte de la règle de sécurité métier pays/entité.
+1. **DÉCISION PROPRIÉTAIRE REQUISE 1 :** Confirmer que seul le mode de réservation `manual_confirm` est éligible à la déclaration de prestation et au calcul de commission en V1a, les modes `request` et `pay_on_site` étant exclus jusqu'à réévaluation en V1b (§2).
+2. **DÉCISION PROPRIÉTAIRE REQUISE 2 :** Valider la création des tables autonomes `partner_profiles` et `partner_poi_assignments` pour isoler la relation contractuelle financière sans dénaturer la table opérationnelle `poi_managers` (§3.1).
+3. **DÉCISION PROPRIÉTAIRE REQUISE 3 :** Arbitrer le modèle d'attachement de `legal_entities` entre l'Option A (entité globale de plateforme sans `tenant_id`) et l'Option B (scoping strict par tenant avec `tenant_id`, recommandée par `CLAUDE.md:59`) (§3.2).
+4. **DÉCISION PROPRIÉTAIRE REQUISE 4 :** Arbitrer la source de la date de prestation entre l'Option A (saisie par le partenaire à la déclaration, bornée au présent/passé), l'Option B (colonne dédiée ajoutée sur `Booking`), et l'Option C (clé obligatoire dans `booking_data`) (§4.1).
+5. **DÉCISION PROPRIÉTAIRE REQUISE 5 :** Arbitrer le traitement de l'expiration du délai de 72 h alloué au voyageur entre l'Option A (confirmation tacite automatique) et l'Option B (mise en attente `expired_unconfirmed` sans calcul de commission, recommandée par `PAYMENT_DECISIONS_V1.md` §4) (§4.2).
+6. **DÉCISION PROPRIÉTAIRE REQUISE 6 :** Valider la politique d'arrondi explicite de la commission entre l'Option A (arrondi à l'unité mineure inférieure / floor) et l'Option B (arrondi bancaire demi-pair) (§4.3).
+7. **DÉCISION PROPRIÉTAIRE REQUISE 7 :** Arbitrer le rôle de l'administrateur du tenant pour la déclaration de prestation entre l'Option A (interdiction stricte réservée aux gestionnaires de POI) et l'Option B (autorisation en secours avec motif d'audit obligatoire) (§5).
+8. **DÉCISION PROPRIÉTAIRE REQUISE 8 :** Valider l'Option A pour le mécanisme de preuve de prestation en V1a (déclaration partenaire couplée à une confirmation in-app du voyageur), écartant les contraintes matérielles des justificatifs papiers ou scanners QR sur place (§6).
+9. **DÉCISION PROPRIÉTAIRE REQUISE 9 :** Confirmer le gel complet des commissions sur le tenant `morocco` en V1 en application stricte de la règle de sécurité métier pays/entité (§3.3).

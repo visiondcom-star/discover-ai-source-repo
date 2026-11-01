@@ -644,33 +644,40 @@ Les modes de réservation autorisés au niveau du backend sont définis dans `ba
 
 Analyse détaillée mode par mode :
 1. `info_only` :
-   - **Création de réservation :** Expressément bloquée dès l'appel à `POST /api/v1/bookings/` : `if (poi.booking_mode or "request") == "info_only": raise HTTPException(status_code=422, detail="This place is information only and cannot be booked")` (`backend/app/api/v1/endpoints/bookings.py:108-109`).
+   - **Création de réservation :** Expressément bloquée dès l'appel à `POST /api/v1/bookings/` :
+     ```python
+     mode = poi.booking_mode or "request"
+     if mode == "info_only":
+         raise HTTPException(status_code=422, detail="This place is information only and cannot be booked")
+     ```
+     (`backend/app/api/v1/endpoints/bookings.py:107-109`).
    - **Transitions :** Aucune (aucune réservation n'est créée en base pour ce mode).
    - **Qui est notifié :** Personne.
    - **Espace partenaire :** N'apparaît pas dans l'espace partenaire (`backend/app/api/v1/endpoints/partner.py:182-225` filtre sur `Booking`, or aucune réservation `info_only` n'existe).
    - **Déclaration de prestation :** Impossible (aucune réservation support).
    - **Exclusion de commission :** Totalement exclu car il s'agit d'un point d'intérêt purement informationnel (ex. monument public, parc, musée sans billetterie).
+   - **Hypothèse à trancher dans PAYMENT_DESIGN.md :** exclusion définitive confirmée du champ de la commission, aucune réservation n'existant pour ce mode.
 2. `request` (mode historique / par défaut) :
    - **Création et transitions :** Créé en `status="pending"`, `consent_given=False` (`backend/app/api/v1/endpoints/bookings.py:113-125`). Lors de `POST /bookings/{id}/consent` avec `consent=True` : confirmation immédiate (`status="confirmed"`, `consent_given=True`, `external_id="EXT-xxxxxxxx"`) (`backend/app/api/v1/endpoints/bookings.py:256-260`). Si `consent=False` : `status="cancelled"` (`backend/app/api/v1/endpoints/bookings.py:275`). Annulable via `/cancel` tant qu'il est en `pending` (`backend/app/api/v1/endpoints/bookings.py:309-315`).
    - **Qui est notifié :** Seul le voyageur (`current_user`) reçoit la notification in-app `booking_confirmed` (`backend/app/api/v1/endpoints/bookings.py:261-273`). Aucun partenaire n'est notifié.
    - **Espace partenaire :** Les réservations en mode `request` peuvent être lues techniquement si le partenaire filtre par `status_filter="confirmed"` ou `"cancelled"` (`backend/app/api/v1/endpoints/partner.py:205-218`), mais elles n'apparaissent **jamais dans la file de travail par défaut** (`status_filter="requested"`, `backend/app/api/v1/endpoints/partner.py:182`). De plus, `POST /partner/bookings/{id}/respond` renvoie une HTTP 409 car `current_status != "requested"` (`backend/app/api/v1/endpoints/partner.py:293-353`). Le partenaire est donc hors de la boucle décisionnelle.
    - **Déclaration de prestation :** En l'absence d'interaction avec le partenaire au moment de la réservation, une déclaration de prestation post-visite nécessiterait que le partenaire recherche la réservation a posteriori ; toutefois, le partenaire n'ayant jamais validé la demande ni la venue, ce mode n'est pas adapté à une déclaration sans ajustement de l'espace partenaire.
-   - **Raisonnement commission :** Exclu ou marginal en V1 car Discover AI n'a aucune garantie de l'engagement du prestataire ni de la réalisation effective, le voyageur confirmant unilatéralement.
+   - **Hypothèse à trancher dans PAYMENT_DESIGN.md :** déterminer si les réservations en mode `request` doivent être exclues de la commission en V1 (le partenaire n'étant pas dans la boucle de confirmation initiale), ou si un mécanisme de rattachement a posteriori doit être envisagé.
 3. `manual_confirm` :
-   - **Création et transitions :** Créé en `status="pending"`, `respond_by = utcnow() + timedelta(hours=24)` (`backend/app/api/v1/endpoints/bookings.py:122-125`). Consentement voyageur : `status="requested"`, `consent_given=True` (`backend/app/api/v1/endpoints/bookings.py:220-227`). Réponse partenaire : `status="confirmed"` (`external_id="EXT-xxxxxxxx"`, `responded_by`, `responded_at`) ou `status="declined"` (`backend/app/api/v1/endpoints/partner.py:305-341`). Expiration automatique si l'échéance `respond_by` est dépassée : `status="expired"` (`backend/app/services/booking_lifecycle.py:30-58`). Annulable par le voyageur via `/cancel` si `status` est `pending`, `requested` ou `expired` (`backend/app/api/v1/endpoints/bookings.py:309-315`).
+   - **Création et transitions :** Créé en `status="pending"`, `respond_by = utcnow() + timedelta(hours=BOOKING_CONFIRM_SLA_HOURS)` avec `BOOKING_CONFIRM_SLA_HOURS = 24` (`backend/app/constants.py:88` et `backend/app/api/v1/endpoints/bookings.py:123`). Consentement voyageur : `status="requested"`, `consent_given=True` (`backend/app/api/v1/endpoints/bookings.py:220-227`). Réponse partenaire : `status="confirmed"` (`external_id="EXT-xxxxxxxx"`, `responded_by`, `responded_at`) ou `status="declined"` (`backend/app/api/v1/endpoints/partner.py:305-341`). Expiration automatique si l'échéance `respond_by` est dépassée : `status="expired"` (`backend/app/services/booking_lifecycle.py:30-58`). Annulable par le voyageur via `/cancel` si `status` est `pending`, `requested` ou `expired` (`backend/app/api/v1/endpoints/bookings.py:309-315`).
    - **Qui est notifié :** 
      - À la demande (`consent=True`) : tous les gérants du POI (`POIManager`) reçoivent `booking_request_received` (`backend/app/api/v1/endpoints/bookings.py:230-253`).
      - À la réponse du partenaire : le voyageur reçoit `booking_confirmed` ou `booking_declined` (`backend/app/api/v1/endpoints/partner.py:314-338`).
      - À l'expiration : le voyageur reçoit `booking_expired` (avec e-mail), et tous les gérants du POI reçoivent `booking_expired` (in-app uniquement, `email=False`) (`backend/app/services/booking_lifecycle.py:63-97`).
    - **Espace partenaire :** C'est le **cœur de l'espace partenaire** (`backend/app/api/v1/endpoints/partner.py:182-358`). Les demandes alimentent la file de travail `status_filter="requested"` triée par `respond_by.asc().nullslast()` (`backend/app/api/v1/endpoints/partner.py:214-215`). Le gérant peut inspecter les détails filtrés (`_safe_details`, lignes 45-73) et accepter ou refuser (`POST /partner/bookings/{id}/respond`, lignes 256-358).
    - **Déclaration de prestation :** C'est le **mode cible privilégié pour la déclaration de prestation** en V1 : le partenaire a formellement validé la disponibilité, s'est engagé, et connaît la réservation dans son espace de gestion.
-   - **Raisonnement commission :** Parfaitement éligible à la commission d'intermédiation car la mise en relation et l'accord préalable entre voyageur et partenaire sont tracés et horodatés dans la plateforme.
+   - **Hypothèse à trancher dans PAYMENT_DESIGN.md :** confirmer le statut de mode principal éligible à la déclaration de prestation et à la commission d'intermédiation, en s'appuyant sur l'engagement tracé du partenaire (`responded_by`, `responded_at`).
 4. `pay_on_site` :
    - **Création et transitions :** Strictement identique au mode `request` dans le code actuel. Créé en `status="pending"`, passe en `status="confirmed"` avec `external_id="EXT-xxxxxxxx"` dès `give_consent(consent=True)` (`backend/app/api/v1/endpoints/bookings.py:255-260`).
    - **Qui est notifié :** Uniquement le voyageur avec `booking_confirmed` (`backend/app/api/v1/endpoints/bookings.py:261-273`). Aucun partenaire n'est notifié.
    - **Espace partenaire :** Même comportement que `request` : visible seulement si filtré spécifiquement par statut `confirmed`, absent de la file de traitement `requested`, et réponse partenaire impossible (HTTP 409).
    - **Déclaration de prestation :** Bien qu'indiquant sémantiquement un encaissement direct sur place par le partenaire, le backend actuel ne notifie pas le partenaire au moment de la réservation.
-   - **Raisonnement commission :** Éligible conceptuellement au modèle d'intermédiation V1 (paiement direct au partenaire sans PSP), mais nécessite d'être aligné sur un parcours avec notification partenaire pour que ce dernier sache quelle prestation déclarer.
+   - **Hypothèse à trancher dans PAYMENT_DESIGN.md :** déterminer si `pay_on_site` doit être aligné sur le flux de notification partenaire (comme `manual_confirm`) pour permettre une déclaration de prestation, ou s'il doit rester exclu de la commission en V1.
 5. Valeurs non supportées (`deposit`, `online_payment`, etc.) :
    - Dans `backend/app/api/v1/endpoints/bookings.py:110-111` :
      ```python
@@ -679,6 +686,7 @@ Analyse détaillée mode par mode :
      ```
    - Ces modes sont rejetés avec HTTP 422 à la création de réservation.
    - **Raison de l'exclusion en V1 :** Ces modes exigent l'encaissement de fonds (acompte ou paiement intégral en ligne via un PSP), ce qui est formellement exclu du périmètre de la V1 (modèle d'intermédiation pur sans encaissement ni PSP, cf. `PAYMENT_DECISIONS_V1.md` §1 et §14).
+   - **Hypothèse à trancher dans PAYMENT_DESIGN.md :** maintien du rejet HTTP 422 en V1, toute introduction de PSP et d'encaissement direct étant réservée à la V2.
 
 ### 18.3 Rôles, permissions et contrôles d'accès existants
 Analyse des contrôles d'accès réels dans le code backend :
@@ -689,10 +697,11 @@ Analyse des contrôles d'accès réels dans le code backend :
 - **`get_partner_poi_ids` :** Défini dans `backend/app/dependencies.py:158-175`. Récupère l'ensemble des `poi_id` rattachés à `current_user.id` dans son `tenant_id`.
 - **Contrôle d'accès partenaire (`_require_partner` et `_scope_filter`) :**
   - Dans `backend/app/api/v1/endpoints/partner.py:89-96`, `_require_partner` exige `current_user.is_admin or poi_ids`, sinon renvoie HTTP 403 (`"Partner access required"`).
-  - Dans `backend/app/api/v1/endpoints/partner.py:76-86`, `_scope_filter` filtre les réservations : si `current_user.is_admin`, accès à toutes les réservations du tenant ; sinon, restreint strictement aux POI dont l'utilisateur est gestionnaire : `and_(Booking.tenant_id == tenant_id, Booking.poi_id.in_(poi_ids or set()))`.
+  - Dans `backend/app/api/v1/endpoints/partner.py:76-86`, `_scope_filter` filtre les réservations : si `current_user.is_admin`, accès à toutes les réservations du tenant (`Booking.tenant_id == tenant_id`) ; sinon, restreint strictement aux POI dont l'utilisateur est gestionnaire : `and_(Booking.tenant_id == tenant_id, Booking.poi_id.in_(poi_ids or set()))`.
+  - **Conséquence directe sur `Booking.responded_by` :** Un administrateur (`is_admin == True`) peut lister et répondre aux réservations de l'ensemble du tenant via `_scope_filter` (`backend/app/api/v1/endpoints/partner.py:76-86, 266-288`). Par conséquent, `Booking.responded_by` (`backend/app/api/v1/endpoints/partner.py:339`) peut être l'identifiant d'un administrateur du tenant et non nécessairement celui d'un `POIManager` rattaché au POI.
 - **Ce qu'un gérant de POI peut voir aujourd'hui :**
   - Un gérant de POI accède uniquement aux réservations associées aux POI auxquels il est rattaché (`backend/app/api/v1/endpoints/partner.py:213`).
-  - **Détails de réservation :** Il ne voit pas les données personnelles directes du voyageur (email et téléphone sont filtrés et exclus par la liste blanche `_DETAILS_ALLOWED_KEYS`, `backend/app/api/v1/endpoints/partner.py:45-73`). Il voit uniquement le nom complet du voyageur (`traveller_name = User.full_name`, `backend/app/api/v1/endpoints/partner.py:128-134`) et les informations logistiques utiles à la prestation (`date`, `guests`, `notes`, etc.).
+  - **Détails de réservation et données personnelles :** Le gérant ne voit pas les champs d'identification directe exclus (`phone_number`, `contact_email`) mais voit le nom complet du voyageur (`traveller_name = User.full_name`, `backend/app/api/v1/endpoints/partner.py:128-134`). Cependant, la liste blanche `_DETAILS_ALLOWED_KEYS` (`backend/app/api/v1/endpoints/partner.py:45-61`) contient des champs de texte libre (`notes`, `message`, `special_requests`). Ces champs de texte libre peuvent contenir des données personnelles (ex. coordonnées, requêtes spécifiques, informations médicales ou alimentaires) saisies directement par le voyageur dans `booking_data`.
   - **Gestion des gérants :** L'endpoint `GET /partner/pois/{poi_id}/managers` et l'ajout/suppression de gérants (`POST`/`DELETE`) sont strictement réservés aux administrateurs du tenant via `_require_admin(current_user)` (`backend/app/api/v1/endpoints/partner.py:371, 399, 442`). Un gérant ne peut ni voir la liste des autres gérants ni modifier les rattachements.
   - **Données financières et fiscales :** Le modèle actuel ne comporte aucune table financière, fiscale ou de facturation. Les permissions actuelles ne distinguent pas encore la gestion opérationnelle du POI de la déclaration financière (point souligné par `PAYMENT_DECISIONS_V1.md` §3 et §5, qui préconise l'introduction ultérieure du rôle `finance_operator`).
 
@@ -713,11 +722,11 @@ Analyse des contrôles d'accès réels dans le code backend :
 
 ### 18.5 Dépendances mobiles, web, notifications et tests de protection des états
 1. **Consommation côté mobile :**
-   - **Modèle `Booking` :** `mobile/lib/models/booking.dart:65-85` implémente des accesseurs booléens stricts basés sur `status` : `isPending` (`status == 'pending'`), `isAwaitingPartner` (`status == 'requested'`), `isConfirmed` (`status == 'confirmed'`), `isDeclined` (`status == 'declined'`), `isExpired` (`status == 'expired'`), `isCancelled` (`status == 'cancelled'`), `isTerminal` (`isConfirmed || isDeclined || isExpired || isCancelled`), `canCancel` (`isPending || isAwaitingPartner || isExpired`), `canGiveConsent` (`isPending`).
-   - **Écran des réservations voyageur :** `mobile/lib/screens/bookings_screen.dart:149-179` applique un style dédié par statut (`styleFor`). Un statut inattendu utilise un repli sûr sans crash : `BookingStatusStyle(booking.status, scheme.secondaryContainer)` (`line 178`).
-   - **Espace partenaire mobile :** `mobile/lib/screens/partner_bookings_screen.dart:25-45` affiche les pastilles de décision en fonction de `status == 'confirmed'` ou `status == 'declined'`.
+   - **Modèle `Booking` :** `mobile/lib/models/booking.dart:65-84` implémente des accesseurs booléens basés sur `status` : `isPending` (`status == 'pending'`), `isAwaitingPartner` (`status == 'requested'`), `isConfirmed` (`status == 'confirmed'`), `isDeclined` (`status == 'declined'`), `isExpired` (`status == 'expired'`), `isCancelled` (`status == 'cancelled'`), `isTerminal` (`isConfirmed || isDeclined || isExpired || isCancelled`), `canCancel` (`isPending || isAwaitingPartner`), `canGiveConsent` (`isPending`).
+   - **Écran des réservations voyageur :** `mobile/lib/screens/bookings_screen.dart:149-179` applique un style dédié par statut (`styleFor`). Un statut inattendu utilise un repli sûr sans crash : `BookingStatusStyle(booking.status, scheme.secondaryContainer)` (`ligne 178`).
+   - **Espace partenaire mobile :** `mobile/lib/screens/partner_bookings_screen.dart:51-73` gère la réponse aux demandes (`confirm` / `decline`) et affiche les SnackBars correspondantes.
 2. **Consommation côté web :**
-   - Dans `frontend/src/components/AppShell.tsx:730-741`, le badge affiche directement la chaîne textuelle `booking.status`.
+   - Dans `frontend/src/components/AppShell.tsx:730` et `741`, le badge affiche directement la chaîne textuelle `booking.status`.
 3. **Notifications dépendantes des transitions d'état :**
    - Branchement dans `backend/app/services/notification_templates.py:8-49` et émissions effectives :
      - `pending` → `requested` (mode `manual_confirm`) : notification `booking_request_received` envoyée à chaque `POIManager` (`backend/app/api/v1/endpoints/bookings.py:244-253`).
@@ -745,24 +754,28 @@ Analyse des contrôles d'accès réels dans le code backend :
      - `test_consent_standard_emits_confirmed_notification` (ligne 41)
      - `test_consent_manual_confirm_notifies_poi_managers` (ligne 110)
      - `test_partner_confirm_and_decline_emit_notifications` (ligne 169)
-     - `test_expire_overdue_requests_notifies_both_once_and_respects_tenant_isolation` (ligne 241)
+     - `test_expire_overdue_requests_notifies_both_once_and_respects_tenant_isolation` (ligne 258)
    - **Mobile - Tests d'interface et machine d'états :**
      - `mobile/test/models/booking_statuses_test.dart` (`requested ⇒ awaiting partner, cancellable, no consent, not terminal`, ligne 9)
-     - `mobile/test/booking_flow_test.dart` (affichage traduit des statuts `confirmed` et `cancelled` en FR et EN, lignes 112-180)
-     - `mobile/test/booking_partner_flow_test.dart` (parcours complet partenaire sur mobile)
+     - `mobile/test/booking_flow_test.dart` (affichage traduit des statuts `confirmed` et `cancelled` en FR et EN, lignes 113 et 134)
+     - `mobile/test/booking_partner_flow_test.dart` (parcours complet partenaire sur mobile, lignes 48-316)
 
 ### 18.6 Seed et tenants : analyse du tenant "morocco" au regard de la règle pays/entité
 - **État actuel dans la base :**
-  - Dans `backend/app/initial_data.py:36-47`, deux tenants de démonstration sont initialisés :
-    - `slug="algeria"`, `default_currency="DZD"`, `primary_color="#0F4C3A"`, `config={"rtl": False, "timezone": "Africa/Algiers"}` (`backend/app/initial_data.py:24-34`).
-    - `slug="morocco"`, `name="Discover Morocco"`, `default_currency="MAD"`, `primary_color="#C1272D"`, `secondary_color="#006233"`, `config={"rtl": False, "timezone": "Africa/Casablanca"}` (`backend/app/initial_data.py:36-46`). Note : `country_code` n'est pas explicité dans le constructeur du seed marocain (valeur `None` par défaut au niveau du modèle, `backend/app/models.py:51`).
+  - La colonne `Tenant.country_code` existe dans le modèle (`backend/app/models.py:51`, `Column(String(2), nullable=True, index=True)`). Elle est validée au format ISO 3166-1 alpha-2 (exactement 2 lettres ASCII) aux lignes 68-76 de `backend/app/models.py`.
+  - Cependant, ni le seed `algeria` ni le seed `morocco` ne renseignent cette colonne lors de leur instanciation dans `backend/app/initial_data.py:24-47`.
+  - **Conséquence technique :** La règle de sécurité pays/entité ne dispose aujourd'hui d'aucune donnée source en base sur les tenants créés par les seeds (la valeur reste `None`).
+  - **Comportement du seed :** Dans `backend/app/initial_data.py:20-22`, la fonction `_create_demo_tenants` effectue un retour anticipé immédiat dès que le tenant `algeria` existe :
+    ```python
+    result = await session.execute(select(Tenant).where(Tenant.slug == "algeria"))
+    if result.scalar_one_or_none():
+        return
+    ```
+    Par conséquent, le tenant `morocco` n'est inséré que lors de l'initialisation initiale sur une base strictement neuve ; sur une base où `algeria` préexiste déjà, `morocco` n'est jamais injecté.
 - **Analyse au regard de la règle pays/entité (`PAYMENT_DECISIONS_V1.md` §8) :**
-  - **Principe de sécurité V1 :** La V1 ne dispose que d'une seule entité juridique Discover AI établie en Algérie (`legal_entity_id` unique). Selon la règle de sécurité métier impérative du §8 : *« la commission ne doit être activable pour un partenaire que si le pays du partenaire correspond au pays de l'entité juridique responsable. Le système vérifie le pays du partenaire et l'entité, pas seulement la devise »*.
-  - **Incompatibilité du tenant "morocco" en V1 :** 
-    - Le tenant "morocco" opère en dirhams marocains (`MAD`). Tout partenaire opérant au Maroc relève du droit et du système bancaire marocain.
-    - Discover AI n'ayant aucune entité juridique au Maroc en V1, aucun contrat d'intermédiation ni facturation de commission ne peut être légalement lié à l'entité algérienne sans soulever des problématiques majeures de contrôle des changes et de fiscalité transfrontalière.
-    - Par conséquent, la commission doit être **strictement désactivée par défaut** pour le tenant "morocco".
-    - Le tenant "morocco" peut continuer à exister pour l'exploration touristique et les réservations sans flux financier (modes informationnels ou accords libres sans commission), mais ne doit générer aucune écriture de commission, ni créance, ni facture en V1.
+  - **Hypothèse du propriétaire :** aucune entité juridique au Maroc en V1. [À VÉRIFIER, hors périmètre technique].
+  - **Règle technique de sécurité métier :** la commission est strictement désactivée par défaut si le pays du partenaire ne correspond pas au pays de l'entité juridique responsable.
+  - Le tenant "morocco" opère en devise `MAD` (`backend/app/initial_data.py:41`). Conformément à la règle de sécurité métier du §8, en l'absence d'entité juridique Discover AI au Maroc, aucune commission ne doit être activée pour les partenaires de ce tenant en V1.
 
 ### 18.7 Mécanisme AES-GCM existant (`CredentialCrypto`) : gestion des clés et réutilisabilité
 - **Implémentation :** `backend/app/services/credential_crypto.py:25-113`.
@@ -770,13 +783,13 @@ Analyse des contrôles d'accès réels dans le code backend :
   - Algorithme : Chiffrement symétrique authentifié **AES-256-GCM** via la bibliothèque `cryptography.hazmat.primitives.ciphers.aead.AESGCM` (`backend/app/services/credential_crypto.py:84-86, 97`).
   - Clés : Clés maîtres de 32 octets (256 bits), fournies en hexadécimal (64 caractères hex) (`KEY_SIZE = 32`, ligne 37).
   - Vecteur d'initialisation / Nonce : 12 octets (96 bits) générés aléatoirement à chaque chiffrement via `os.urandom(12)` (`NONCE_SIZE = 12`, lignes 36, 83).
-  - Données associées authentifiées (AAD) : Les métadonnées de contexte sont liées cryptographiquement au message chiffré via `_aad(tenant_id, provider) = f"{tenant_id}:{provider}".encode("utf-8")` (`backend/app/services/credential_crypto.py:79-80`). Le déchiffrement échoue (`InvalidTag`) si le secret est présenté sous un autre tenant ou un autre contexte (`lines 97-102`).
-  - Format du jeton résultant : Concaténation `nonce || ciphertext + tag` encodée en base64url (`token = base64.urlsafe_b64encode(nonce + ciphertext).decode("ascii")`, `line 87`).
+  - Données associées authentifiées (AAD) : Les métadonnées de contexte sont liées cryptographiquement au message chiffré via `_aad(tenant_id, provider) = f"{tenant_id}:{provider}".encode("utf-8")` (`backend/app/services/credential_crypto.py:79-80`). Le déchiffrement échoue (`InvalidTag`) si le secret est présenté sous un autre tenant ou un autre contexte (`lignes 97-102`).
+  - Format du jeton résultant : Concaténation `nonce || ciphertext + tag` encodée en base64url (`token = base64.urlsafe_b64encode(nonce + ciphertext).decode("ascii")`, `ligne 87`).
 - **Gestion des clés et rotation :**
   - Gestion multiversion des clés : Configuration via la variable d'environnement `AI_MASTER_KEYS="1:<hex64>,2:<hex64>"` et `AI_ACTIVE_KEY_VERSION="2"` (`backend/app/services/credential_crypto.py:53-72`).
   - Chaque secret stocke sa version de clé active lors de l'enregistrement (`key_version: int`, `EncryptedSecret`, lignes 30-32).
-  - Mécanisme de rotation intégré : Méthode `rotate(token, key_version, tenant_id, provider)` permettant de déchiffrer avec l'ancienne clé et de rechiffrer immédiatement avec la clé active en cours (`lines 104-107`).
-  - Masquage des secrets : Fonction `last4(secret)` pour affichage des 4 derniers caractères dans les interfaces d'administration sans révéler le secret (`lines 110-112`).
+  - Mécanisme de rotation intégré : Méthode `rotate(token, key_version, tenant_id, provider)` permettant de déchiffrer avec l'ancienne clé et de rechiffrer immédiatement avec la clé active en cours (`lignes 104-107`).
+  - Masquage des secrets : Fonction `last4(secret)` pour affichage des 4 derniers caractères dans les interfaces d'administration sans révéler le secret (`lignes 110-112`).
 - **Réutilisabilité pour le domaine Paiement :**
-  - Le composant `CredentialCrypto` est **parfaitement conçu et immédiatement réutilisable** pour sécuriser les données financières sensibles au repos.
-  - **Adaptation requise pour le paiement :** La méthode `_aad` couple actuellement `tenant_id` et `provider` (`f"{tenant_id}:{provider}"`). Pour le domaine financier, il suffira soit d'utiliser une constante de contexte spécifique (ex. `provider="partner_tax_id"` ou `provider="payment_gateway"`), soit de généraliser `CredentialCrypto` avec un paramètre contextuel libre (`context: str`) afin d'authentifier `f"{tenant_id}:{partner_id}:{context}"`, garantissant qu'un secret fiscal ou bancaire ne puisse jamais être injecté dans un autre profil partenaire.
+  - Le composant `CredentialCrypto` est réutilisable pour sécuriser les données financières sensibles au repos.
+  - **Adaptation requise pour le paiement :** La méthode `_aad` couple actuellement `tenant_id` et `provider` (`f"{tenant_id}:{provider}"`, `backend/app/services/credential_crypto.py:79-80`). Pour le domaine financier, il conviendra de déterminer dans `PAYMENT_DESIGN.md` si un paramètre contextuel libre ou un contexte spécifique (ex. `f"{tenant_id}:{partner_id}:{context}"`) doit être introduit pour lier les identifiants fiscaux ou de facturation à leur titulaire.

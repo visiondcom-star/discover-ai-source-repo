@@ -27,7 +27,7 @@ async def _create_demo_tenants(session: AsyncSession):
         default_language="fr",
         supported_languages=["fr", "ar", "en"],
         default_currency="DZD",
-        primary_color="#006233",
+        primary_color="#0F4C3A",
         secondary_color="#FFFFFF",
         config={"rtl": False, "timezone": "Africa/Algiers"},
     )

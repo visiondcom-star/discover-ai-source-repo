@@ -204,7 +204,7 @@ Cette matrice formalise la dépendance opérationnelle de chaque bloc technique 
 | Q9.1 | Transparence de la commission au voyageur | V1a | Oui (affichage UI paramétrable) | **Oui** | Dépend de la réponse du juriste en droit de la consommation à la question Q9.1 : on ne peut pas figer l'affichage du prix sans cette réponse. |
 | Q9.2 | Loyauté du classement et algorithmes IA | V1a | Oui (moteurs de recherche déterministes) | Non | Dépend de la réponse du juriste à la question Q9.2 : aucune commission différenciée par IA n'est appliquée en V1. |
 | Q10.1 | Validité de la clause de non-contournement | V1b | Oui (métriques statistiques testables) | **Oui** | Dépend de la réponse de l'avocat en droit des contrats à la question Q10.1 : on ne peut pas figer le texte de la clause de non-contournement sans cette réponse. |
-| Q10.2 | Sanctions contractuelles pour fraude | V1b | Oui (blocage logique des comptes de test) | **Oui** | Dépend de la réponse de l'avocat à la question Q10.2 : on ne peut pas figer les mesures de suspension de compte sans cette réponse. |
+| Q10.2 | Mesures contractuelles en cas de fausse déclaration | V1b | Oui (blocage logique des comptes de test) | **Oui** | Dépend de la réponse de l'avocat à la question Q10.2 : on ne peut pas figer les mesures de suspension de compte sans cette réponse. |
 | Q10.3 | Décharge de responsabilité sur les prestations | V1a | Oui (sans incidence sur le code backend) | **Oui** | Dépend de la réponse de l'avocat à la question Q10.3 : on ne peut pas figer les clauses de responsabilité des CGU sans cette réponse. |
 
 ---

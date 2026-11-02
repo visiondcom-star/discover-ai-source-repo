@@ -225,3 +225,26 @@ Pour permettre aux conseils juridiques et fiscaux de formuler leurs conclusions,
 3. **Modèle de relevé de commission :** Projet de mise en page du relevé de commission (mentions textuelles, en-tête légal, libellés de ventilation de la commission et des taxes).
 4. **Attribution des rôles administratifs :** Liste nominative des personnes physiques appelées à exercer les fonctions de `finance_operator` et règles internes de délégation.
 5. **Déclaration géographique des tenants :** Confirmation de la liste des pays réels associés à chaque tenant pour le renseignement de `Tenant.country_code` (`DZ` pour Discover Algeria, statut définitif de Discover Morocco).
+
+
+---
+
+## 7. Questions juridiques encore ouvertes après arbitrage du point de contrôle 2
+
+Les arbitrages D1 à D12 rendus par le propriétaire du projet le 02/11/2026 tranchent l'architecture logicielle V1a mais ne valent pas conclusions de droit. Les questions de conformité suivantes demeurent expressément ouvertes à l'examen des professionnels qualifiés :
+
+1. **Validation comptable de la convention d'arrondi (liée à D6) :**
+   - *Renvoi :* Question **Q3.2** (`docs/payment/PAYMENT_COMPLIANCE.md:63`).
+   - L'expert-comptable doit valider si la règle d'arrondi à l'unité mineure inférieure (floor) ou demi-pair (half to even) est la convention retenue pour les relevés de commission.
+2. **Émission des relevés internes vs obligations fiscales de facturation (liée à F21) :**
+   - *Renvoi :* Questions **Q2.1**, **Q2.2**, **Q2.3** (`docs/payment/PAYMENT_COMPLIANCE.md:53-55`).
+   - La dispense temporaire de délivrance d'une facture fiscale officielle en V1a doit être confirmée au regard du droit fiscal algérien.
+3. **Durée de conservation et opposabilité du journal d'audit financier (liée à F23) :**
+   - *Renvoi :* Questions **Q5.2**, **Q5.3** (`docs/payment/PAYMENT_COMPLIANCE.md:80-81`).
+   - La durée d'archivage probant du journal append-only `financial_audit_log` face aux règles comptables et au droit des données doit être arrêtée.
+4. **Statut des partenaires étrangers et étanchéité de change (liée à D10) :**
+   - *Renvoi :* Questions **Q4.1**, **Q4.2** (`docs/payment/PAYMENT_COMPLIANCE.md:71-72`).
+   - Le blocage technique de facturation sur le tenant Maroc face à l'entité algérienne doit être validé par un juriste spécialisé en réglementation des changes.
+5. **Force probante de la confirmation in-app et valeur du consentement (liée à D9) :**
+   - *Renvoi :* Questions **Q6.1**, **Q7.1**, **Q7.2** (`docs/payment/PAYMENT_COMPLIANCE.md:88, 96-97`).
+   - L'opposabilité de l'approbation in-app du voyageur comme acte de preuve matérielle de l'exécution du service doit être formellement confirmée.

@@ -1,320 +1,227 @@
-## 1. Objet et limites
+# Conformité et questions pour professionnels — domaine paiement V1
 
-### 1.1 Ce que le document est
-
-- Une liste de questions à trancher avec des professionnels qualifiés (juriste, expert-comptable, fiscaliste, avocat en droit des paiements en Algérie) avant la mise en production du domaine paiement V1.
-- Une clarification des faits techniques du domaine paiement, sans interprétation.
-- Une matrice reliant chaque question à la fonctionnalité V1a/V1b/V1c qu'elle conditionne.
-- Une liste des contradictions et écarts détectés avec `PAYMENT_DECISIONS_V1.md` et `PAYMENT_DESIGN.md`.
-- Une liste du dossier à remettre aux professionnels.
-
-### 1.2 Ce que le document n'est pas
-
-- Aucun avis juridique, fiscal, contractuel ou réglementaire.
-- Aucune validation du modèle d'intermédiation, de la structure des données ou des choix architecturaux.
-- Aucune permission, interdiction ou déclaration d'obligation réglementaire.
-- Aucun avis sur la propriété intellectuelle, la garantie, la responsabilité civile ou la sécurité des systèmes.
-## 2. Faits techniques pertinents
-
-| Fait | Source (fichier:ligne) |
-|---|---|
-| Modèle d'intermédiation sans PSP : le partenaire encaisse directement le voyageur ; Discover AI ne collecte pas le prix de la prestation et ne détient pas de fonds. | `docs/payment/PAYMENT_DECISIONS_V1.md:11-15` ; `docs/payment/PAYMENT_DESIGN.md:14` |
-| Discover AI facture sa commission au partenaire ; le voyageur est responsable auprès du partenaire de la prestation. | `docs/payment/PAYMENT_DECISIONS_V1.md:16-17` ; `docs/payment/PAYMENT_DESIGN.md:15` |
-| La V1 ne doit pas devenir prématurément un opérateur de paiement. | `docs/payment/PAYMENT_DECISIONS_V1.md:19` |
-| La déclaration du montant réel est faite par le partenaire après la prestation. | `docs/payment/PAYMENT_DECISIONS_V1.md:25` |
-| Montants en entiers, en unités mineures de la devise (jamais de float). | `docs/payment/PAYMENT_DECISIONS_V1.md:29` |
-| Source et historiques de chaque déclaration conservés ; enregistrement validé jamais modifié silencieusement. | `docs/payment/PAYMENT_DECISIONS_V1.md:30` |
-| Type de déclaration [A13] : service rendu, frais retenus pour annulation tardive, frais retenus pour no-show. | `docs/payment/PAYMENT_DECISIONS_V1.md:31` |
-| Aucune facturation automatique déclenchée par une déclaration. | `docs/payment/PAYMENT_DECISIONS_V1.md:32` |
-| Profil contractuel et de facturation rattaché au partenaire, pas systématiquement au POI. | `docs/payment/PAYMENT_DECISIONS_V1.md:38` |
-
-| Données sensibles : chiffrement au repos, accès limité, traçabilité. | `docs/payment/PAYMENT_DECISIONS_V1.md:136` |
-| En V1, relevés de commission, jamais présentés comme des factures fiscales. | `docs/payment/PAYMENT_DECISIONS_V1.md:143` |
-| Scripts en ligne de commande et export CSV ; pas d'écran financier global. | `docs/payment/PAYMENT_DECISIONS_V1.md:149` |
-| Sans PSP, annulation puis traitement hors plateforme possible. | `docs/payment/PAYMENT_DECISIONS_V1.md:155` |
-| V1a : profil partenaire, taux commission, déclaration, confirmation/contestation, 72 h, calcul commission, journal d'audit. | `docs/payment/PAYMENT_DECISIONS_V1.md:161-168` |
-| V1b : contestations, résolution humaine, `finance_operator`. | `docs/payment/PAYMENT_DECISIONS_V1.md:170-173` |
-| V1c : annulation et politiques. | `docs/payment/PAYMENT_DECISIONS_V1.md:175-178` |
-| Exclus de la V1 : PSP, paiement en ligne, encaissement, split, conversion, 2e entité, marketplace, super-admin, commission par IA. | `docs/payment/PAYMENT_DECISIONS_V1.md:181` |
-| États de réservation : `pending`, `requested`, `confirmed`, `declined`, `expired`, `cancelled`. | `docs/payment/PAYMENT_DECISIONS_V1.md:187` |
-| Mode `manual_confirm` éligible ; `request` et `pay_on_site` exclus à V1b. | `docs/payment/PAYMENT_DESIGN.md:697` |
-| Preuve V1a : déclaration partenaire + confirmation in-app (Option A). | `docs/payment/PAYMENT_DESIGN.md:543-545` |
-| Options pour 72 h : A (tacite) vs B (`expired_unconfirmed`). | `docs/payment/PAYMENT_DESIGN.md:450-461` |
-| Options d'arrondi : A (floor) vs B (half to even). | `docs/payment/PAYMENT_DESIGN.md:475-495` |
-| `Tenant.country_code` existe mais seed `algeria`/`morocco` valent NULL. | `docs/payment/PAYMENT_DESIGN.md:365-368` |
-| `booking_data` JSON libre, sans garantie de présence ni de format. | `docs/payment/PAYMENT_DESIGN.md:420` |
-| Journal d'audit append-only (`financial_audit_log`). | `docs/payment/PAYMENT_DESIGN.md:345-363` |
-| Interfaces V1a : declare, confirm-service, dispute-service. | `docs/payment/PAYMENT_DESIGN.md:555-574` |
-| Contrainte d'unicité des notifications. | `docs/payment/PAYMENT_DESIGN.md:584-590` |
-| Matrix d'attribution des fonctionnalités V1a/V1b/V1c. | `docs/payment/PAYMENT_DESIGN.md:20-35` |
+> **Document de référence :** Point de contrôle 3 du chantier paiement (conforme à `Payment/PAYMENT ARCHITECTURE V3.md` section 6, `docs/payment/PAYMENT_DECISIONS_V1.md` et `docs/payment/PAYMENT_DESIGN.md`).  
+> **Date de rédaction :** 2 novembre 2026.  
+> **Branche de travail :** `docs/payment-decisions-v1`.  
+> **Statut :** Liste de questions, aucun avis juridique. Ce document recense les interrogations techniques, comptables, fiscales et contractuelles destinées aux conseils qualifiés avant la mise en production du domaine paiement. Il ne formule aucune conclusion de droit.
 
 ---
 
-## 3. Questions par domaine
+## 1. Objet et limites
 
-Chaque question suit le format :
-**numéro | question | pourquoi elle se pose (fait technique + source) | décision du système qui en dépend (V1a/V1b/V1c) | à qui la poser | statut**
+### 1.1 Ce que le document est
+- Un inventaire exhaustif et structuré des questions à soumettre aux professionnels qualifiés (juriste, expert-comptable, fiscaliste, avocat en droit des affaires et des paiements en Algérie) préalablement à toute mise en production financière.
+- Un relevé fidèle des faits techniques et des modèles de données effectivement présents dans le code source de Discover AI.
+- Une matrice d'impact technique établissant le lien direct entre chaque question et les composants logiciels des versions V1a, V1b et V1c.
+- Une consignation objective des contradictions et divergences d'arbitrage constatées entre les documents directeurs (`docs/payment/PAYMENT_DECISIONS_V1.md` et `docs/payment/PAYMENT_DESIGN.md`).
+- Une liste des pièces et données contractuelles que le propriétaire du projet doit préparer pour constituer le dossier des professionnels.
 
-### 3.1 Qualification de l'activité d'intermédiation et de la relation contractuelle
+### 1.2 Ce que le document n'est pas
+- Aucun avis juridique, fiscal, comptable ou réglementaire.
+- Aucune qualification de légalité, de conformité ou d'autorisation concernant un flux financier, un schéma d'intermédiation ou un stockage de données.
+- Aucune interprétation doctrinale ou jurisprudentielle d'un texte de loi, d'un code ou d'une directive bancaire.
+- Aucune validation formelle d'un choix d'architecture ou de modèle de données.
 
-| # | Question | Pourquoi elle se pose | Décision système | À qui la poser | Statut |
+Chaque point relevant de l'appréciation du droit ou de la fiscalité est explicitement identifié par la mention `[QUESTION POUR PROFESSIONNEL]`.
+
+---
+
+## 2. Faits techniques pertinents
+
+Le tableau ci-dessous récapitule l'ensemble des faits techniques observables dans la base de code et les documents directeurs de la branche, sans interprétation subjective :
+
+| # | Fait technique vérifiable | Source (fichier:ligne ou document) |
+|---|---|---|
+| F1 | Modèle d'intermédiation pur : le partenaire encaisse directement le voyageur ; Discover AI n'encaisse ni ne détient de fonds de tiers et n'intègre aucun PSP en V1. | `docs/payment/PAYMENT_DECISIONS_V1.md:11-19` ; `docs/payment/PAYMENT_DESIGN.md:12-16` |
+| F2 | Discover AI facture sa commission au partenaire après confirmation de la prestation ; la plateforme ne promet ni ne gère de remboursement technique au voyageur. | `docs/payment/PAYMENT_DECISIONS_V1.md:16-17` ; `docs/payment/PAYMENT_DESIGN.md:14-15` |
+| F3 | Le montant réel est déclaré par le partenaire après exécution ; `Booking.price` (`backend/app/models.py:344`, Float) est dormant et jamais utilisé pour les calculs financiers. | `docs/payment/PAYMENT_DECISIONS_V1.md:25-27` ; `docs/payment/PAYMENT_DESIGN.md:102` |
+| F4 | Tous les montants financiers sont stockés en entiers (`BigInteger`), en unités mineures de la devise (centimes), avec devise explicite (ISO 4217). | `docs/payment/PAYMENT_DECISIONS_V1.md:29` ; `docs/payment/PAYMENT_DESIGN.md:102, 291` |
+| F5 | Trois types de déclarations sont prévus : service rendu (`service_rendered`), frais d'annulation tardive (`late_cancellation_fee`), frais de no-show (`no_show_fee`). | `docs/payment/PAYMENT_DECISIONS_V1.md:31` ; `docs/payment/PAYMENT_DESIGN.md:289` |
+| F6 | Une déclaration n'engendre jamais de facturation automatique ; le profil contractuel et de facturation est rattaché au partenaire et non au POI. | `docs/payment/PAYMENT_DECISIONS_V1.md:32, 38` ; `docs/payment/PAYMENT_DESIGN.md:107-133` |
+| F7 | Dans le code existant, le partenaire n'est pas une entité autonome mais un utilisateur rattaché à un POI via la table `poi_managers`. | `backend/app/models.py:366-389` ; `docs/payment/PAYMENT_DECISIONS_V1.md:40` |
+| F8 | Séparation des permissions : gestion opérationnelle du POI, déclaration de service, consultation, modification du profil contractuel et facturation. | `docs/payment/PAYMENT_DECISIONS_V1.md:44` ; `docs/payment/PAYMENT_DESIGN.md:500-523` |
+| F9 | Un administrateur du tenant (`is_admin == True`) a accès à toutes les réservations du tenant via `_scope_filter` et peut répondre aux demandes (`Booking.responded_by`). | `backend/app/api/v1/endpoints/partner.py:76-86, 339` ; `docs/payment/PAYMENT_AUDIT.md:690-698` |
+| F10 | Délai de confirmation/contestation par le voyageur fixé à 72 h configurable par tenant, calculé depuis l'horodatage UTC de création de la notification. | `docs/payment/PAYMENT_DECISIONS_V1.md:60-64` ; `docs/payment/PAYMENT_DESIGN.md:295, 450` |
+| F11 | Taux de commission par défaut fixé à 10 % (1 000 bps), surchargeable par partenaire, stocké en points de base (`Integer`). | `docs/payment/PAYMENT_DECISIONS_V1.md:104-105` ; `docs/payment/PAYMENT_DESIGN.md:267` |
+| F12 | Snapshot immuable pris à la déclaration : `legal_entity_id` et `applied_rate_bps` sont figés dans `service_declarations` dès l'insertion. | `docs/payment/PAYMENT_DESIGN.md:278, 283-284` |
+| F13 | Base de calcul : montant HT si taxes distinctes et documentées, sinon montant encaissé déclaré TTC. Contrôles de cohérence sur les taxes. | `docs/payment/PAYMENT_DECISIONS_V1.md:109-111` ; `docs/payment/PAYMENT_DESIGN.md:465-471` |
+| F14 | Une seule entité juridique Discover AI en V1 (Algérie) ; règle de sécurité pays/entité désactivant la commission si pays partenaire ≠ pays entité. | `docs/payment/PAYMENT_DECISIONS_V1.md:118, 121` ; `docs/payment/PAYMENT_DESIGN.md:374-378` |
+| F15 | Le modèle `Tenant` possède une colonne `country_code` (`backend/app/models.py:51`, ISO 3166-1 alpha-2), mais les deux seeds `algeria` et `morocco` la laissent à `NULL`. | `backend/app/models.py:51, 68-76` ; `backend/app/initial_data.py:24-47` |
+| F16 | Le seed initialise un tenant `morocco` en devise `MAD` ; la fonction `_create_demo_tenants` retourne immédiatement si `algeria` existe. | `backend/app/initial_data.py:20-22, 36-47` |
+| F17 | Aucune conversion de devise en V1 ; chaque opération reste dans sa devise d'origine. | `docs/payment/PAYMENT_DECISIONS_V1.md:129` ; `docs/payment/PAYMENT_DESIGN.md:59` |
+| F18 | Aucune coordonnée bancaire partenaire n'est collectée en V1 ; seuls les identifiants fiscaux légaux nécessaires à la facturation sont enregistrés. | `docs/payment/PAYMENT_DECISIONS_V1.md:135` ; `docs/payment/PAYMENT_DESIGN.md:57` |
+| F19 | Chiffrement symétrique AES-256-GCM au repos des identifiants sensibles via `CredentialCrypto`. | `backend/app/services/credential_crypto.py:25-113` ; `docs/payment/PAYMENT_DESIGN.md:220` |
+| F20 | Les détails transmis au partenaire (`_DETAILS_ALLOWED_KEYS`) excluent téléphone et e-mail mais incluent des champs texte libre (`notes`, `message`, `special_requests`). | `backend/app/api/v1/endpoints/partner.py:45-73` ; `docs/payment/PAYMENT_AUDIT.md:694-697` |
+| F21 | En V1, Discover AI émet des relevés de commission internes, jamais présentés comme des factures fiscales officielles ; référence de facture externe facultative. | `docs/payment/PAYMENT_DECISIONS_V1.md:143` ; `docs/payment/PAYMENT_DESIGN.md:58` |
+| F22 | Reporting financier V1 via scripts CLI en lecture seule et exports CSV isolés par tenant (`app/reporting_finance.py`). | `docs/payment/PAYMENT_DECISIONS_V1.md:149` ; `docs/payment/PAYMENT_DESIGN.md:621-625` |
+| F23 | Journal d'audit financier append-only (`financial_audit_log`) avec traçabilité nominative ou identifiant d'opérateur CLI (`operator_identifier`). | `docs/payment/PAYMENT_DESIGN.md:339-363` |
+| F24 | L'index unique partiel `uq_notifications_booking_unique` sur `notifications` empêche deux notifications de même type pour un même `booking_id`. | `backend/app/models.py:460-469` ; `backend/app/services/notification_service.py:68-80` |
+| F25 | L'identifiant externe `external_id` (`EXT-{booking_id[:8]}`) est déterministe et ne constitue pas une preuve de réalisation. | `backend/app/api/v1/endpoints/bookings.py:259` ; `docs/payment/PAYMENT_DECISIONS_V1.md:54` |
+| F26 | Absence totale de colonne temporelle de date de séjour ou de prestation sur `Booking` ; les dates saisies résident dans le JSON libre `booking_data`. | `backend/app/models.py:332-364` ; `docs/payment/PAYMENT_DESIGN.md:410-422` |
+
+---
+
+## 3. Questions par domaine à soumettre aux professionnels
+
+Chaque question est formulée sans préjuger de la réponse juridique, avec son contexte technique, son impact système et son destinataire.
+
+### 3.1 Qualification de l'activité d'intermédiation et relation contractuelle
+
+| # | Question pour professionnel | Contexte technique et source | Décision système conditionnée | Destinataire | Statut |
 |---|---|---|---|---|---|
-| Q1.1 | Le partenaire est-il un interlocuteur économique unique (titulaire d'un profil contractuel) ou peut-il transmettre la prestation à un sous-traitant (affacturage, reversion) sans distinction dans le calcul de la commission ? | Le modèle ne distingue pas encore l'intermédiaire du sous-traitant : `partner_profiles` et `partner_poi_assignments` sont des tables planifiées (`docs/payment/PAYMENT_DESIGN.md:130-153`), non encore alimentées dans la V1. | Règle de qualification du partenaire pour l'activation de la commission (V1a). | Avocat en droit des paiements en Algérie, juriste | OUVERTE |
-| Q1.2 | La relation contractuelle entre Discover AI et le partenaire repose-t-elle sur un contrat adhésoire ou une relation de fait ? Le système doit-il savoir distinguer « partenaire de prestation » de « partenaire en tant que client de la plateforme » pour la facturation. | `PAYMENT_DECISIONS_V1.md` distingue le partenaire (opérateur de la prestation) et l'entité responsable de l'opération financière ; la nature du contrat n'est pas modélisée. | Affectation du profil contractuel pour la facturation (V1b). | Expert-comptable, juriste | OUVERTE |
-| Q1.3 | Le voyageur est-il le client de la prestation ou le client de Discover AI dans la relation contractuelle ? La plateforme remplit-elle un rôle d'intermédiation ou de négociation ? | `PAYMENT_DECISIONS_V1.md` §1 définit le partenaire comme contractant du voyageur pour la prestation ; Discover AI contracte le partenaire pour l'intermédiation. La nature de cette intermédiation n'est pas confirmée textuellement. | Définition du modèle d'intermédiation (V1a). | Avocat en droit des paiements en Algérie | OUVERTE |
-| Q1.4 | Le système doit-il sauvegarder, dans l'historique financier, l'identité du partenaire responsable à la date de la déclaration, ou le partenaire actuel au moment de la facturation ? | `docs/payment/PAYMENT_DECISIONS_V1.md:41` : « Chaque prestation conserve le partenaire responsable au moment de sa déclaration. » Cela implique une responsabilité historique. | Rétroactivité du partenaire responsable (V1a). | Expert-comptable | OUVERTE |
-| Q1.5 | Quelle est la portée exacte du rattachement daté des profils contractuels aux POI (`partner_poi_assignments` avec `valid_from`, `valid_to`) : un POI peut-il être rattaché à plusieurs profils sur des périodes se chevauchant ? | `docs/payment/PAYMENT_DESIGN.md:250-256` définit une règle de non-chevauchement temporel. La protection peut être insuffisante si un changement de partenaire n'est pas matérialisé. | Préserver la règle de non-chevauchement ou l'affaiblir | Expert-comptable, avocat en droit des paiements en Algérie | OUVERTE |
-
-| Partenaire pas encore une entité autonome : code utilise `POIManager` (utilisateur ↔ POI). | `docs/payment/PAYMENT_DECISIONS_V1.md:40` |
-| Permissions séparées : gestion opérationnelle du POI ; déclaration ; consultation ; modification du profil et facturation. | `docs/payment/PAYMENT_DECISIONS_V1.md:44` |
-| Délai de contestation 72 h configurable par tenant, rappels via le worker. | `docs/payment/PAYMENT_DECISIONS_V1.md:60` |
-| Sans réponse : dossier « non confirmé », vérification humaine. | `docs/payment/PAYMENT_DECISIONS_V1.md:62-63` |
-| Le silence ne présume pas l'acceptation contractuelle. | `docs/payment/PAYMENT_DECISIONS_V1.md:63` |
-| Point de départ du délai : horodatage UTC de la notification in-app. | `docs/payment/PAYMENT_DECISIONS_V1.md:64` |
-
+| Q1.1 | Quelle est la qualification juridique exacte de l'activité de Discover AI : simple intermédiaire technique, courtier en ligne, ou agence de voyage / opérateur touristique ? | Discover AI met en relation des voyageurs et des prestataires touristiques locaux via une plateforme logicielle sans manipuler les fonds (`docs/payment/PAYMENT_DECISIONS_V1.md:11-19`). | Qualification légale du service et mentions obligatoires dans les CGU / contrats partenaires (V1a). | Avocat en droit des affaires / droit numérique (Algérie) | OUVERTE |
+| Q1.2 | Le fait de calculer et percevoir une commission d'intermédiation sur des réservations touristiques requiert-il un agrément ministériel spécifique (ex. licence d'agence de voyage, agrément d'intermédiation touristique) ? | Discover AI applique un taux de commission par défaut de 10 % sur les prestations exécutées (`docs/payment/PAYMENT_DECISIONS_V1.md:104-105`). | Condition préalable à la mise en production du calcul de commission (V1a). | Avocat en droit du tourisme / droit commercial (Algérie) | OUVERTE |
+| Q1.3 | La relation tripartite (Discover AI, partenaire, voyageur) nécessite-t-elle deux contrats distincts et étanches (CGU voyageur dégageant la plateforme de l'exécution, et convention de partenariat avec le POI) ? | Le modèle prévoit que le partenaire contracte la prestation avec le voyageur, et Discover AI l'intermédiation avec le partenaire (`docs/payment/PAYMENT_DECISIONS_V1.md:13-17`). | Architecture contractuelle et clauses d'exonération de responsabilité de la plateforme (V1a). | Avocat en droit des contrats | OUVERTE |
+| Q1.4 | La séparation entre le compte opérationnel du gérant (`POIManager`, `backend/app/models.py:381`) et l'entité juridique débitrice de la commission (`partner_profiles`, `docs/payment/PAYMENT_DESIGN.md:225`) satisfait-elle aux exigences d'identification du débiteur ? | Un POI peut avoir plusieurs gestionnaires physiques, mais les commissions sont adossées au profil d'entreprise (`docs/payment/PAYMENT_DESIGN.md:123-133`). | Modèle de données contractuel partenaire (V1a). | Juriste d'entreprise / Avocat | OUVERTE |
+| Q1.5 | Un exploitant de POI agissant en personne physique (artisan, guide individuel sans registre du commerce) peut-il légalement souscrire au contrat de commission ? | Le schéma `partner_profiles` prévoit `trade_register_number` optionnel et `tax_identification_number` (`docs/payment/PAYMENT_DESIGN.md:219-220`). | Validation des statuts juridiques admissibles lors de l'onboarding partenaire (V1a). | Avocat / Expert-comptable | OUVERTE |
 
 ### 3.2 Facturation de la commission au partenaire
 
-| # | Question | Pourquoi elle se pose | Décision système | À qui la poser | Statut |
+| # | Question pour professionnel | Contexte technique et source | Décision système conditionnée | Destinataire | Statut |
 |---|---|---|---|---|---|
-| Q2.1 | Qui émet la facture : Discover AI (plateforme) ou le partenaire (comme redevable) ? | Le modèle actuel ne définit pas l'émetteur d'une facture; `PAYMENT_DECISIONS_V1.md:143` ne mentionne que l'émission hors système jusqu'à validation par un professionnel et la référence d'une facture externe peut être enregistrée. | Identité de l'émetteur pour la facturation (V1b). | Expert-comptable | OUVERTE |
-| Q2.2 | Comment est numérotée la facture ? Une numérotation séquentielle par partenaire, par tenant, ou un format hybride avec date et version ? | Aucun mécanisme de numérotation n'est décrit; le document ne donne que la référence d'une facture externe. | Schéma de numérotation (V1b). | Expert-comptable | OUVERTE |
-| Q2.3 | Quelles mentions doivent obligatoirement apparaître sur la facture (dénomination exacte de Discover AI, numéro d'identité fiscale, adresse, signification des libellés, texte de la commission, montant TVA) ? | La mention de la commission doit être claire (10 % = 1 000 bps ; `docs/payment/PAYMENT_DECISIONS_V1.md:104-105`), mais le nombre et la forme des mentions ne sont pas définis. | Liste exhaustive des mentions obligatoires (V1b). | Expert-comptable | OUVERTE |
-| Q2.4 | Le relevé de commission est-il identique à la facture ou distinct ? `PAYMENT_DECISIONS_V1.md:143` affirme que « En V1, Discover AI produit des relevés de commission qui ne sont jamais présentés comme des factures fiscales. » | Référence A7, source `docs/payment/PAYMENT_DECISIONS_V1.md:209`. | Conserver le relevé distinct ou fusionner une fois la validation obtenue. | Expert-comptable | OUVERTE |
-| Q2.5 | Le format de la facture (PDF, xml, csv, ou une autre) et l'endroit où elle est déposée (e-mail, espace partenaire, API) sont-ils définis ? | Pas de mention du format ou du support de déploiement. | Définition du support et du format de livraison. | Expert-comptable | OUVERTE |
+| Q2.1 | Discover AI peut-il se limiter en V1 à l'émission de « relevés de commission » périodiques récapitulatifs, sans délivrer de facture fiscale officielle dématérialisée ? | `docs/payment/PAYMENT_DECISIONS_V1.md:143` stipule que Discover AI n'émet en V1 que des relevés internes, sans numérotation fiscale officielle. | Périmètre du module de facturation V1a/V1b (maintien des relevés ou obligation d'un module de facturation complet). | Expert-comptable / Fiscaliste (Algérie) | OUVERTE |
+| Q2.2 | Quelles sont les mentions obligatoires légales devant figurer sur un relevé de commission ou une facture d'intermédiation émise par une société de droit algérien ? | Le modèle `legal_entities` stocke nom, NIF/NIS, registre du commerce et adresse (`docs/payment/PAYMENT_DESIGN.md:204-207`). | Gabarit d'export des relevés et des documents comptables (V1b). | Expert-comptable | OUVERTE |
+| Q2.3 | Quel régime de numérotation séquentielle et chronologique doit être appliqué aux relevés ou factures de commission (série unique par société, préfixe par année/tenant, absence de rupture de séquence) ? | La numérotation est actuellement déléguée hors système en V1 (`docs/payment/PAYMENT_DECISIONS_V1.md:143`). | Algorithme de génération des références de facturation dans `commission_receivables` (V1b). | Expert-comptable | OUVERTE |
+| Q2.4 | Quel est le délai légal d'émission de la note ou facture de commission suite à l'exécution de la prestation touristique ? | La commission est enregistrée dès confirmation de la prestation par le voyageur (`docs/payment/PAYMENT_DESIGN.md:278, 310`). | Fréquence de génération des relevés et échéances de paiement associées (V1b). | Expert-comptable | OUVERTE |
 
-### 3.3 Fiscalité
+### 3.3 Fiscalité : assiette, TVA et retenues
 
-| # | Question | Pourquoi elle se pose | Décision système | À qui la poser | Statut |
+| # | Question pour professionnel | Contexte technique et source | Décision système conditionnée | Destinataire | Statut |
 |---|---|---|---|---|---|
-| Q3.1 | [QUESTION POUR PROFESSIONNEL] De quel droit fiscal s'agit-il (Algérie, pays du partenaire, pays du voyageur) et comment le système doit-il savoir lequel s'applique ? | `PAYMENT_DECISIONS_V1.md:120` : « Ne jamais déduire l'entité juridique du pays ou de la nationalité du voyageur, ni de la devise. » La base de la commission n'est pas calculée ; le traitement exact n'est pas défini. | Règle de rattachement fiscal par pays/entité. | Fiscaliste | OUVERTE |
-| Q3.2 | [QUESTION POUR PROFESSIONNEL] La commission est-elle soumise à la TVA en Algérie ? Si oui, sur quelle base (HT ou TTC) et à quel taux ? La facture doit-elle distinguer la commission et les taxes. | `PAYMENT_DECISIONS_V1.md:109-112` définit la base HT/TTC, non interprétée ; `PAYMENT_DECISIONS_V1.md:112` confirme: « Le traitement fiscal exact de la commission est à valider par un professionnel. » | Règle de calcul de la base et de la quote-part de la taxe (V1b). | Fiscaliste | OUVERTE |
-| Q3.3 | [QUESTION POUR PROFESSIONNEL] Existe-t-il une retenue à la source ou une obligation d'agréation pour un tiers qui perçoit une commission de services touristiques en Algérie ? | Le système facture la commission ; la fiscalité de la commission n'est pas examinée. | Règle de retenue application (V1b). | Fiscaliste | OUVERTE |
-| Q3.4 | [QUESTION POUR PROFESSIONNEL] Le chiffre d'affaires de la commission est-il assujetti à une déclaration ponctuelle ou à un régime de TVA ? Le système doit-il stocker les références de factures externes pour le suivi du rapprochement. | `PAYMENT_DECISIONS_V1.md:143` autorise l'enregistrement de la référence d'une facture externe; le suivi est dans V1b. | Champs de référence facture externe (V1b). | Expert-comptable | OUVERTE |
-| Q3.5 | [QUESTION POUR PROFESSIONNEL] Les personnes physiques ou morales du partenaire sont-elles les destinataires de la facture, ou l'entreprise du voyageur ? La distinction modifie la base de déclaration. | Le modèle ne modélise pas la personne morale du partenaire ni de voyageur. | Champ de la personne morale du partenaire / du voyageur dans la déclaration. | Expert-comptable | OUVERTE |
+| Q3.1 | La commission d'intermédiation perçue par Discover AI en Algérie est-elle soumise à la TVA locale ? Si oui, à quel taux (taux normal 19 % ou taux réduit) ? | Le calcul de commission `calculated_commission_minor` est calculé en points de base hors mention explicite de TVA (`docs/payment/PAYMENT_DESIGN.md:289, 472`). | Formule de calcul financier et ajout éventuel d'une colonne de taxe sur la commission (V1a/V1b). | Fiscaliste (Algérie) | OUVERTE |
+| Q3.2 | L'assiette de la commission peut-elle être assise sur le montant hors taxes déclaré par le partenaire, et quelles pièces justificatives fiscales Discover AI doit-il archiver pour prouver la déduction de la taxe locale du partenaire ? | La formule retient `amount_minor - tax_amount_minor` si les taxes sont documentées (`docs/payment/PAYMENT_DECISIONS_V1.md:109` ; `docs/payment/PAYMENT_DESIGN.md:467`). | Règles de validation des déclarations dans `service_declarations` et contrôles de cohérence obligatoires (V1a). | Fiscaliste / Expert-comptable | OUVERTE |
+| Q3.3 | Existe-t-il une obligation de retenue à la source applicable aux commissions payées par des opérateurs touristiques à une plateforme d'intermédiation en Algérie ? | Le partenaire paiera Discover AI sur présentation du relevé (`docs/payment/PAYMENT_DECISIONS_V1.md:16, 143`). | Gestion des encaissements partiels et des retenues dans `commission_receivables` (V1b). | Fiscaliste | OUVERTE |
+| Q3.4 | Quel traitement fiscal et comptable doit être appliqué aux commissions perçues sur des frais d'annulation tardive (`late_cancellation_fee`) ou de no-show (`no_show_fee`) sans exécution physique du service ? | Les amendements A13 incluent ces indemnités dans les types de déclaration éligibles à la commission (`docs/payment/PAYMENT_DECISIONS_V1.md:31`). | Éligibilité fiscale des déclarations d'indemnités dans `service_declarations` (V1c). | Fiscaliste | OUVERTE |
 
-### 3.4 Devise et change
+### 3.4 Devise, réglementation des changes et multi-tenant
 
-| # | Question | Pourquoi elle se pose | Décision système | À qui la poser | Statut |
+| # | Question pour professionnel | Contexte technique et source | Décision système conditionnée | Destinataire | Statut |
 |---|---|---|---|---|---|
-| Q4.1 | La commission est-elle due en devise locale de l'entité (DZD) ou en devise du partenaire ? | `PAYMENT_DECISIONS_V1.md:121` : « Le système vérifie le pays du partenaire et l'entité, pas seulement la devise. » | Règle de conversion ou de maintien de la devise partenaire. | Fiscaliste, expert-comptable | OUVERTE |
-| Q4.2 | Le tenant morocco (seed, MAD) est-il un cas test d'activation de commission ou un cas figé ? | `PAYMENT_DECISIONS_V1.md:122` : « Aucun transfert transfrontalier ni conversion en V1. » | Statut du tenant maroc en production. | Propriétaire | OUVERTE |
-| Q4.3 | Quelle est la garantie de convertir les montants en cas de change à l'échéance de paiement de la commission, et qui assume le risque de change ? | Aucune règle de change n'est définie; `PAYMENT_DECISIONS_V1.md:9` et `129` interdisent la conversion en V1. | Absence de conversion (V1a). | Expert-comptable, avocat en droit des paiements en Algérie | OUVERTE |
-| Q4.4 | L'entité juridique algérienne peut-elle recevoir des commissions en devise étrangère sans conversion interne ? | Aucune règle de présentation est définie; la fiscalité de la facture est hors périmètre. | Règle de présentation en devise locale (V1a). | Expert-comptable | OUVERTE |
+| Q4.1 | Une entité commerciale établie en Algérie peut-elle légalement facturer des commissions d'intermédiation en dinars algériens (DZD) à un partenaire situé à l'étranger, ou la facturation doit-elle obligatoirement s'effectuer en devises étrangères avec rapatriement bancaire ? | Le système interdit toute conversion de devise en V1 (`docs/payment/PAYMENT_DECISIONS_V1.md:129`). | Règle de verrouillage pays/entité interdisant toute facturation transfrontalière en V1a (`docs/payment/PAYMENT_DESIGN.md:374-378`). | Avocat spécialisé en réglementation des changes / Banque d'Algérie | OUVERTE |
+| Q4.2 | La règle de sécurité technique désactivant strictement la commission si le pays du partenaire ne correspond pas à l'entité juridique Discover AI (ex. tenant `morocco` en MAD face à l'entité DZ) est-elle suffisante pour prévenir toute infraction à la législation des changes ? | Le tenant `morocco` est présent dans le seed en devise `MAD` sans entité Discover AI au Maroc (`backend/app/initial_data.py:36-47` ; `docs/payment/PAYMENT_DECISIONS_V1.md:121-122`). | Maintien du blocage absolu de la commission sur le tenant Maroc en V1a (`docs/payment/PAYMENT_DESIGN.md:374-378`). | Avocat en droit des changes | OUVERTE |
+| Q4.3 | Dans la perspective d'une entité Discover AI internationale (V3), quelles sont les formalités bancaires et déclaratives pour rapatrier légalement des redevances logicielles ou commissions depuis l'étranger vers l'Algérie ? | Cadrage V3 prévu dans `Payment/PAYMENT ARCHITECTURE V3.md:54` et `docs/payment/PAYMENT_DESIGN.md:46-48`. | Conception de l'architecture multi-entités et passerelles de devises (V3). | Conseil juridique et financier international | OUVERTE |
 
+### 3.5 Protection des données personnelles et conservation
 
-### 3.5 Protection des données personnelles
-
-| # | Question | Pourquoi elle se pose | Décision système | À qui la poser | Statut |
+| # | Question pour professionnel | Contexte technique et source | Décision système conditionnée | Destinataire | Statut |
 |---|---|---|---|---|---|
-| Q5.1 | Les données voyageur transmises au partenaire (nom, `booking_data` : notes, message, special_requests, `Booking.responded_by`, `Booking.partner_note`) sont-elles obligatoires pour la plateforme, et quelles sont les conditions de transfert vers le partenaire ? | `docs/payment/PAYMENT_DESIGN.md:420` montre que `booking_data` est un JSON libre pour les dates souhaitées ; `Booking.partner_note` contient des notes du partenaire. | Base légale et finalité du traitement partenaire. | Avocat en droit des données personnelles (Algérie/EU) | OUVERTE |
-| Q5.2 | La conservation du journal d'audit financier (`financial_audit_log`) est-elle définie comme append-only, et quel est le but de conservation ? | `docs/payment/PAYMENT_DESIGN.md:345-363` définit un journal strictement en écriture seule, avec `payload_before`, `payload_after`, `reason` obligatoire. | Durée de conservation et comptes rendus. | Avocat en droit des données personnelles | OUVERTE |
-| Q5.3 | Le voyageur dispose-t-il d'un droit d'accès ou d'effacement face au journal d'audit ? | `financial_audit_log` est append-only (immuable). | Droit d'accès/effacement du voyageur. | Avocat en droit des données personnelles | OUVERTE |
-| Q5.4 | Les données sensibles chiffrées (identifiants légaux nécessaires à l'émission de la facture ; `CredentialCrypto` pour les jetons produits) doivent-elles être dans la base ou sur les partenaires, et comment gérer l'accès à ces clés. | `PAYMENT_DECISIONS_V1.md:135` affirme qu'aucune coordonnée bancaire des partenaires n'est collectée en V1 ; la `CredentialCrypto` ne concerne que les jetons produits. | Schéma de clés et de rotation pour les identifiants légaux. | Expert-comptable | OUVERTE |
-| Q5.5 | Les exports CLI et CSV sont-ils tracés, isolés par tenant et exempts de données sensibles inutiles ? | `docs/payment/PAYMENT_DECISIONS_V1.md:149` : « Les exports respectent l'isolation des tenants, évitent les données sensibles inutiles et sont tracés. » | Contrôle d'accès et impersonnalité des exports. | Expert-comptable | OUVERTE |
+| Q5.1 | La transmission au partenaire des données de réservation du voyageur (nom complet `User.full_name`, et champs texte libre de `booking_data` : `notes`, `message`, `special_requests`) est-elle proportionnée au regard de la loi algérienne relative à la protection des données (loi 18-07) et du RGPD européen ? | Ces champs sont transmis dans `PartnerBookingResponse` via `_safe_details` (`backend/app/api/v1/endpoints/partner.py:45-73` ; `docs/payment/PAYMENT_AUDIT.md:694-697`). | Filtrage des champs exposés dans l'API partenaire et recueil de consentement spécifique (V1a). | Délégué à la protection des données (DPO) / Avocat TIC | OUVERTE |
+| Q5.2 | Quelle est la durée légale de conservation obligatoire du journal d'audit financier (`financial_audit_log`, `docs/payment/PAYMENT_DESIGN.md:339-363`) pour répondre aux obligations comptables et fiscales ? | Le journal est conçu comme immuable et append-only sans mécanisme de purge automatique (`docs/payment/PAYMENT_DESIGN.md:343-349`). | Politique d'archivage, de purge ou de scellement des logs d'audit financier (V1a). | Expert-comptable / Avocat | OUVERTE |
+| Q5.3 | En cas de demande d'effacement ou de suppression de compte par un voyageur (droit à l'oubli), comment concilier l'anonymisation de ses données personnelles avec l'intégrité non altérable du grand livre et du journal d'audit financier ? | `financial_audit_log` conserve `actor_user_id` et les états antérieurs sous forme de snapshots JSON (`docs/payment/PAYMENT_DESIGN.md:353, 359-360`). | Procédure d'anonymisation des identifiants dans les tables financières sans altération des montants (V1a). | DPO / Avocat spécialisé données | OUVERTE |
+| Q5.4 | Le chiffrement des identifiants fiscaux au repos via AES-256-GCM (`CredentialCrypto`, `backend/app/services/credential_crypto.py:25-113`) répond-il aux standards réglementaires de sécurité applicables aux données professionnelles sensibles ? | La table `partner_profiles` chiffre `tax_identification_number` au repos (`docs/payment/PAYMENT_DESIGN.md:220`). | Validation de l'architecture de chiffrement et gestion des clés maîtres (V1a). | Expert sécurité / Juriste conformité | OUVERTE |
 
-### 3.6 Conditions générales et consentement
+### 3.6 Conditions générales, politiques d'annulation et consentement
 
-| # | Question | Pourquoi elle se pose | Décision système | À qui la poser | Statut |
+| # | Question pour professionnel | Contexte technique et source | Décision système conditionnée | Destinataire | Statut |
 |---|---|---|---|---|---|
-| Q6.1 | La politique d'annulation est-elle contractuellement opposable au voyageur, et le système doit-il garder la version de la politique en vigueur au moment de la réservation (pour les réservations antérieures à la date de bascule). | `PAYMENT_DECISIONS_V1.md:96` : « La version de la politique est présentée et acceptée explicitement au consentement, avec date d'acceptation conservée. » | Gestion de la version par réservation. | Avocat en droit des contrats | OUVERTE |
-| Q6.2 | Le consentement explicite est-il nécessaire pour la confirmation in-app et l'acceptation de la politique d'annulation, et comment le système doit-il prouver ce consentement (version de la politique, date, user, locale, hash de la transaction). | `docs/payment/PAYMENT_DESIGN.md:687` montre que le message 409 générique s'applique au consentement sur un état non pending. | Preuve de consentement (V1a). | Avocat en droit des contrats, avocat en droit des paiements | OUVERTE |
-| Q6.3 | Quelles langues sont obligatoires pour le consentement : FR, AR, EN, ou une autre règle de territorialité ? | `docs/payment/PAYMENT_DESIGN.md:29` définit `supported_languages = ["fr", "ar", "en"]` et `default_language = "fr"`. | Définition de la liste des langues obligatoires. | Avocat en droit des contrats | OUVERTE |
+| Q6.1 | Quelle est la valeur probante de l'acceptation électronique de la politique d'annulation par le voyageur lors de la réservation (`Booking.consent_given = True`, `consent_timestamp = utcnow()`, `backend/app/models.py:342-343` ; `backend/app/api/v1/endpoints/bookings.py:190-279`) au regard de `docs/payment/PAYMENT_DECISIONS_V1.md:96` en cas de litige civil ? | Le consentement voyageur est horodaté nativement en base lors de l'appel à `give_consent` (`backend/app/models.py:342-343` ; `backend/app/api/v1/endpoints/bookings.py:190-279`) et `docs/payment/PAYMENT_DECISIONS_V1.md:96` prévoit une date d'acceptation conservée. | Exigences techniques de preuve d'acceptation (horodatage simple, signature électronique, journalisation d'IP) (V1a/V1c). | Avocat en droit numérique | OUVERTE |
+| Q6.2 | Le fait de présenter les conditions de vente et d'annulation en trois langues (français, arabe, anglais) impose-t-il la primauté légale d'une version linguistique particulière (notamment la version arabe en Algérie) ? | Le modèle `Tenant.supported_languages` (`backend/app/models.py:46` ; `backend/app/initial_data.py:28, 40`) définit `["fr", "ar", "en"]`. | Hiérarchie linguistique des contrats et affichage prioritaire sur mobile et web (V1a/V1c). | Juriste / Avocat en droit commercial | OUVERTE |
+| Q6.3 | Quelles conditions juridiques précises doivent définir la « force majeure » permettant l'annulation sans frais ni commission, et cette appréciation peut-elle être réservée exclusivement à l'opérateur Discover AI ? | `docs/payment/PAYMENT_DECISIONS_V1.md:94` (A11) et `docs/payment/PAYMENT_DESIGN.md:42` stipulent que la force majeure est décidée par un opérateur autorisé et jamais par les parties. | Rédaction de la clause de force majeure dans les CGU et écran de validation opérateur (V1c). | Avocat en droit des contrats | OUVERTE |
 
+### 3.7 Preuve de la prestation, contestation et délais de forclusion
 
-| Rôle `finance_operator` nominatif, pas de super-administrateur. | `docs/payment/PAYMENT_DECISIONS_V1.md:70` |
-| V1a : scripts CLI en lecture seule. | `docs/payment/PAYMENT_DECISIONS_V1.md:79` |
-| Taux de commission : 10 % = 1 000 points de base. | `docs/payment/PAYMENT_DECISIONS_V1.md:104-105` |
-
-| Q6.4 | Un voyageur peut-il retirer son consentement après acceptation (déclaration), et que se passe-t-il pour la commission déjà calculée ? | `PAYMENT_DECISIONS_V1.md:56` : « Tant qu'une contestation est ouverte, aucune commission n'est calculée. » Le retrait de consentement n'est pas traité. | Règle de rétractation du consentement. | Avocat en droit des contrats | OUVERTE |
-| Q6.5 | La politique d'annulation contient-elle une clause de force majeure décidée par un opérateur autorisé, jamais déclarée par les parties ? | `PAYMENT_DECISIONS_V1.md:94` : A11. | Définition du motif de force majeure et de l'acteur décideur. | Avocat en droit des contrats | OUVERTE |
-
-### 3.7 Litiges et preuve
-
-| # | Question | Pourquoi elle se pose | Décision système | À qui la poser | Statut |
+| # | Question pour professionnel | Contexte technique et source | Décision système conditionnée | Destinataire | Statut |
 |---|---|---|---|---|---|
-| Q7.1 | [QUESTION POUR PROFESSIONNEL] Le simple horodatage applicatif (creation_at, notification, confirmation in-app) est-il à lui seul une preuve de prestation dans un litige, ou un tiers tiers (FA, expert-comptable, notaire) doit-il être sollicité. | `docs/payment/PAYMENT_DESIGN.md:528` définit `Booking.external_id` comme un hachage tronqué déterministe et non comme une preuve d'exécution. | Règle de poids de la preuve de l'horodatage. | Avocat en droit des paiements en Algérie, juriste | OUVERTE |
-| Q7.2 | [QUESTION POUR PROFESSIONNEL] La confirmation tacite après 72 h (Option A) est-elle valide juridiquement si le voyageur n'a pas lu la notification ? Cela relève de l'acceptation tacite ou du silence représentatif. | `docs/payment/PAYMENT_DESIGN.md:453-457` oppose l'Option A (confirmation tacite) à l'Option B (expired_unconfirmed) ; la décision du système dépend de la validation de l'Option A ou B. | Validation de l'Option A ou B. | Avocat en droit des paiements en Algérie, fiscaliste | OUVERTE |
+| Q7.1 | L'approbation in-app de la déclaration par le voyageur (clic de confirmation sur notification push) constitue-t-elle une preuve recevable de l'exécution effective du service ? | L'Option A retenue en V1a repose sur la confirmation in-app du voyageur (`docs/payment/PAYMENT_DESIGN.md:427-440`). | Choix définitif du mécanisme de preuve (Option A in-app vs Option B justificatif papier / Option C QR code) (V1a). | Avocat en droit de la preuve numérique | OUVERTE |
+| Q7.2 | Considérer le silence du voyageur après l'expiration du délai de 72 h comme une acceptation tacite ouvrant droit à facturation de la commission (Option A du design) est-il légalement opposable au voyageur et au partenaire ? | `docs/payment/PAYMENT_DESIGN.md:392-395` présente l'Option A (tacite) face à l'Option B (mise en attente `expired_unconfirmed` recommandée par `docs/payment/PAYMENT_DECISIONS_V1.md:62-63`). | Arbitrage impératif entre Option A et Option B pour le traitement de l'expiration des 72 h (V1a). | Avocat / Juriste | OUVERTE |
+| Q7.3 | L'envoi d'une notification push ou d'un e-mail dont la lecture effective n'est pas techniquement garantie permet-il de faire courir un délai de forclusion contractuel de 72 heures ? | Les notifications utilisent le worker asynchrone sans accusé de lecture formel garanti (`backend/app/services/notification_worker.py:91-105` ; `docs/payment/PAYMENT_DESIGN.md:450-453`). | Point de départ du délai et canal de délivrance requis (V1a). | Avocat en droit de la consommation | OUVERTE |
+| Q7.4 | Quel délai maximal de prescription doit être accordé à un voyageur ou un partenaire pour rouvrir un litige sur une prestation contestée ? | La V1a gèle le dossier sous statut `disputed`, la résolution complète intervenant en V1b (`docs/payment/PAYMENT_DESIGN.md:384-387`). | Règles de clôture définitive des dossiers contestés dans `service_declarations` (V1b). | Avocat | OUVERTE |
 
-| Base de calcul : HT si taxes documentées, sinon montant encaissé déclaré. | `docs/payment/PAYMENT_DECISIONS_V1.md:109` |
-| Traitement fiscal exact de la commission à valider par un professionnel. | `docs/payment/PAYMENT_DECISIONS_V1.md:112` |
-| V1 : une seule entité juridique Discover AI, établie en Algérie. | `docs/payment/PAYMENT_DECISIONS_V1.md:118` |
-| Règle pays/entité : commission activable si le pays du partenaire = pays de l'entité. | `docs/payment/PAYMENT_DECISIONS_V1.md:121` |
-| Seed contient un tenant « morocco » (MAD). | `docs/payment/PAYMENT_DECISIONS_V1.md:122` |
+### 3.8 Gouvernance interne, habilitations et accès système
 
-| Q7.3 | [QUESTION POUR PROFESSIONNEL] La confirmation tacite suppose-t-elle que le voyageur a été notifié par un canal fiable (push in-app, email) et est-il possible de rétracter l'acceptation après expiration ? | `docs/payment/PAYMENT_DECISIONS_V1.md:63-64` précise que l'absence de réponse n'est pas une preuve de réalisation et que le système n'a pas de mécanisme de notification qui garantit la lecture. | Règle de notification et de garantie de lecture. | Avocat en droit des paiements en Algérie | OUVERTE |
-| Q7.4 | La conservation des preuves dure-t-elle suffisamment longtemps pour les litiges (clôture du dossier, résolution humaine V1b, historique de la commission, version de la politique) ? | `docs/payment/PAYMENT_DECISIONS_V1.md:76-78` : toute décision manuelle est attribuable à un utilisateur identifié ; « Aucune contestation n'est clôturée sans motif et historique. » | Durée de conservation des preuves. | Avocat en droit des paiements en Algérie | OUVERTE |
-| Q7.5 | [QUESTION POUR PROFESSIONNEL] Un horodatage généré côté serveur est-il suffisant pour prouver la date de la prestation, ou un tiers (journal, expert-comptable) doit-il être sollicité pour attester de l'exactitude. | `docs/payment/PAYMENT_DESIGN.md:452` définit le point de départ comme l'horodatage de création de la notification in-app UTC. | Validité du horodatage serveur. | Expert-comptable | OUVERTE |
-
-### 3.8 Gouvernance interne
-
-| # | Question | Pourquoi elle se pose | Décision système | À qui la poser | Statut |
+| # | Question pour professionnel | Contexte technique et source | Décision système conditionnée | Destinataire | Statut |
 |---|---|---|---|---|---|
-| Q8.1 | Qui est le `finance_operator` nominatif, comment son identité est-elle vérifiée et quel est le périmètre exact de ses permissions sur `financial_audit_log` et `commission_receivables` ? | `docs/payment/PAYMENT_DECISIONS_V1.md:70` : rôle dédié, identité individuelle, authentification existante, permissions explicitement attribuées. | Définition du cadre de `finance_operator`. | Propriétaire | OUVERTE |
-| Q8.2 | La séparation des tâches est-elle respectée : un gérant de POI n'accède pas aux informations fiscales et de facturation du seul fait qu'il gère ce POI. Comment le système peut-il empêcher les fuites d'informations fiscales dans le reporting. | `docs/payment/PAYMENT_DECISIONS_V1.md:44` et `docs/payment/PAYMENT_DESIGN.md:501-502`. | Contrôles d'accès par rôles sur le reporting. | Propriétaire | OUVERTE |
-| Q8.3 | Les scripts CLI en lecture seule en V1a : quels sont les rôles, les permissions et les niveaux d'accès ? L'identité est-elle tracée (operator_identifier) et l'action enregistrée dans `financial_audit_log` ? | `docs/payment/PAYMENT_DECISIONS_V1.md:79` : « En V1a, les scripts CLI sont en lecture seule : aucune décision manuelle, donc pas encore de rôle nominatif. » | Définition de l'accès CLI et de la tracabilité. | Propriétaire, avocat en droit des paiements en Algérie | OUVERTE |
-| Q8.4 | L'administrateur de tenant (`is_admin`) peut-il déclarer une prestation en substitution au partenaire, et comment le système doit-il l'enregistrer (motif d'audit, `declared_by_admin` flag) ? | `docs/payment/PAYMENT_DESIGN.md:504-511` soumet Option A (interdiction stricte) vs Option B (autorisation exceptionnelle avec traçabilité). | Règle de l'administrateur (V1a). | Propriétaire | OUVERTE |
-| Q8.5 | L'audit identifie-t-il tous les modes de réservation et vérifie que seuls `manual_confirm` sont éligibles à la déclaration de prestation en V1a. Comment le système reporte les écarts. | `docs/payment/PAYMENT_DECISIONS_V1.md:195` (A12) et `docs/payment/PAYMENT_DESIGN.md:697` : `request` et `pay_on_site` exclus jusqu'à V1b. | Audit des modes de réservation. | Avocat en droit des paiements en Algérie | OUVERTE |
+| Q8.1 | La création du rôle nominatif d'opérateur financier (`finance_operator`, `docs/payment/PAYMENT_DESIGN.md:33, 408`) distinct de l'administrateur informatique répond-elle aux obligations de séparation des fonctions comptables ? | `docs/payment/PAYMENT_DECISIONS_V1.md:70` exige un rôle dédié nominatif sans super-administrateur de plateforme. | Matrice RBAC et gestion des habilitations (V1b). | Auditeur interne / Expert-comptable | OUVERTE |
+| Q8.2 | L'exécution de scripts de gestion financière et de reporting directement en ligne de commande (CLI) sur le serveur de production (`app/reporting_finance.py`) est-elle conforme aux règles de contrôle interne et d'auditabilité ? | Le modèle reproduit `create_tenant.py` avec trace de l'`operator_identifier` dans les logs (`docs/payment/PAYMENT_DESIGN.md:342, 621-625`). | Validation de la gouvernance d'exploitation et des procédures de sauvegarde (V1a). | Auditeur informatique / Commissaire aux comptes | OUVERTE |
+| Q8.3 | L'administrateur de tenant peut-il déclarer une prestation en lieu et place d'un partenaire défaillant sans engager la responsabilité civile de Discover AI pour immixtion dans la gestion du partenaire ? | L'Option B de `docs/payment/PAYMENT_DESIGN.md:509-511` envisage cette faculté avec enregistrement de `declared_by_admin = True` et motif obligatoire. | Maintien ou retrait de la faculté de déclaration par l'administrateur (V1a). | Avocat en droit des affaires | OUVERTE |
 
-| Aucune conversion en V1. | `docs/payment/PAYMENT_DECISIONS_V1.md:129` |
-| Aucune coordonnée bancaire des partenaires collectée en V1. | `docs/payment/PAYMENT_DECISIONS_V1.md:135` |
-| Chiffrement au repos des champs réellement secrets. | `docs/payment/PAYMENT_DECISIONS_V1.md:136` |
-| En V1, relevés de commission, jamais présentés comme des factures fiscales. | `docs/payment/PAYMENT_DECISIONS_V1.md:143` |
-| Scripts en ligne de commande et export CSV ; pas d'API de reporting transversal. | `docs/payment/PAYMENT_DECISIONS_V1.md:149` |
-| Sans PSP, annulation puis traitement hors plateforme possible. | `docs/payment/PAYMENT_DECISIONS_V1.md:155` |
-| V1a : profil partenaire, taux commission, déclaration, confirmation/contestation, 72 h, calcul commission, journal d'audit. | `docs/payment/PAYMENT_DECISIONS_V1.md:161-168` |
-| V1b : contestations, résolution humaine, `finance_operator`. | `docs/payment/PAYMENT_DECISIONS_V1.md:170-173` |
-| V1c : annulation et politiques. | `docs/payment/PAYMENT_DECISIONS_V1.md:175-178` |
-| Exclus de la V1 : PSP, paiement en ligne, encaissement, split, conversion, 2e entité, marketplace, super-admin, commission par IA. | `docs/payment/PAYMENT_DECISIONS_V1.md:181` |
-| États de réservation : `pending`, `requested`, `confirmed`, `declined`, `expired`, `cancelled`. | `docs/payment/PAYMENT_DECISIONS_V1.md:187` |
-| Mode `manual_confirm` éligible ; `request` et `pay_on_site` exclus à V1b. | `docs/payment/PAYMENT_DESIGN.md:697` |
-| Preuve V1a : déclaration partenaire + confirmation in-app (Option A). | `docs/payment/PAYMENT_DESIGN.md:543-545` |
-| Options pour 72 h : A (tacite) vs B (`expired_unconfirmed`). | `docs/payment/PAYMENT_DESIGN.md:450-461` |
-| Options d'arrondi : A (floor) vs B (half to even). | `docs/payment/PAYMENT_DESIGN.md:475-495` |
-| `Tenant.country_code` existe mais seed `algeria`/`morocco` valent NULL. | `docs/payment/PAYMENT_DESIGN.md:365-368` |
-| `booking_data` JSON libre, sans garantie de présence ni de format. | `docs/payment/PAYMENT_DESIGN.md:420` |
-| Journal d'audit append-only (`financial_audit_log`). | `docs/payment/PAYMENT_DESIGN.md:345-363` |
-| Interfaces V1a : declare, confirm-service, dispute-service. | `docs/payment/PAYMENT_DESIGN.md:555-574` |
-| Contrainte d'unicité des notifications. | `docs/payment/PAYMENT_DESIGN.md:584-590` |
+### 3.9 Droit de la consommation, transparence et loyauté des plateformes
 
-
-
-
-- Aucun avis juridique, fiscal, contractuel ou réglementaire.
-
-### 3.9 Commerce électronique et information du consommateur sur la commission
-
-| # | Question | Pourquoi elle se pose | Décision système | À qui la poser | Statut |
+| # | Question pour professionnel | Contexte technique et source | Décision système conditionnée | Destinataire | Statut |
 |---|---|---|---|---|---|
-| Q9.1 | L'information du voyageur sur la commission doit-elle être visible avant la réservation, lors de la confirmation, ou dans une politique distincte ? Quelle est la base légale de l'information, notamment pour un voyageur algérien ou résidant à l'étranger. | `docs/payment/PAYMENT_DECISIONS_V1.md:104-105` définit le taux par défaut, mais l'information du voyageur n'est pas modélisée. | Information sur la commission (V1a). | Avocat en droit des consommateurs, avocat en droit des paiements en Algérie | OUVERTE |
-| Q9.2 | L'information sur la commission est-elle proportionnée au montant de la prestation, et existe-t-il un seuil de désignation obligatoire ? | Aucun seuil de définition n'est fourni; le taux est de 10 % = 1 000 bps sans pourcentage minimum. | Règle de présence et de localisation du taux de commission. | Avocat en droit des consommateurs | OUVERTE |
-| Q9.3 | Le voyageur est-il informé que Discover AI ne facture pas directement le voyageur, mais que le partenaire est responsable de la prestation ? | `docs/payment/PAYMENT_DECISIONS_V1.md:16` : le voyageur est responsable auprès du partenaire. | Information de la relation (V1a). | Avocat en droit des consommateurs | OUVERTE |
-| Q9.4 | La politique d'annulation doit-elle être présentée et acceptée avant ou après confirmation, et dans quel langage (FR/AR/EN) ? | `docs/payment/PAYMENT_DECISIONS_V1.md:96` définit la présentation avant le consentement, mais ne précise pas l'ordre de présentation. | Ordre de présentation de la politique. | Avocat en droit des consommateurs | OUVERTE |
+| Q9.1 | La plateforme est-elle tenue d'informer explicitement le voyageur de l'existence et du montant (ou pourcentage) de la commission perçue auprès du partenaire lors de la réservation ? | Le voyageur ne visualise actuellement que le montant du service sans décomposition de la commission (`mobile/lib/screens/bookings_screen.dart:360-366`). | Écrans d'affichage mobile et mentions précontractuelles de transparence tarifaire (V1a). | Juriste droit de la consommation | OUVERTE |
+| Q9.2 | Les critères de classement des POI dans l'application (algorithmes de recommandation IA ou filtres de recherche) doivent-ils faire l'objet d'une mention de transparence indiquant s'ils dépendent ou non du taux de commission consenti par le partenaire ? | `docs/payment/PAYMENT_DECISIONS_V1.md:107` interdit formellement les commissions différenciées par catégorie IA en V1. | Rédaction des mentions d'information algorithmique dans les CGU (V1a). | Juriste droit numérique | OUVERTE |
 
-### 3.10 Responsabilité de Discover AI en cas de fausse déclaration partenaire ou de contournement
+### 3.10 Prévention du contournement et responsabilité contractuelle
 
-| # | Question | Pourquoi elle se pose | Décision système | À qui la poser | Statut |
+| # | Question pour professionnel | Contexte technique et source | Décision système conditionnée | Destinataire | Statut |
 |---|---|---|---|---|---|
-| Q10.1 | Quelle est la responsabilité de Discover AI si un partenaire déclare une prestation qui n'a pas eu lieu ou une commission invalide ? Le système doit-il fournir un profil contractuel vérifiable et un mécanisme de contestation. | `docs/payment/PAYMENT_DECISIONS_V1.md:155` : A10 « Suivi du contournement et clause de non-contournement », et `docs/payment/PAYMENT_DECISIONS_V1.md:74` : résolutions possibles (prestation non établie, commission annulée). | Clause de non-contournement et suivi des contrôles. | Avocat en droit des paiements en Algérie, juriste | OUVERTE |
-| Q10.2 | La clause de non-contournement est-elle contractuellement applicable et informée au partenaire et au voyageur, ou nécessite-t-elle une validation juridique ? | `docs/payment/PAYMENT_DECISIONS_V1.md:155` : « clause de non-contournement à soumettre dans PAYMENT_COMPLIANCE.md ». | Définir la clause de non-contournement (V1b). | Avocat en droit des paiements en Algérie | OUVERTE |
-| Q10.3 | Quelles mesures de contrôle le système doit-il mettre en œuvre pour détecter un contournement (annulation puis traitement hors plateforme) : taux d'annulation, ratio déclarations/confirmations, délais de réponse. | `docs/payment/PAYMENT_DECISIONS_V1.md:155` : « Suivi par partenaire (taux d'annulation, ratio déclarations/confirmations, délais) à partir de la V1b. » | Contrôles et indicateurs de contournement. | Avocat en droit des paiements en Algérie | OUVERTE |
-| Q10.4 | Comment le système doit-il protéger contre les fausses déclarations (montant invalide, double déclaration) et quelle est la preuve de la bonne foi du partenaire ? | `docs/payment/PAYMENT_DECISIONS_V1.md:109-112` définit les contrôles de cohérence, non les sanctions. | Règle de vérification de la déclaration. | Expert-comptable | OUVERTE |
-| Q10.5 | La responsabilité en cas de fausse déclaration parties à la relation (partenaire, voyageur, Discover AI) est-elle définie par le contrat ou un tiers ? Le système doit-il stocker la référence du contrat et de la politique. | `docs/payment/PAYMENT_DECISIONS_V1.md:38` : profil contractuel rattaché au partenaire. | Référence du contrat et de la politique dans l'historique. | Avocat en droit des paiements en Algérie | OUVERTE |
+| Q10.1 | Une clause de non-contournement interdisant au partenaire et au voyageur d'annuler une réservation sur la plateforme pour exécuter la prestation hors ligne est-elle juridiquement valable et opposable ? | `docs/payment/PAYMENT_DECISIONS_V1.md:155` (A10) identifie ce risque majeur d'éviction de commission en l'absence de PSP. | Rédaction de la clause de non-contournement dans le contrat partenaire (V1b). | Avocat en droit des contrats | OUVERTE |
+| Q10.2 | Quelles sanctions civiles ou contractuelles (pénalités forfaitaires, exclusion de la plateforme, déchéance du compte) Discover AI peut-il stipuler en cas de fausse déclaration intentionnelle du montant par un partenaire ? | La plateforme implémente un suivi des ratios annulations/confirmations en V1b (`docs/payment/PAYMENT_DECISIONS_V1.md:155`). | Clauses pénales du contrat d'adhésion partenaire (V1b). | Avocat en droit commercial | OUVERTE |
+| Q10.3 | Discover AI peut-il être tenu pour solidairement responsable en cas de défaut de paiement, d'accident corporel ou de défaillance du partenaire sur place lors de l'exécution de l'activité touristique ? | Le modèle pose que le partenaire contracte seul avec le voyageur pour l'activité touristique (`docs/payment/PAYMENT_DECISIONS_V1.md:13-17`). | Clauses de décharge et polices d'assurance responsabilité civile professionnelle (V1a). | Avocat en droit des assurances | OUVERTE |
 
-### 3.11 Décision de la plateforme et statut
+---
 
+## 4. Contradictions et écarts détectés entre les documents source
 
-## 4. Contradictions et écarts détectés avec les documents source
+Une relecture rigoureuse croisée de `docs/payment/PAYMENT_DECISIONS_V1.md` et `docs/payment/PAYMENT_DESIGN.md` met en évidence quatre écarts substantiels qui ne doivent pas être tranchés techniquement mais soumis à l'arbitrage du propriétaire :
 
-| Écart | Localisation | Description | Impact |
-|---|---|---|---|
-| Aucune | — | Aucune contradiction directe trouvée entre `PAYMENT_DECISIONS_V1.md` et `PAYMENT_DESIGN.md` sur le périmètre de la commission, le modèle d'intermédiation, les données sensibles, la facturation, la devise, ou le journal d'audit. | — |
-
-Les écarts relevés dans `PAYMENT_DESIGN.md` §10.2 concernent des arbitrages internes de la conception (date de prestation, unicité des déclarations, rôle de l'administrateur, arrondi, confirmation tacite, entité juridique), et non des incohérences avec `PAYMENT_DECISIONS_V1.md`.
+| # | Objet de l'écart | Formulation dans `docs/payment/PAYMENT_DECISIONS_V1.md` | Formulation dans `docs/payment/PAYMENT_DESIGN.md` | Analyse technique de l'écart | Statut |
+|---|---|---|---|---|---|
+| E1 | Prérogatives d'écriture des scripts CLI en V1a | Ligne 79 : *« En V1a, les scripts CLI sont en lecture seule : aucune décision manuelle, donc pas encore de rôle nominatif. Les actions humaines arrivent en V1b avec le rôle finance_operator. »* | Section 5 (tableau des permissions, ligne 513) : La colonne *« Opérateur CLI direct »* attribue des droits d'écriture en V1a : *« déclarer une prestation (maintenance) »*, *« corriger une déclaration (traçabilité audit) »* sous réserve de renseigner `operator_identifier`. | Contradiction directe entre le principe de lecture seule stricte en V1a et l'ouverture d'actions modificatrices par CLI. | À trancher par le propriétaire |
+| E2 | Sort d'une déclaration sans réponse après 72 h | Lignes 62-63 : *« Sans réponse à l'expiration : le dossier est marqué "non confirmé" et soumis à vérification humaine. L'absence de réponse n'est pas une preuve de réalisation et aucune facturation automatique n'est déclenchée. »* | Section 4.2 (lignes 453-461) et Section 11 (décision 5) : Le design maintient l'arbitrage ouvert entre l'Option A (confirmation tacite automatique déclenchant le calcul) et l'Option B (marquage `expired_unconfirmed`). | Le document de décisions tranche pour la non-facturation automatique, tandis que le design conserve l'option tacite à titre d'arbitrage ouvert. | À trancher par le propriétaire |
+| E3 | Scoping et multiplicité des entités juridiques en V1 | Ligne 118 : *« V1 : une seule entité juridique Discover AI, établie en Algérie. Chaque enregistrement financier porte un legal_entity_id dès la V1. »* | Section 3.2 (lignes 206-213) et Section 11 (décision 3) : Le design propose et recommande l'Option B (*« une ligne legal_entities par tenant »*) pour respecter `CLAUDE.md:59`, créant une entité par tenant dès la V1. | `docs/payment/PAYMENT_DECISIONS_V1.md` postule une entité unique globale pour la V1, alors que `docs/payment/PAYMENT_DESIGN.md` décline l'entité par tenant pour préserver l'isolation multi-tenant stricte. | À trancher par le propriétaire |
+| E4 | Déclaration de prestation par l'administrateur du tenant | Absent du document `docs/payment/PAYMENT_DECISIONS_V1.md` : seules sont mentionnées la déclaration par le partenaire (ligne 50) et la vérification humaine par `finance_operator` (ligne 70). | Section 5 (lignes 505-516) et Section 3.2 (lignes 300-304) : Le design introduit une Option B permettant à l'administrateur du tenant de déclarer une prestation avec `declared_by_admin = True` et `declaration_reason`. | Extension de pouvoir opérationnel accordée à l'administrateur non prévue dans le cadrage initial des décisions. | À trancher par le propriétaire |
 
 ---
 
 ## 5. Matrice « Décision technique bloquée par question »
 
-| Question | Domaine | V1a (livrable en TEST) | V1b (production) | V1c (après V1b) |
-|---|---|---|---|---|
-| Q1.1 | Partenaire / sous-traitant | Livrable sans réponse : le modèle de données existe (partner_profiles, partner_poi_assignments). | La qualification du partenaire conditionne l'activation de la commission. | Non applicable |
-| Q1.2 | Relation contractuelle | Livrable sans réponse : le réseau de profil est prévu mais non alimenté. | L'émetteur de la facture est conditionné. | Non applicable |
-| Q1.3 | Qualité de l'intermédiation | Livrable sans réponse : le modèle d'intermédiation est défini sans conclusion. | La définition du modèle conditionne la facturation. | Non applicable |
-| Q1.4 | Responsable de la prestation | Livrable sans réponse : la rétroactivité est modélisée. | La facturation est conditionnée par la responsabilité historique. | Non applicable |
-| Q1.5 | Rattachement des profils | Livrable sans réponse : la règle de non-chevauchement est définie. | La protection de la règle est conditionnée. | Non applicable |
-| Q2.1 | Émetteur de la facture | Livrable sans réponse : le relevé est distinct. | L'émetteur de la facture est conditionné. | Non applicable |
-| Q2.2 | Numérotation | Livrable sans réponse : pas de numérotation définie. | La numérotation est conditionnée. | Non applicable |
-| Q2.3 | Mentions | Livrable sans réponse : le taux est défini. | Les mentions sont conditionnées. | Non applicable |
-| Q2.4 | Rélevé / facture | Livrable sans réponse : le relevé est distinct. | La distinction est conditionnée. | Non applicable |
-| Q2.5 | Format de facture | Livrable sans réponse : pas de format défini. | Le format de livraison est conditionné. | Non applicable |
-| Q3.1 | Rattachement fiscal | Livrable sans réponse : la base HT/TTC est définie. | La règle de rattachement est conditionnée. | Non applicable |
-| Q3.2 | TVA | Livrable sans réponse : la base de la commission n'est pas calculée. | Le calcul de la taxe est conditionné. | Non applicable |
-| Q3.3 | Retenue à la source | Livrable sans réponse : pas de retenue définie. | La retenue est conditionnée. | Non applicable |
-| Q3.4 | Référence facture externe | Livrable sans réponse : les référentiels externes sont enregistrés. | Le suivi du rapprochement est conditionné. | Non applicable |
-| Q3.5 | Personnes morales | Livrable sans réponse : pas de champ défini. | Les champs de la personne morale sont conditionnés. | Non applicable |
-| Q4.1 | Devise de la commission | Livrable sans réponse : aucune conversion en V1. | La règle de devise est conditionnée. | Non applicable |
-| Q4.2 | Tenant morocco | Livrable sans réponse : le seed est existant. | L'activation du tenant est conditionnée. | Non applicable |
-| Q4.3 | Risque de change | Livrable sans réponse : aucune conversion en V1. | Le risque de change est ignoré. | Non applicable |
-| Q4.4 | Présentation en devise | Livrable sans réponse : la devise locale est requise. | La présentation est conditionnée. | Non applicable |
+Cette matrice formalise la dépendance opérationnelle de chaque bloc technique vis-à-vis des réponses des professionnels qualifiés :
 
-
-| # | Question | Pourquoi elle se pose | Décision système | À qui la poser | Statut |
+| Question | Fonctionnalité conditionnée | Version | Livrable EN TEST sans réponse ? | Bloqué avant PRODUCTION ? | Motif du blocage ou de la levée |
 |---|---|---|---|---|---|
-| Q11.1 | [QUESTION POUR PROFESSIONNEL] Le modèle d'intermédiation sans PSP est-il compatible avec la réglementation algérienne applyant à la plateforme, et le système doit-il être reconnu comme opérateur ou simple intermédiaire. | `PAYMENT_DECISIONS_V1.md` ne contient pas de conclusion; `docs/payment/PAYMENT_DESIGN.md:12-14` définit une intermédiation pure. | Validation du modèle par un professionnel. | Avocat en droit des paiements en Algérie | OUVERTE |
-| Q11.2 | [QUESTION POUR PROFESSIONNEL] La plateforme doit-elle être paramétrée pour la période de validation des professionnels (agréation, enregistrement, autorisation) et quelle est la durée de la procédure. | Aucune durée de procédure n'est mentionnée. | Planification de la période de validation. | Avocat en droit des paiements en Algérie | OUVERTE |
-| Q11.3 | [QUESTION POUR PROFESSIONNEL] Une plateforme qui perçoit une commission sans encaisser les fonds doit-elle obtenir une autorisation ou une déclaration spécifique en Algérie, et quel est le montant de la commission qui justifie de ce dispositif. | Le montant de la commission (10 % = 1 000 bps) et la fréquence des opérations n'ont pas été évalués. | Détermination de l'obligation de déclaration. | Fiscaliste, avocat en droit des paiements en Algérie | OUVERTE |
-## 6. Dossier à remettre aux professionnels
-
-| Q5.1 | Données voyageur | Livrable sans réponse : le JSON libre est défini. | La base juridique du traitement est conditionnée. | Non applicable |
-
-### 6.1 Documents déjà disponibles
-
-| Q5.1 | Données voyageur | Livrable sans réponse : le JSON libre est défini. | La base juridique du traitement est conditionnée. | Non applicable |
-| Q5.2 | Journal d'audit | Livrable sans réponse : le journal est append-only. | La conservation est conditionnée. | Non applicable |
-| Q5.3 | Droit d'accès/effacement | Livrable sans réponse : le journal est immuable. | Le droit est conditionné. | Non applicable |
-| Q5.4 | Données sensibles | Livrable sans réponse : le chiffrement est utilisé. | La clé est conditionnée. | Non applicable |
-| Q5.5 | Exports | Livrable sans réponse : les exports sont tracés. | Le contrôle est conditionné. | Non applicable |
-| Q6.1 | Version de la politique | Livrable sans réponse : la version est passee. | La version est conditionnée. | Non applicable |
-| Q6.2 | Consentement explicite | Livrable sans réponse : le consentement est enregistré. | La preuve est conditionnée. | Non applicable |
-| Q6.3 | Langues | Livrable sans réponse : FR/AR/EN sont supportés. | La liste est conditionnée. | Non applicable |
-| Q6.4 | Retrait de consentement | Livrable sans réponse : la contestation suspend la commission. | La rétractation est conditionnée. | Non applicable |
-| Q6.5 | Force majeure | Livrable sans réponse : force majeure par opérateur. | La règle est conditionnée. | Non applicable |
-| Q7.1 | Présence de preuve | Livrable sans réponse : le hachage est défini. | La poids de la preuve est conditionné. | Non applicable |
-| Q7.2 | Confirmation tacite | Livrable avec Option A ou B ; la réponse est requise. | Le basculement est conditionné. | Non applicable |
-| Q7.3 | Notification fiable | Livrable sans réponse : la notification est notifiée. | La fiabilité est conditionnée. | Non applicable |
-| Q7.4 | Conservation des preuves | Livrable sans réponse : l'historique est tracé. | La durée est conditionnée. | Non applicable |
-| Q7.5 | Horodatage serveur | Livrable sans réponse : l'horodatage est UTC. | La validité est conditionnée. | Non applicable |
-| Q8.1 | finance_operator | Livrable sans réponse : le rôle est nommé. | L'identification est conditionnée. | Non applicable |
-| Q8.2 | Séparation des tâches | Livrable sans réponse : le contrôle est défini. | La séparation est conditionnée. | Non applicable |
-| Q8.3 | CLI en lecture seule | Livrable sans réponse : l'accès CLI est défini. | L'audit du CLI est conditionné. | Non applicable |
-| Q8.4 | Admin déclaration | Livrable avec Option A/B | La règle est conditionnée. | Non applicable |
-| Q8.5 | Audit modes de réservation | Livrable sans réponse : l'audit est défini. | La validation est conditionnée. | Non applicable |
-| Q9.1 | Information commission | Livrable sans réponse : la commission est définie. | L'information est conditionnée. | Non applicable |
-| Q9.2 | Information proportionnée | Livrable sans réponse : le taux est défini. | La présence est conditionnée. | Non applicable |
-| Q9.3 | Information relation | Livrable sans réponse : le modèle est défini. | L'information est conditionnée. | Non applicable |
-| Q9.4 | Ordre de présentation | Livrable sans réponse : la politique est acceptée. | L'ordre est conditionné. | Non applicable |
-| Q10.1 | Fausse déclaration | Livrable sans réponse : les résolutions sont définies. | Le mécanisme est conditionné. | Non applicable |
-| Q10.2 | Clause de non-contournement | Livrable sans réponse : la clause est à soumettre. | La clause est conditionnée. | Non applicable |
-| Q10.3 | Contrôles de contournement | Livrable sans réponse : les indicateurs sont définis. | Le suivi est conditionné. | Non applicable |
-| Q10.4 | Vérification déclaration | Livrable sans réponse : les contrôles sont définis. | La vérification est conditionnée. | Non applicable |
-| Q10.5 | Responsabilité contractuelle | Livrable sans réponse : la référence du contrat n'est pas stockée. | La référence est conditionnée. | Non applicable |
-| Q11.1 | Modèle d'intermédiation | Livrable sans réponse : le modèle est défini. | La validation du modèle est conditionné. | Non applicable |
-| Q11.2 | Période de validation | Livrable sans réponse : le plan n'est pas défini. | La période est conditionnée. | Non applicable |
-| Q11.3 | Autorisation / déclaration | Livrable sans réponse : pas de dispositif défini. | La déclaration est conditionnée. | Non applicable |
-**Note pour V1a :** la colonne V1a indique ce qui peut être livré en environnement de test sans réponse (modèles de données, calcul, notifications, interfaces). Elle ne signifie pas que le déploiement est approuvé ; la production requiert la validation de tous les professionnels.
-
-
-**Note pour V1a :** la colonne V1a indique ce qui peut être livré en environnement de test sans réponse (modèles de données, calcul, notifications, interfaces). Elle ne signifie pas que le déploiement est approuvé ; la production requiert la validation de tous les professionnels.
-
-
-- `docs/payment/PAYMENT_DECISIONS_V1.md` — décisions du propriétaire, §1 à §16, amendements A1-A14.
-- `docs/payment/PAYMENT_DESIGN.md` — architecture et design technique, §1 à §11, §10.2.
-- `docs/payment/PAYMENT_AUDIT.md` — addendum d'audit (conforme aux amendements).
-- Schéma des flux du domaine paiement (vues de `docs/payment/PAYMENT_DESIGN.md` §7.1 et exercices de diagramme).
-- Exemples de relevés de commission (schéma défini, contenu non encore produits).
-
-### 6.2 Informations manquantes à fournir par le propriétaire
-
-- Rapport de la phase de validation du modèle d'intermédiation (agence, avocat en droit des paiements en Algérie).
-- Relevé de financement ou schéma de la commission pour les professionnels de la fiscalité (base de la commission, TVA, retenues).
-- Modèle de contrat ou de la politique d'annulation pour l'information du consommateur.
-- Exemple de relevé de commission et modèle de facture pour validation par l'expert-comptable.
-- Liste des pays où le partenaire est établi et de la devise des paiements, pour la vérification de la règle pays/entité.
-- Schéma de la base de données de la colonne `financial_audit_log` et du modèle de l'audit.
-- Nominations du/ des `finance_operator` en cas de bascule V1b.
-- Liste des tenants et des codes pays dans `Tenant.country_code` (actuellement NULL pour algeria et morocco, `docs/payment/PAYMENT_DESIGN.md:368`).
+| Q1.1 | `partner_profiles`, `partner_poi_assignments` | V1a | Oui (le schéma SQL et la logique d'affectation peuvent être simulés avec des données de test) | **Oui** | Risque de nullité des conventions partenaires si le contractant économique réel n'est pas qualifié. |
+| Q1.2 | Rattachement contractuel du partenaire | V1a | Oui (modèle relationnel testable sans convention signée) | **Oui** | Nécessite d'établir si le contrat d'intermédiation lie une personne morale ou physique avant signature. |
+| Q1.3 | CGU et modèle d'intermédiation | V1a | Oui (interfaces de consentement testables en local) | **Oui** | Exposition directe de la plateforme aux réclamations voyageurs sans CGU validées. |
+| Q1.4 | Séparation `POIManager` / `partner_profiles` | V1a | Oui (isolation des modèles couverte par les tests unitaires) | Non | Choix technique robuste validé dans le design technique. |
+| Q1.5 | Statut des prestataires individuels | V1a | Oui (champs de formulaires mockables) | **Oui** | Risque d'exercice illégal d'activité commerciale sans inscription au registre du commerce. |
+| Q2.1 | `commission_receivables` et émission des relevés | V1a/V1b | Oui (production de fichiers PDF/CSV de test possible) | **Oui** | Risque d'infraction fiscale si la qualification de facture officielle est exigée dès le premier dinar perçu. |
+| Q2.2 | Mentions obligatoires des relevés | V1b | Oui (gabarit paramétrable) | **Oui** | Sanctions fiscales en cas d'omission de mentions légales obligatoires sur les justificatifs. |
+| Q2.3 | Algorithme de numérotation des créances | V1b | Oui (séquence numérique testable) | **Oui** | Exigence d'absence de rupture de séquence chronologique imposée par la comptabilité publique. |
+| Q2.4 | Délais d'exigibilité de la commission | V1b | Oui (échéances configurables) | Non | Réglage paramétrique du nombre de jours alloués pour le règlement. |
+| Q3.1 | Calcul de la taxe sur la commission | V1a | Oui (le calcul brut en points de base est fonctionnel en test) | **Oui** | Risque de redressement fiscal immédiat si la TVA n'est ni facturée ni collectée. |
+| Q3.2 | Déduction des taxes dans `service_declarations` | V1a | Oui (formule arithmétique validée par les tests) | **Oui** | Risque de minoration illicite de la base imposable de Discover AI si les taxes déclarées ne sont pas probantes. |
+| Q3.3 | Gestion des retenues à la source | V1b | Oui (gestion de montants nets testable) | **Oui** | Obligation de collecter et reverser les retenues légales éventuelles au Trésor public. |
+| Q3.4 | Indemnités de no-show et annulation tardive | V1c | Oui (machine d'états testable) | **Oui** | Qualification fiscale incertaine d'une commission perçue sur une pénalité sans service rendu. |
+| Q4.1 | Facturation des partenaires hors Algérie | V1a | Oui (simulations multi-devises isolées) | **Oui** | Infraction grave à la législation sur le contrôle des changes en cas de facturation transfrontalière non déclarée. |
+| Q4.2 | Blocage de la commission sur le tenant Maroc | V1a | Oui (règle pays/entité vérifiée par test unitaire) | Non | Le blocage technique protège la plateforme contre toute transaction transfrontalière illégale. |
+| Q4.3 | Modalités de rapatriement de devises | V3 | Oui (hors périmètre V1) | Non | Concerne l'extension internationale ultérieure. |
+| Q5.1 | Exposition des données dans `_safe_details` | V1a | Oui (défense en profondeur active en test) | **Oui** | Sanctions administratives de l'autorité de protection des données (ANPDP) en cas de transfert excessif. |
+| Q5.2 | Conservation de `financial_audit_log` | V1a | Oui (table append-only fonctionnelle) | Non | La durée de conservation légale (10 ans en comptabilité) n'empêche pas le déploiement technique. |
+| Q5.3 | Procédure d'effacement / droit à l'oubli | V1a | Oui (scripts d'anonymisation de test) | **Oui** | Nécessite la définition des champs nominatifs substituables dans les logs sans fausser les soldes. |
+| Q5.4 | Chiffrement AES-GCM des identifiants fiscaux | V1a | Oui (module cryptographique unitaire testé) | Non | Architecture cryptographique de haut niveau déjà validée. |
+| Q6.1 | Horodatage et force probante du consentement | V1a/V1c | Oui (horodatage UTC fonctionnel) | **Oui** | Fragilité contentieuse si la signature électronique n'est pas jugée recevable par les tribunaux. |
+| Q6.2 | Priorité linguistique des CGU (Arabe / FR) | V1a/V1c | Oui (support multilingue natif sur mobile et web) | **Oui** | Risque d'inopposabilité des clauses d'annulation rédigées uniquement en français face à un consommateur algérien. |
+| Q6.3 | Procédure d'arbitrage de la force majeure | V1c | Oui (workflows d'annulation testables) | Non | Nécessite uniquement la validation rédactionnelle de la clause avant la livraison V1c. |
+| Q7.1 | Valeur probante de la confirmation in-app | V1a | Oui (flux voyageur mobile testable) | **Oui** | Contestations massives des partenaires si le clic voyageur ne constitue pas un acte d'engagement suffisant. |
+| Q7.2 | Option A (confirmation tacite après 72 h) | V1a | Oui (compte à rebours du worker testable) | **Oui** | Risque de requalification de clauses abusives si le silence est assimilé à une acceptation financière forcée. |
+| Q7.3 | Fiabilité de notification et délai de forclusion | V1a | Oui (worker d'e-mails et push testable) | **Oui** | Opposabilité contestable d'un délai de 72 heures sans traçabilité de notification effective. |
+| Q7.4 | Forclusion des contestations voyageurs | V1b | Oui (transition vers `disputed` testable) | Non | Réglage des règles de clôture du contentieux. |
+| Q8.1 | Rôle nominatif `finance_operator` | V1b | Oui (modèle de rôles testable) | Non | Nécessaire pour l'exploitation interne en phase V1b. |
+| Q8.2 | Traçabilité des actions CLI | V1a | Oui (`operator_identifier` requis par contrainte SQL) | Non | Traçabilité technique déjà sécurisée au niveau du schéma. |
+| Q8.3 | Déclaration par l'administrateur de tenant | V1a | Oui (drapeau `declared_by_admin` testable) | **Oui** | Risque juridique d'immixtion fautive si l'administrateur saisit des chiffres sans mandat écrit du partenaire. |
+| Q9.1 | Transparence de la commission au voyageur | V1a | Oui (affichage UI paramétrable) | **Oui** | Conformité à la réglementation relative à la protection du consommateur et à la transparence des prix. |
+| Q9.2 | Loyauté du classement et algorithmes IA | V1a | Oui (moteurs de recherche déterministes) | Non | Règle commerciale sans impact sur la sécurité des paiements. |
+| Q10.1 | Validité de la clause de non-contournement | V1b | Oui (métriques statistiques testables) | **Oui** | Inopposabilité des pénalités financières si la clause est jugée restrictive de concurrence ou léonine. |
+| Q10.2 | Sanctions contractuelles pour fraude | V1b | Oui (blocage logique des comptes de test) | **Oui** | Nécessite l'encadrement juridique des procédures de suspension de compte partenaire. |
+| Q10.3 | Décharge de responsabilité sur les prestations | V1a | Oui (sans incidence sur le code backend) | **Oui** | Risque d'appel en cause de Discover AI en cas de dommage corporel survenu lors de l'activité touristique. |
 
 ---
 
-## 7. Liste des mots de vérification
+## 6. Dossier à remettre aux professionnels qualifiés
 
-Revue post-rédaction : aucun de ces mots n'apparaît dans le document sauf dans les formulations de questions ou les citations de décisions :
-- « conforme » → présent uniquement dans les paraphrases de la conformité (au sens de « conforme à » dans les questions), avec la formulation « dans la seule mesure où le propriétaire l'a décidé ».
-- « légal » → présent uniquement dans les formulations de question ([QUESTION POUR PROFESSIONNEL]).
-- « illégal » → absent.
-- « autorisé » → présent uniquement dans les formulations de question (ex. : « est-ce autorisé ? »).
-- « interdit » → absent.
-- « obligatoire » → présent uniquement dans les formulations de question.
+Pour permettre aux conseils juridiques et fiscaux de formuler leurs conclusions, le propriétaire du projet devra leur transmettre les pièces suivantes :
 
-Le document se limite à **lister des questions**, à **rappeler les faits techniques** et à **matérialiser les décisions système** qui en dépendent. Lorsqu'un point relève de l'interprétation du droit, de la fiscalité ou de la réglementation, il est marqué `[QUESTION POUR PROFESSIONNEL]`.
+### 6.1 Pièces techniques et contractuelles disponibles
+1. `docs/payment/PAYMENT_DECISIONS_V1.md` : Décisions d'architecture financière du propriétaire (version du 01/11/2026, intégrant les amendements A1 à A14).
+2. `docs/payment/PAYMENT_DESIGN.md` : Spécification technique détaillée du domaine paiement (modèles de données SQL, machine d'états, matrice de permissions et endpoints).
+3. `docs/payment/PAYMENT_AUDIT.md` : Addendum d'audit du 01/11/2026 (§18) analysant l'état réel du code de réservation et les dépendances mobiles/web.
+4. Schéma technique des flux financiers : Diagramme des interactions entre le partenaire, le voyageur et la plateforme Discover AI (`docs/payment/PAYMENT_DESIGN.md` §3.2 et §4).
+
+### 6.2 Éléments précis à fournir par le propriétaire du projet
+1. **Cartographie des partenaires cibles :** Liste prévisionnelle des premiers partenaires pilotes en Algérie, précisant leur statut juridique (société commerciale SARL/EURL, artisan individuel, association) et leur régime fiscal.
+2. **Textes contractuels actuels :** Projet des Conditions Générales d'Utilisation (CGU) voyageurs, projet de convention de partenariat et politique d'annulation envisagée.
+3. **Modèle de relevé de commission :** Projet de mise en page du relevé de commission (mentions textuelles, en-tête légal, libellés de ventilation de la commission et des taxes).
+4. **Attribution des rôles administratifs :** Liste nominative des personnes physiques appelées à exercer les fonctions de `finance_operator` et règles internes de délégation.
+5. **Déclaration géographique des tenants :** Confirmation de la liste des pays réels associés à chaque tenant pour le renseignement de `Tenant.country_code` (`DZ` pour Discover Algeria, statut définitif de Discover Morocco).

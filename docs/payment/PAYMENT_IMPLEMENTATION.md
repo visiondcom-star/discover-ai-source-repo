@@ -472,3 +472,32 @@ Le passage effectif au développement logiciel ne pourra intervenir que lorsque 
 - [ ] Les écarts **E1 à E4** relevés dans `docs/payment/PAYMENT_COMPLIANCE.md:155-165` ont été tranchés.
 - [ ] L'Étape 0 de mesure de référence des tests a été exécutée et consignée.
 - [ ] Le propriétaire du projet a formulé son accord écrit explicite pour l'ouverture de la sous-livraison V1a.
+
+
+---
+
+## 11. Plan V1a/V1b/V1c après arbitrage du point de contrôle 2
+
+Cette section consigne la réaffectation des étapes et la résolution des dépendances suite aux arbitrages du 02/11/2026 :
+
+### 11.1 Statut des dépendances et résolution des écarts E1 à E4
+- **D1 à D12 :** Formellement **TRANCHÉES** par le propriétaire du projet (renvoi exhaustif vers `docs/payment/PAYMENT_DECISIONS_V1.md:224-241`, Annexe C).
+- **Écarts E1 à E4 :** Entièrement **RÉSOLUS** par les arbitrages D1 à D12 :
+  - **E1 (CLI V1a) :** Résolu par **D12** (lecture seule stricte en V1a ; aucune modification manuelle par CLI).
+  - **E2 (Délai 72 h) :** Résolu par **D5** (statut `expired_unconfirmed`, pas de facturation automatique en V1a).
+  - **E3 (Entité légale) :** Résolu par **D3** (entité unique algérienne, table de configuration `tenant_legal_entity_configs`).
+  - **E4 (Admin tenant) :** Résolu par **D7** (exclusion stricte de l'administrateur de tenant de la faculté de déclarer).
+- **D13 à D16 :** Nouvelles questions ouvertes à trancher par le propriétaire (`docs/payment/PAYMENT_DECISIONS_V1.md:243-268`, Annexe D).
+
+### 11.2 Réaffectation des étapes techniques de la sous-livraison V1a
+1. **Étape 1.1 (Modèles et migration 0017) :** Modifiée selon D3. La table `legal_entities` est créée sans colonne `tenant_id` ; une table d'association `tenant_legal_entity_configs` (`tenant_id` UNIQUE -> `legal_entity_id`) gère le rattachement par tenant.
+2. **Étape 1.3 (Déclaration partenaire) :** Modifiée selon D7 et D11. La dépendance de sécurité est `_require_declaring_partner` (excluant `is_admin == True`, exigeant une liaison active dans `POIManager` et `partner_poi_assignments`). Le plafond technique est fixé à **une seule correction** par réservation (`correction_count < 1`).
+3. **Étape 1.4 (Confirmation et créance) :** Modifiée selon D5. À l'expiration du SLA sans confirmation voyageur, la déclaration bascule en `expired_unconfirmed` ; aucune commission n'est exigible, aucune créance n'est générée.
+4. **Étape 1.5 (Notifications financières) :** Modifiée selon D8. Implémentation des **sept types d'événements distincts** garantissant l'absence de conflit avec l'index partiel `uq_notifications_booking_unique` (`backend/app/models.py:460-469`).
+
+### 11.3 Séparation étanche des livraisons et verrou d'autorisation
+- **V1a (Fondation) :** Modèles, règles de pays, déclaration, confirmation in-app, expiration 72 h, calcul immuable, notifications et CLI en lecture seule.
+- **V1b (Contrôle financier) :** Résolution humaine des litiges par `finance_operator`, relevés périodiques, métriques d'anti-contournement.
+- **V1c (Annulations) :** Politiques d'annulation versionnées, motifs post-confirmation, déclaration d'indemnités et force majeure.
+
+> **RÈGLE ABSOLUE D'ENGAGEMENT :** Aucune ligne de code, aucune migration Alembic et aucun test applicatif ne sera créé ou modifié sans l'autorisation écrite explicite du propriétaire du projet validant le démarrage de l'étape concernée.

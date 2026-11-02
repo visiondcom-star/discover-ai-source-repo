@@ -220,3 +220,51 @@ Toute évolution de transition est identifiée, justifiée, couverte par des tes
 ## Annexe B — Points laissés à PAYMENT_DESIGN.md
 
 Mécanisme de preuve retenu (A8) ; point de départ exact du délai de 72 h ; règle d'arrondi ; schéma minimal par sous-livraison ; matrice de permissions ; interfaces minimales de la V1a ; stratégie de migration et de retour arrière.
+
+
+---
+
+## Annexe C : Décisions du point de contrôle 2 (02/11/2026)
+
+Le propriétaire du projet a formellement tranché les décisions D1 à D12 lors de la revue du point de contrôle 2 :
+
+- **D1 (Modes éligibles) :** Seul `manual_confirm` est éligible en V1a. Les autres modes restent hors commission V1a, même s'ils apparaissent dans l'espace partenaire : la confirmation immédiate n'est pas une preuve suffisante de réalisation.
+- **D2 (Structure partenaire) :** Deux tables dédiées : `partner_profiles` (identité contractuelle, informations fiscales nécessaires, profil de facturation) et `partner_poi_assignments` (rattachement daté partenaire-POI). Chaque prestation conserve un snapshot du partenaire responsable à la déclaration. Un changement ultérieur de gérant ou de rattachement ne modifie jamais rétroactivement l'historique.
+- **D3/E3 (Entité juridique) :** Une seule entité juridique Discover AI en V1 (algérienne). Pas d'entité par tenant. Une ligne de configuration par tenant référence cette entité (`tenant_id` -> `legal_entity_id`) ; plusieurs tenants peuvent référencer la même entité ; chaque opération financière conserve `tenant_id` et `legal_entity_id` ; le tenant Maroc ne devient pas une entité distincte ; aucune entité européenne créée.
+- **D4 (Date de prestation) :** Date de prestation saisie par le partenaire, sans modification de `bookings` ; date obligatoirement passée ; cohérente avec la réservation et la période réelle ; une date trop éloignée de la réservation déclenche un contrôle, jamais une acceptation silencieuse.
+- **D5/E2 (Sort des 72 h sans réponse) :** `expired_unconfirmed` est un statut du cycle de confirmation financière, jamais de `Booking.status`. Après 72 h sans réponse : la confirmation voyageur expire ; le dossier est identifiable en CLI ; aucune commission n'est définitivement exigible sur cette seule base ; aucune facturation automatique. Vérification humaine et résolution : V1b.
+- **D6 (Arrondi et calcul) :** Calcul exact sur entiers et taux en points de base, aucun float ; résultat et règle d'arrondi conservés ; convention d'arrondi à confirmer par l'expert-comptable avant facturation ; aucun montant incohérent en attendant.
+- **D7/E4 (Droits administrateur) :** L'administrateur du tenant ne peut pas déclarer une prestation en V1a ni accéder au profil fiscal/facturation du partenaire. Réexamen en V1b (contrôle d'identité, permissions dédiées, audit).
+- **D8 (Notifications distinctes) :** Types de notification distincts : prestation déclarée ; confirmation demandée au voyageur ; rappel avant expiration ; prestation confirmée ; prestation contestée ; confirmation expirée ; correction de déclaration. Idempotents : une même déclaration ne génère pas plusieurs notifications identiques.
+- **D9 (Preuve de prestation) :** Preuve = confirmation in-app par le voyageur authentifié ; QR non obligatoire en V1a. La preuve associe : identité du voyageur, réservation, déclaration du partenaire, date et heure, montant et devise confirmés, version de la déclaration acceptée. Le voyageur voit précisément ce qu'il confirme.
+- **D10 (Règle pays/entité) :** Commission activable seulement si le pays du partenaire = pays de l'entité juridique responsable ; V1 : entité algérienne, partenaire marocain exclu de la facturation de commission ; contrôle côté serveur, pas seulement dans l'interface.
+- **D11 (Plafond de correction) :** Une seule correction par réservation en V1a ; conserver la déclaration initiale, identifier l'auteur, enregistrer le motif, conserver ancienne et nouvelle valeur, recalculer au taux historique applicable sans toucher aux autres prestations ; une deuxième correction est bloquée et orientée vers une revue ultérieure.
+- **D12/E1 (Dossiers contestés en V1a) :** Dossiers contestés avant V1b : consultation CLI uniquement ; aucune résolution manuelle en V1a ; aucun changement silencieux de montant ; aucun recalcul de commission ; calcul gelé ; dossier conservé pour V1b.
+
+### Périmètre V1a validé (conception uniquement)
+- **Inclus dans la V1a :** Profil partenaire et rattachement aux POI ; taux 10 % (1 000 bps) ; déclaration du montant après prestation ; confirmation in-app voyageur ; expiration 72 h (`expired_unconfirmed`) ; calcul et snapshot de la commission ; consultation CLI en lecture seule ; contrôles de pays et de permissions côté serveur.
+- **Hors V1a :** Résolution humaine des contestations ; facturation fiscale dans Discover AI ; paiement en ligne ; remboursements ; annulation après confirmation et nouveau consentement ; reporting transversal par interface.
+
+---
+
+## Annexe D : Questions ouvertes D13-D16 (à trancher par le propriétaire)
+
+- **D13 — Chemin de création des profils partenaires, rattachements et règles de commission en V1a :**
+  - Sachant que l'admin du tenant n'a pas accès au profil fiscal (D7) et que le CLI de reporting est en lecture seule (D12).
+  - *Option A :* Script CLI de provisionnement distinct, en écriture, journalisé (`operator_identifier`), calqué sur `backend/app/create_tenant.py`.
+  - *Option B :* Saisie par le partenaire lui-même via un endpoint dédié d'auto-enregistrement.
+  - *Option C :* Provisionnement manuel hors application directement en base de données.
+  - > **DÉCISION PROPRIÉTAIRE REQUISE (D13).**
+- **D14 — Possibilité de correction après la confirmation du voyageur :**
+  - *Option A :* Correction possible après confirmation voyageur : exige une nouvelle confirmation de la version corrigée par le voyageur (D9), ajustement de la créance déjà générée, en l'absence de grand livre en V1a.
+  - *Option B :* Correction strictement autorisée avant confirmation voyageur uniquement ; toute correction après confirmation est renvoyée à la revue manuelle en V1b.
+  - > **DÉCISION PROPRIÉTAIRE REQUISE (D14).**
+- **D15 — Confirmation voyageur après `expired_unconfirmed` et seuil de date éloignée (D4) :**
+  - *Option A :* La confirmation voyageur reste acceptée après expiration des 72 h et réactive le calcul de commission.
+  - *Option B :* La confirmation est refusée après expiration et le dossier est définitivement renvoyé vers V1b.
+  - *Définition du contrôle de date éloignée (D4) :* Fixation du seuil configurable (ex. 30 jours après la date de réservation) et qualification du contrôle en V1a (drapeau `needs_review = True` visible en CLI sans acceptation silencieuse).
+  - > **DÉCISION PROPRIÉTAIRE REQUISE (D15).**
+- **D16 — Cas d'un utilisateur cumulatif (Admin du tenant et `POIManager` du POI) :**
+  - *Option A :* L'utilisateur peut déclarer en tirant son autorité exclusivement de son rattachement `POIManager` au POI.
+  - *Option B :* Exclusion stricte de tout utilisateur portant `is_admin == True` de la faculté de déclarer, même s'il est par ailleurs listé dans `POIManager`.
+  - > **DÉCISION PROPRIÉTAIRE REQUISE (D16).**

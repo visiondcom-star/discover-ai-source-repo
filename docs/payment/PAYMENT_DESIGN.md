@@ -134,6 +134,9 @@ Par ailleurs, un POI peut avoir 3 gérants distincts, et un même professionnel 
 
 ### 3.2 Spécification des tables V1a
 
+> **NOTE D'ARBITRAGE DU POINT DE CONTRÔLE 2 (02/11/2026) :**  
+> L'Option B de la sous-section 1 ci-dessous (`legal_entities` avec colonne `tenant_id`, une ligne par tenant) est formellement **SUPERSEDÉE** par la décision **D3/E3** (`docs/payment/PAYMENT_DECISIONS_V1.md:229`). La décision D3 arrête qu'il n'y a qu'une seule entité juridique Discover AI en V1 (algérienne, sans `tenant_id`), référencée par une table de configuration par tenant `tenant_legal_entity_configs` (`tenant_id` -> `legal_entity_id`). Voir le détail des conséquences techniques en section 12.
+
 ```
 +----------------------------------------------------------------------------------------------------+
 |                                         legal_entities                                             |
@@ -704,3 +707,77 @@ Ces constats sont consignés à titre d'information architecturale et **ne doive
 8. **DÉCISION PROPRIÉTAIRE REQUISE 8 :** Valider l'Option A pour la gestion de l'unicité des notifications (types d'événements distincts sans toucher à l'index partiel `uq_notifications_booking_unique` en base) (§7.3).
 9. **DÉCISION PROPRIÉTAIRE REQUISE 9 :** Valider l'Option A pour le mécanisme de preuve de prestation en V1a (déclaration partenaire couplée à une confirmation in-app du voyageur), écartant les contraintes matérielles des justificatifs papiers ou scanners QR sur place (§6).
 10. **DÉCISION PROPRIÉTAIRE REQUISE 10 :** Confirmer le gel complet des commissions sur le tenant `morocco` en V1 en application stricte de la règle de sécurité métier pays/entité (§3.3).
+
+
+---
+
+## 12. Conséquences techniques des décisions D1 à D12
+
+Cette section consigne les impacts techniques précis des arbitrages D1 à D12 validés lors du point de contrôle 2 (`docs/payment/PAYMENT_DECISIONS_V1.md:224-241`) :
+
+### 12.1 Entité juridique Discover AI et configuration par tenant (D3/E3)
+- La table `legal_entities` ne porte **pas** de colonne `tenant_id`. Elle modélise la société Discover AI au niveau plateforme (en V1 : une seule ligne, Discover AI Algérie, `country_code = "DZ"`).
+- Une table de configuration dédiée `tenant_legal_entity_configs` associe chaque destination à son entité de rattachement légal :
+  - `id` : `UUID`, Clé Primaire (`default=uuid.uuid4`).
+  - `tenant_id` : `UUID`, Clé Étrangère vers `tenants.id`, non nulle, indexée, **UNIQUE** (un tenant pointe sur exactement une entité en V1).
+  - `legal_entity_id` : `UUID`, Clé Étrangère vers `legal_entities.id`, non nulle (`ondelete="RESTRICT"`).
+  - `created_at` : `DateTime`, défaut `utcnow`.
+- Plusieurs tenants peuvent ainsi pointer sur la même entité juridique sans duplication de l'entité elle-même. Chaque opération financière enregistrée continue de porter explicitement `tenant_id` ET `legal_entity_id` pour préserver l'isolation et la traçabilité. Le tenant Maroc pointe sur cette même entité ou reste sans configuration active de commission. Aucune entité européenne n'est créée.
+
+### 12.2 Structure partenaire et immuabilité de l'imputation (D2)
+- La table `service_declarations` conserve un snapshot complet du partenaire responsable au moment précis de la déclaration :
+  - `partner_profile_id` : `UUID`, Clé Étrangère vers `partner_profiles.id`, non nulle (`ondelete="RESTRICT"`).
+  - `partner_assignment_id` : `UUID`, Clé Étrangère vers `partner_poi_assignments.id`, non nulle (`ondelete="RESTRICT"`).
+- **Règles sur les clés étrangères vers `users` :**
+  - Pour `service_declarations.declared_by_user_id` et `service_completions` : utilisation de `ondelete="RESTRICT"` ou conservation du nom complet textuel dénormalisé (`declared_by_user_name = Column(String(100))`) avec `ForeignKey("users.id", ondelete="SET NULL")`.
+  - *Justification :* La suppression ultérieure d'un compte utilisateur ou le départ d'un gestionnaire de POI ne doit jamais altérer rétroactivement la validité comptable de la déclaration ni supprimer en cascade les preuves d'audit.
+
+### 12.3 Démonstration D7 — Éligibilité de l'utilisateur déclarant
+- **Examen de l'existant :**
+  - Dans `backend/app/api/v1/endpoints/partner.py:76-86`, `_scope_filter` filtre par `if current_user.is_admin: return Booking.tenant_id == tenant_id`.
+  - Dans `backend/app/api/v1/endpoints/partner.py:89-96`, `_require_partner` autorise l'accès si `current_user.is_admin or poi_ids`.
+  - Dans `backend/app/dependencies.py:158-175`, `get_partner_poi_ids` extrait les POI liés par `POIManager` (`backend/app/models.py:381-386`).
+  - Dans `backend/app/models.py:118, 201`, `User.is_admin` est un booléen accordant l'administration globale du tenant.
+- **Conclusion de conception pour D7 :**
+  - L'administrateur du tenant (`is_admin == True`) est **strictement exclu** de la faculté de déclarer une prestation en V1a.
+  - La route de déclaration `POST /api/v1/partner/bookings/{booking_id}/declare` ne doit **PAS** réutiliser `_require_partner` ni `_scope_filter` tels quels car ces fonctions admettent les administrateurs sans rattachement de terrain.
+  - La route exige une dépendance dédiée `_require_declaring_partner` qui :
+    1. Vérifie formellement que `current_user.id` possède une ligne active dans `POIManager` pour le `poi_id` de la réservation (`backend/app/models.py:381-386`).
+    2. Vérifie qu'il existe un rattachement temporellement actif dans `partner_poi_assignments` (`valid_from <= utcnow() < coalesce(valid_to, 'infinity')`) liant ce `poi_id` à un `partner_profiles` dont la commission est activée (`is_commission_enabled == True`).
+  - **Résultat :** Aucun nouveau rôle opérationnel n'est inventé ; la sécurité repose sur le croisement strict des relations existantes.
+
+### 12.4 Date de prestation et détection d'anomalie (D4)
+- La table `service_declarations` inclut `service_date = Column(Date, nullable=False)` saisie par le partenaire.
+- Gardes-fous côté serveur :
+  - `service_date <= utcnow().date()` (date obligatoirement passée ou du jour).
+  - Contrôle de cohérence temporelle : si la date déclarée est trop éloignée de la réservation (ex. écart supérieur au seuil configurable dans `Tenant.config["max_declaration_delay_days"]`, défaut 30 jours), le système ne valide pas silencieusement la déclaration mais positionne le drapeau `needs_review = Column(Boolean, default=False, nullable=False)` à `True`. Ce drapeau est consultable en CLI sans bloquer arbitrairement la saisie.
+
+### 12.5 Statuts du cycle de confirmation financière (D5/E2)
+- Le cycle financier de `service_declarations.status` adopte les états fermés : `"declared"`, `"confirmed"`, `"disputed"`, `"expired_unconfirmed"`, `"superseded"`.
+- Après 72 h sans confirmation voyageur : passage automatique à `status = "expired_unconfirmed"`. Aucune commission n'est exigible, aucune créance n'est émise. Le dossier reste identifiable par les outils CLI d'audit. La résolution humaine éventuelle relève de la V1b.
+
+### 12.6 Règle d'arrondi et calcul sur entiers (D6)
+- Montants stockés en entiers mineurs (centimes) avec taux en points de base (`rate_bps`).
+- Le mode d'arrondi par défaut appliqué par le code est conservé dans `service_completions.rounding_mode = Column(String(20))` (ex. `"half_even"` ou `"floor"` selon validation par l'expert-comptable).
+
+### 12.7 Sept types de notifications distincts et idempotence (D8)
+Pour respecter l'index partiel existant `uq_notifications_booking_unique` (`backend/app/models.py:460-469`, unique sur `tenant_id`, `user_id`, `booking_id`, `type`), sept types distincts sont déclarés dans `NOTIFICATION_TEMPLATES` (`backend/app/services/notification_templates.py:8-49`) :
+1. `service_declaration_received` (prestation déclarée par le partenaire).
+2. `service_confirmation_requested` (demande d'approbation transmise au voyageur).
+3. `service_confirmation_reminder` (rappel automatique avant expiration).
+4. `service_confirmed` (prestation approuvée par le voyageur).
+5. `service_disputed` (prestation contestée par le voyageur).
+6. `service_confirmation_expired` (confirmation expirée sans réponse).
+7. `service_declaration_corrected` (correction émise par le partenaire).  
+Chaque type étant unique par `booking_id`, aucun conflit d'insertion silencieux ne se produit pour une même réservation.
+
+### 12.8 Règle de sécurité pays/entité côté serveur (D10)
+- Le contrôle d'éligibilité est vérifié de manière défensive au niveau du service backend (`commission_service.py`) :  
+  Si `partner_profile.country_code != legal_entity.country_code`, la création d'une déclaration ou d'une règle de commission est rejetée avec une exception métier HTTP 422. Les partenaires marocains (`country_code == "MA"`) sont ainsi exclus de toute facturation de commission face à l'entité algérienne (`"DZ"`).
+
+### 12.9 Plafond d'une correction unique par réservation (D11)
+- La table `service_declarations` comporte `correction_count = Column(Integer, default=0, nullable=False)`.
+- Si une déclaration est déjà sous statut `"superseded"` ou si `correction_count >= 1`, toute nouvelle tentative d'appel à `/declare` pour cette même réservation renvoie une HTTP 409 (`"Only one correction allowed per booking in V1a"`). La déclaration initiale, son motif de correction et les snapshots avant/après sont conservés dans `financial_audit_log`.
+
+### 12.10 Gel des contestations en V1a (D12/E1)
+- Une déclaration passant à `status = "disputed"` fige immédiatement le dossier. Aucun recalcul de commission n'est déclenché. Le script CLI `app.reporting_finance` permet uniquement d'extraire ces dossiers sous statut contesté pour revue en V1b, sans modification manuelle en V1a.

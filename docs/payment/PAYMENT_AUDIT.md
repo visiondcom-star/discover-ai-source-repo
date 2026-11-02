@@ -420,7 +420,7 @@ Puisqu'aucun montant fiable n'est stocké à ce jour, aucune commission ni trans
 ### 13.3 Politique de downgrade
 
 - Dans les migrations de structure (ex. `0014_notifications.py`), `downgrade()` effectue un `op.drop_table(...)`.
-- Dans les migrations de reprise de données (ex. `0016_backfill_skipped_notifs.py:27-29`), `downgrade()` contient un `pass` documenté lorsqu'une restauration exacte de l'état antérieur n'est pas réversible.
+- Dans les migrations de reprise de données (ex. `backend/alembic/versions/0016_backfill_skipped_notifs.py:27-29`), `downgrade()` contient un `pass` documenté lorsqu'une restauration exacte de l'état antérieur n'est pas réversible.
 
 ### 13.4 Piège de la base de test et amorçage
 
@@ -793,3 +793,16 @@ Analyse des contrôles d'accès réels dans le code backend :
 - **Réutilisabilité pour le domaine Paiement :**
   - Le composant `CredentialCrypto` est réutilisable pour sécuriser les données financières sensibles au repos.
   - **Adaptation requise pour le paiement :** La méthode `_aad` couple actuellement `tenant_id` et `provider` (`f"{tenant_id}:{provider}"`, `backend/app/services/credential_crypto.py:79-80`). Pour le domaine financier, il conviendra de déterminer dans `PAYMENT_DESIGN.md` si un paramètre contextuel libre ou un contexte spécifique (ex. `f"{tenant_id}:{partner_id}:{context}"`) doit être introduit pour lier les identifiants fiscaux ou de facturation à leur titulaire.
+
+
+### 18.8 Réponses complémentaires suite aux arbitrages du point de contrôle 2
+1. **Démonstration D7 — Restriction d'accès à la déclaration de prestation :**
+   - Dans `backend/app/api/v1/endpoints/partner.py:76-86`, `_scope_filter` filtre par `if current_user.is_admin: return Booking.tenant_id == tenant_id`.
+   - Dans `backend/app/api/v1/endpoints/partner.py:89-96`, `_require_partner` accorde l'accès à la fonction si `current_user.is_admin or poi_ids`.
+   - Dans `backend/app/dependencies.py:158-175`, `get_partner_poi_ids` extrait les POI liés à `current_user.id` via `POIManager` (`backend/app/models.py:381-386`).
+   - Dans `backend/app/models.py:118, 201`, `User.is_admin` est un booléen accordant l'administration globale du tenant.
+   - **Constat d'audit :** Seul un utilisateur explicitement lié par `POIManager` au `poi_id` de la réservation peut être habilité à déclarer. La route de déclaration ne doit donc pas réutiliser `_require_partner` ni `_scope_filter` tels quels (qui admettent tout administrateur sans rattachement de terrain). Elle exige en plus un rattachement temporel actif dans `partner_poi_assignments` (`valid_from <= utcnow() < valid_to`) liant ce `poi_id` à un `partner_profiles` éligible. Aucun nouveau rôle opérationnel n'est nécessaire.
+2. **Absence de lien direct utilisateur -> profil partenaire :**
+   - Dans le schéma actuel (`backend/app/models.py:192-205, 366-389`), il n'existe **strictement aucun lien direct** entre un `User` et une entité partenaire autre que la relation `POIManager` reliant `user_id` à `poi_id`. La modélisation de la partie contractante financière nécessite donc formellement la création d'un profil contractuel autonome `partner_profiles`.
+3. **Absence d'historique des gestionnaires de POI :**
+   - Dans `backend/app/models.py:381-386`, la table `poi_managers` supprime ses liaisons en cascade (`ondelete="CASCADE"` sur `pois.id` et `users.id`) et ne comporte aucune colonne d'historisation de date de fin (`valid_to`). La suppression ou le départ d'un gestionnaire efface définitivement la ligne. L'immuabilité de l'imputation financière exige donc que chaque déclaration fige un snapshot immuable du partenaire et du gestionnaire déclarant.

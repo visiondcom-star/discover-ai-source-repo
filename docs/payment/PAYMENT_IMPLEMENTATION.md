@@ -152,17 +152,25 @@ Deux options sont soumises à l'arbitrage du propriétaire (Dépendance **D12**)
 - **Dépendances :** Dépend de **D3** et **D10**.
 
 ### Étape 1.2-bis — Backfill de `country_code` et configuration du SLA de confirmation
-- **Objectif :** Renseigner par migration de données idempotente la colonne `Tenant.country_code` pour les tenants existants (`algeria` -> `"DZ"`, `morocco` -> `"MA"`) à partir des informations fournies par le propriétaire (`docs/payment/PAYMENT_COMPLIANCE.md:193`), et initialiser la clé `Tenant.config["service_confirmation_sla_hours"] = 72` par défaut.
+- **Objectif :** Renseigner par migration de données la colonne `Tenant.country_code` pour les tenants existants (`algeria` -> `"DZ"`, `morocco` -> `"MA"`) à partir des informations fournies par le propriétaire (`docs/payment/PAYMENT_COMPLIANCE.md:193`), et initialiser la clé `Tenant.config["service_confirmation_sla_hours"] = 72` par défaut.
+- **Mécanisme de migration retenu :** Le script de seed `backend/app/initial_data.py:20-22` effectue un retour anticipé immédiat dès que le tenant `algeria` existe :
+  ```python
+  result = await session.execute(select(Tenant).where(Tenant.slug == "algeria"))
+  if result.scalar_one_or_none():
+      return
+  ```
+  Par conséquent, `initial_data.py` ne peut pas renseigner `country_code` sur des bases de données existantes où `algeria` préexiste déjà. Le mécanisme retenu est donc une migration de données Alembic dédiée (exécutant des ordres SQL `UPDATE tenants SET country_code = ...` ciblés et idempotents).
 - **Fichiers à modifier / créer :**
-  - `backend/app/initial_data.py` (alimentation explicite de `country_code` et `config`).
-  - `backend/app/services/tenant_service.py` (garantie de présence des clés de configuration par défaut).
-- **Migration :** Script de migration de données SQLAlchemy idempotent.
-- **Tests à écrire :** `backend/tests/test_tenant_defaults.py` :
+  - `backend/alembic/versions/0017_backfill_tenant_country_codes.py` (migration de données Alembic dédiée).
+  - `backend/app/initial_data.py` (alimentation explicite de `country_code` pour les nouvelles bases).
+  - `backend/tests/test_tenant_defaults.py` (fichier existant créé par la PR #47, à étendre).
+- **Migration :** Révision Alembic de données (ex. `0017_backfill_tenant_country_codes.py` ou intégrée à la migration de schéma V1a).
+- **Tests à étendre :** Le fichier `backend/tests/test_tenant_defaults.py:1-20` existe déjà et protège actuellement `test_tenant_default_primary_color`. Il sera étendu avec :
   - `test_tenant_seed_populates_country_code_dz`
   - `test_tenant_config_contains_service_confirmation_sla_hours`
 - **Critère d'acceptation :** Tous les tenants ont un `country_code` non nul à 2 lettres et un SLA de confirmation à 72 heures.
 - **Risque :** Conflit avec le validateur `@validates("country_code")` (`backend/app/models.py:68-76`).
-- **Retour arrière :** Revert du commit.
+- **Retour arrière :** Revert de la migration de données.
 - **Dépendances :** Dépend de **D10** et des données du propriétaire (`docs/payment/PAYMENT_COMPLIANCE.md:193`).
 
 ### Étape 1.3 — Endpoint de déclaration de prestation partenaire et table d'audit

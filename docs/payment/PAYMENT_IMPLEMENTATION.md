@@ -79,13 +79,13 @@ Deux options sont soumises à l'arbitrage du propriétaire (Dépendance **D12**)
                                                   │
                                                   ▼
 +---------------------------------------------------------------------------------------------------+
-| Étape 1.2-bis : Backfill country_code des tenants & configuration SLA 72h                         |
+| Étape 1.2-bis : Backfill country_code (migration 0018) & configuration SLA 72h                    |
 | -> Dépend de D10 et PAYMENT_COMPLIANCE.md §6.2                                                    |
 +---------------------------------------------------------------------------------------------------+
                                                   │
                                                   ▼
 +---------------------------------------------------------------------------------------------------+
-| Étape 1.3 : Déclaration de prestation (API partner declare & migration Alembic 0018)              |
+| Étape 1.3 : Déclaration de prestation (API partner declare & migration Alembic 0019)              |
 | -> Dépend de D1, D4, D7 / E4, D11                                                                 |
 +---------------------------------------------------------------------------------------------------+
                                                   │
@@ -161,26 +161,26 @@ Deux options sont soumises à l'arbitrage du propriétaire (Dépendance **D12**)
   ```
   Par conséquent, `initial_data.py` ne peut pas renseigner `country_code` sur des bases de données existantes où `algeria` préexiste déjà. Le mécanisme retenu est donc une migration de données Alembic dédiée (exécutant des ordres SQL `UPDATE tenants SET country_code = ...` ciblés et idempotents).
 - **Fichiers à modifier / créer :**
-  - `backend/alembic/versions/0017_backfill_tenant_country_codes.py` (migration de données Alembic dédiée).
+  - `backend/alembic/versions/0018_backfill_tenant_country_codes.py` (migration de données Alembic dédiée).
   - `backend/app/initial_data.py` (alimentation explicite de `country_code` pour les nouvelles bases).
   - `backend/tests/test_tenant_defaults.py` (fichier existant créé par la PR #47, à étendre).
-- **Migration :** Révision Alembic de données (ex. `0017_backfill_tenant_country_codes.py` ou intégrée à la migration de schéma V1a).
+- **Migration :** Révision Alembic de données `0018_backfill_tenant_country_codes.py` (succédant à `0017_financial_foundation_entities.py`).
 - **Tests à étendre :** Le fichier `backend/tests/test_tenant_defaults.py:1-19` existe déjà et protège actuellement `test_tenant_default_primary_color`. Il sera étendu avec :
   - `test_tenant_seed_populates_country_code_dz`
   - `test_tenant_config_contains_service_confirmation_sla_hours`
 - **Critère d'acceptation :** Tous les tenants ont un `country_code` non nul à 2 lettres et un SLA de confirmation à 72 heures.
 - **Risque :** Conflit avec le validateur `@validates("country_code")` (`backend/app/models.py:68-76`).
-- **Retour arrière :** Revert de la migration de données.
+- **Retour arrière :** `alembic downgrade 0017_financial_foundation_entities`.
 - **Dépendances :** Dépend de **D10** et des données du propriétaire (`docs/payment/PAYMENT_COMPLIANCE.md:193`).
 
 ### Étape 1.3 — Endpoint de déclaration de prestation partenaire et table d'audit
 - **Objectif :** Créer la table `service_declarations`, la table `financial_audit_log` (avec trigger d'immuabilité) et exposer la route `POST /api/v1/partner/bookings/{booking_id}/declare`.
 - **Fichiers à modifier / créer :**
   - `backend/app/models.py` (modèles `ServiceDeclaration`, `FinancialAuditLog`).
-  - `backend/alembic/versions/0018_service_declarations_receivables.py` (création des tables et du trigger PostgreSQL d'immuabilité).
+  - `backend/alembic/versions/0019_service_declarations_receivables.py` (création des tables et du trigger PostgreSQL d'immuabilité).
   - `backend/app/schemas.py` (`ServiceDeclarationCreate`, `ServiceDeclarationResponse`).
   - `backend/app/api/v1/endpoints/partner.py` (route de déclaration sous contrôle `_require_partner`).
-- **Migration :** Révision `0018_service_declarations_receivables`.
+- **Migration :** Révision `0019_service_declarations_receivables`.
 - **Tests à écrire :** `backend/tests/test_service_declaration.py` :
   - `test_partner_can_declare_completed_booking`
   - `test_declaration_freezes_legal_entity_and_rate_snapshot`
@@ -189,7 +189,7 @@ Deux options sont soumises à l'arbitrage du propriétaire (Dépendance **D12**)
   - `test_partner_declare_tenant_isolation_returns_404` (test d'isolation vérifiant qu'un appel avec l'en-tête `other_tenant.slug` renvoie HTTP 404, calqué sur `backend/tests/conftest.py:164-199`).
 - **Critère d'acceptation :** Une réservation `confirmed` en mode `manual_confirm` peut recevoir une déclaration ; `applied_rate_bps` est figé ; toute tentative de `UPDATE` sur `financial_audit_log` lève une exception SQL ; l'isolation cross-tenant renvoie 404.
 - **Risque :** Conflit sur la contrainte d'unicité en cas de corrections multiples.
-- **Retour arrière :** `alembic downgrade 0017_financial_foundation_entities`.
+- **Retour arrière :** `alembic downgrade 0018_backfill_tenant_country_codes`.
 - **Dépendances :** Dépend de **D1**, **D4**, **D7 / E4**, **D11**.
 
 ### Étape 1.4 — Confirmation, calcul immuable de la commission et contestation initiale
@@ -197,7 +197,7 @@ Deux options sont soumises à l'arbitrage du propriétaire (Dépendance **D12**)
 - **Fichiers à modifier / créer :**
   - `backend/app/api/v1/endpoints/bookings.py` (routes voyageur authentifié).
   - `backend/app/services/commission_service.py` (formule arithmétique exacte avec règle d'arrondi).
-- **Migration :** Comprise dans la révision `0018`.
+- **Migration :** Comprise dans la révision `0019`.
 - **Tests à écrire :** `backend/tests/test_service_confirmation.py` :
   - `test_traveller_confirm_creates_completion_and_receivable`
   - `test_commission_rounding_floor_vs_half_even`
@@ -268,16 +268,16 @@ Deux options sont soumises à l'arbitrage du propriétaire (Dépendance **D12**)
 - **Impact sur les tables existantes :** Migration additive ajoutant `is_finance_operator = Column(Boolean, default=False, nullable=False)` sur la table existante `users`.
 - **Fichiers à modifier / créer :**
   - `backend/app/models.py` (colonne sur `User`).
-  - `backend/alembic/versions/0019_user_finance_operator_role.py` (migration additive).
+  - `backend/alembic/versions/0020_user_finance_operator_role.py` (migration additive).
   - `backend/app/dependencies.py` (dépendance `get_finance_operator` vérifiant `current_user.is_finance_operator`).
-- **Migration :** Révision `0019_user_finance_operator_role`.
+- **Migration :** Révision `0020_user_finance_operator_role`.
 - **Tests à écrire :** `backend/tests/test_finance_operator_rbac.py` :
   - `test_finance_operator_access_granted`
   - `test_standard_admin_forbidden_on_dispute_resolution`
   - `test_non_regression_user_jwt_login` (vérifie que l'ajout de la colonne n'invalide pas l'authentification existante).
 - **Critère d'acceptation :** Seul un utilisateur portant `is_finance_operator == True` accède aux routes de litige.
 - **Risque :** Régression sur les fixtures d'utilisateurs existantes dans `conftest.py`.
-- **Retour arrière :** `alembic downgrade 0018_service_declarations_receivables`.
+- **Retour arrière :** `alembic downgrade 0019_service_declarations_receivables`.
 - **Dépendances :** Prérequis V1a validée.
 
 ### Étape 2.2 — Moteur de résolution des contestations (Cycle en 6 étapes)
@@ -299,15 +299,15 @@ Deux options sont soumises à l'arbitrage du propriétaire (Dépendance **D12**)
 - **Objectif :** Permettre l'agrégation mensuelle des créances `commission_receivables` en relevés de commission téléchargeables et stocker la référence de facture externe (`docs/payment/PAYMENT_DECISIONS_V1.md:143`).
 - **Fichiers à modifier / créer :**
   - `backend/app/models.py` (modèle `CommissionStatement`).
-  - `backend/alembic/versions/0020_commission_statements.py` (table `commission_statements`).
+  - `backend/alembic/versions/0021_commission_statements.py` (table `commission_statements`).
   - `backend/app/api/v1/endpoints/finance.py` (génération et clôture des relevés).
-- **Migration :** Révision `0020_commission_statements`.
+- **Migration :** Révision `0021_commission_statements`.
 - **Tests à écrire :** `backend/tests/test_commission_statements.py` :
   - `test_generate_commission_statement_sums_unbilled_receivables`
   - `test_attach_external_invoice_reference`
 - **Critère d'acceptation :** Production d'un relevé ventilé avec archivage de la date d'émission et statut `invoiced`.
 - **Risque :** Double facturation d'une même créance.
-- **Retour arrière :** `alembic downgrade 0019_user_finance_operator_role`.
+- **Retour arrière :** `alembic downgrade 0020_user_finance_operator_role`.
 - **Dépendances :** Étape 2.1.
 
 ### Étape 2.4 — Outils de détection du contournement et rapprochement manuel
@@ -333,14 +333,14 @@ Deux options sont soumises à l'arbitrage du propriétaire (Dépendance **D12**)
 - **Impact sur les tables existantes :** Migration additive ajoutant `cancellation_policy_version_id = Column(UUID(as_uuid=True), ForeignKey("cancellation_policies.id"), nullable=True)` sur `bookings`.
 - **Fichiers à modifier / créer :**
   - `backend/app/models.py` (table `cancellation_policies`, colonne sur `Booking`).
-  - `backend/alembic/versions/0021_cancellation_policies.py` (migration additive).
-- **Migration :** Révision `0021_cancellation_policies`.
+  - `backend/alembic/versions/0022_cancellation_policies.py` (migration additive).
+- **Migration :** Révision `0022_cancellation_policies`.
 - **Tests à écrire :** `backend/tests/test_cancellation_policies.py` :
   - `test_booking_freezes_cancellation_policy_version_at_consent`
   - `test_non_regression_existing_bookings_have_null_policy_version`
 - **Critère d'acceptation :** La modification d'une politique n'altère pas les réservations déjà enregistrées ; les réservations historiques conservent `NULL`.
 - **Risque :** Dépendance de clé étrangère sur une table volumineuse.
-- **Retour arrière :** `alembic downgrade 0020_commission_statements`.
+- **Retour arrière :** `alembic downgrade 0021_commission_statements`.
 - **Dépendances :** Prérequis V1b validée.
 
 ### Étape 3.2 — Parcours d'annulation post-confirmation avec motifs contrôlés
@@ -491,9 +491,10 @@ Cette section consigne la réaffectation des étapes et la résolution des dépe
 
 ### 11.2 Réaffectation des étapes techniques de la sous-livraison V1a
 1. **Étape 1.1 (Modèles et migration 0017) :** Modifiée selon D3. La table `legal_entities` est créée sans colonne `tenant_id` ; une table d'association `tenant_legal_entity_configs` (`tenant_id` UNIQUE -> `legal_entity_id`) gère le rattachement par tenant.
-2. **Étape 1.3 (Déclaration partenaire) :** Modifiée selon D7 et D11. La dépendance de sécurité est `_require_declaring_partner` (excluant `is_admin == True`, exigeant une liaison active dans `POIManager` et `partner_poi_assignments`). Le plafond technique est fixé à **une seule correction** par réservation (`correction_count < 1`).
-3. **Étape 1.4 (Confirmation et créance) :** Modifiée selon D5. À l'expiration du SLA sans confirmation voyageur, la déclaration bascule en `expired_unconfirmed` ; aucune commission n'est exigible, aucune créance n'est générée.
-4. **Étape 1.5 (Notifications financières) :** Modifiée selon D8. Implémentation des **sept types d'événements distincts** garantissant l'absence de conflit avec l'index partiel `uq_notifications_booking_unique` (`backend/app/models.py:460-469`).
+2. **Étape 1.2-bis (Backfill de country_code et SLA 72h) :** Migration de données Alembic dédiée `0018_backfill_tenant_country_codes.py` (succédant à `0017_financial_foundation_entities.py`).
+3. **Étape 1.3 (Déclaration partenaire) :** Modifiée selon D7 et D11. Migration Alembic `0019_service_declarations_receivables.py`. La dépendance de sécurité est `_require_declaring_partner` (excluant `is_admin == True`, exigeant une liaison active dans `POIManager` et `partner_poi_assignments`). Le plafond technique est fixé à **une seule correction** par réservation (`correction_count < 1`).
+4. **Étape 1.4 (Confirmation et créance) :** Modifiée selon D5. Comprise dans la révision `0019`. À l'expiration du SLA sans confirmation voyageur, la déclaration bascule en `expired_unconfirmed` ; aucune commission n'est exigible, aucune créance n'est générée.
+5. **Étape 1.5 (Notifications financières) :** Modifiée selon D8. Implémentation des **sept types d'événements distincts** garantissant l'absence de conflit avec l'index partiel `uq_notifications_booking_unique` (`backend/app/models.py:460-469`).
 
 ### 11.3 Séparation étanche des livraisons et verrou d'autorisation
 - **V1a (Fondation) :** Modèles, règles de pays, déclaration, confirmation in-app, expiration 72 h, calcul immuable, notifications et CLI en lecture seule.

@@ -289,15 +289,18 @@ Par ailleurs, un POI peut avoir 3 gérants distincts, et un même professionnel 
   - `partner_profile_id` : `UUID`, Clé Étrangère vers `partner_profiles.id`, non nulle.
   - `poi_id` : `UUID`, Clé Étrangère vers `pois.id`, non nulle.
   - `declared_by_user_id` : `UUID`, Clé Étrangère vers `users.id` (gérant ayant saisi la déclaration).
-  - `declaration_type` : `String(30)`, parmi `("service_rendered", "late_cancellation_fee", "no_show_fee")` (`PAYMENT_DECISIONS_V1.md` §2, A13).
+  - `declaration_type` : `String(30)`, parmi `("service_rendered", "late_cancellation_fee", "no_show_fee")` (`docs/payment/PAYMENT_DECISIONS_V1.md:31`).
   - `service_date` : `Date`, date effective d'exécution du service (voir section Date de prestation ci-dessous).
   - `amount_minor` : `BigInteger`, montant total encaissé déclaré en unités mineures (centimes), non nul, strictement positif (`> 0`).
   - `currency` : `String(3)`, code devise ISO 4217 identique à `Booking.currency`.
   - `tax_amount_minor` : `BigInteger`, nullable, montant des taxes incluses identifiées et documentées.
-  - `status` : `String(30)`, état de la déclaration : `"declared"`, `"confirmed"`, `"disputed"`, `"expired_unconfirmed"`, `"superseded"`.
-  - `confirmation_deadline` : `DateTime`, échéance de 72 heures allouée au voyageur pour confirmer ou contester.
+  - `status` : `String(30)`, état de la déclaration : `"declared"`, `"confirmed"`, `"disputed"`, `"expired_unconfirmed"`, `"needs_review"`, `"superseded"`.
+  - `review_reason` : `Text`, nullable (motif interne obligatoire lorsque `status == "needs_review"`).
+  - `confirmation_deadline` : `DateTime`, nullable (échéance de 72 heures allouée au voyageur pour confirmer ou contester ; nulle tant que `status == "needs_review"`).
+  - `flagged_at` : `DateTime`, nullable (horodatage du signalement d'anomalie `needs_review`).
   - `dispute_reason` : `Text`, motif de contestation renseigné par le voyageur en cas de désaccord.
-  - `disputed_at` : `DateTime`, horodatage de contestation par le voyageur.
+  - `disputed_at` : `DateTime`, nullable (horodatage de contestation par le voyageur).
+  - `expired_at` : `DateTime`, nullable (horodatage du passage à `expired_unconfirmed`).
   - `supersedes_declaration_id` : `UUID`, Clé Étrangère vers `service_declarations.id`, nullable (identifie la déclaration corrigée).
   - `is_current` : `Boolean`, non nulle, défaut `True` (indique la version active du type de déclaration pour la réservation).
   - `declared_by_admin` : `Boolean`, non nulle, défaut `False` (drapeau indiquant si l'action émane d'un administrateur).
@@ -417,6 +420,14 @@ La déclaration financière dispose de sa propre machine d'états sur la table `
 ```
 
 ### 4.1 Date de prestation et conditions de déclaration
+
+#### Distinction stricte entre les trois dates (Glossaire temporel)
+Le domaine financier distingue rigoureusement trois dates temporelles indépendantes, qui ne doivent **jamais être confondues ni substituées** :
+1. **Date prévue de la réservation (`booking_data["date"]`) :** Date souhaitée ou convenue lors de la demande de réservation, extraite du dictionnaire JSON libre `Booking.booking_data`. Elle peut être absente, partielle ou mal formée.
+2. **Date de prestation déclarée par le partenaire (`service_declarations.service_date`) :** Date effective à laquelle le partenaire certifie que l'activité touristique a été réalisée. Saisie obligatoirement lors de la déclaration, elle doit être située dans le passé ou au jour même (`service_date <= utcnow().date()`).
+3. **Date de création de la réservation (`Booking.created_at`) :** Horodatage technique système de création de la ligne SQL dans la table `bookings`.
+
+**Règle absolue :** Il n'existe **aucun repli silencieux sur `Booking.created_at`**. Si la date prévue de la réservation ou la date de prestation déclarée est absente ou inexploitable, le système ne substitue jamais la date de création : le dossier bascule immédiatement sous statut d'anomalie `needs_review` (voir D15). Le contrôle de cohérence temporelle des 7 jours calendaires (D15) compare exclusivement la date prévue de réservation (`booking_data["date"]`) et la date de prestation déclarée (`service_date`).
 
 #### Absence de colonne de date sur le modèle Booking existant
 Dans le code actuel de `Booking` (`backend/app/models.py:332-364`), le modèle ne comporte **strictement aucune colonne SQL dédiée aux dates de séjour ou de prestation**. Les seules colonnes temporelles présentes sont des métadonnées système : `consent_timestamp`, `respond_by`, `responded_at`, `created_at`, `updated_at` (`backend/app/models.py:343, 348, 353-355`).  
@@ -578,7 +589,11 @@ Tous les endpoints sont montés avec isolation stricte par tenant via `x_tenant_
 
 ### 7.2 Intégration côté mobile (Flutter)
 
-- **Espace partenaire (`mobile/lib/screens/partner_bookings_screen.dart`) :** Sur les réservations confirmées dont la date d'exécution est passée, ajout d'un bouton d'action _"Déclarer la prestation"_ ouvrant une modale de saisie du montant en devise locale.
+- **Espace partenaire (`mobile/lib/screens/partner_bookings_screen.dart`) :**
+  - Sur les réservations confirmées dont la date d'exécution est passée, ajout d'un bouton d'action _"Déclarer la prestation"_ ouvrant une modale de saisie du montant en devise locale.
+  - **Affichage des dossiers signalés ou en vérification :** Lorsqu'un dossier est sous statut `needs_review` ou `disputed`, l'espace partenaire affiche la mention neutre : *"Prestation en vérification"*, accompagnée d'un lien vers le contact support.
+  - **Absence de promesse de notification et confidentialité :** Cet affichage n'engage aucune promesse de notification ultérieure au partenaire (aucune notification de D8 ne couvre une réouverture en V1a ; aucune reprise de dossier n'est automatisée). L'interface partenaire ne révèle **jamais** de motif interne d'anomalie, de résultat de contrôle antifraude, de commentaire interne de gestion, d'information fiscale sensible ni de détail sur une contestation voyageur. Elle ne laisse en aucun cas croire que le partenaire peut résoudre l'anomalie de façon autonome dans son interface.
+
 - **Écran voyageur (`mobile/lib/screens/bookings_screen.dart`) :** Réception de la notification `service_declaration_received`. La carte de réservation affiche un bandeau invitant à confirmer ou contester le montant sous 72 h.
 
 ### 7.3 Mécanisme des rappels périodiques et gestion de l'unicité des notifications
@@ -625,7 +640,14 @@ Conformément à `PAYMENT_DECISIONS_V1.md` §4 et A14, le voyageur dispose d'un 
 
 - Développé selon le standard strict de `backend/app/create_tenant.py:1-103`.
 - **Usage :** `python -m app.reporting_finance --tenant-slug algeria --format csv --output /tmp/commissions_algeria.csv`.
-- **Fonctionnalités :** Lecture seule, extraction des déclarations, des prestations confirmées et des créances de commission, sans aucune dépendance HTTP ni exposition réseau.
+- **Fonctionnalités :** Lecture seule stricte.
+- **Affichage des dossiers d'exception et calcul d'ancienneté :**
+  Le script permet de lister les dossiers aux statuts `needs_review`, `disputed` et `expired_unconfirmed` en restituant :
+  - L'identifiant de la déclaration (`id`), le statut courant, le `tenant_id`, et la référence de réservation (`booking_id`).
+  - L'horodatage précis de l'événement déclencheur : `flagged_at` pour `needs_review`, `disputed_at` pour `disputed`, et `expired_at` pour `expired_unconfirmed`.
+  - **L'ancienneté du dossier :** Calculée strictement depuis l'horodatage de l'événement (`flagged_at`, `disputed_at`, ou `expired_at`), et **jamais depuis `Booking.created_at`** (qui ne reflète que la date technique de la réservation initiale).
+  - Pour les dossiers `needs_review`, le CLI affiche également le motif interne consigné (`review_reason`).
+  - Le script opère exclusivement en lecture seule : il n'exécute aucun changement de statut, aucun recalcul de montant, aucune résolution manuelle ni aucune facturation.
 
 ---
 
@@ -758,7 +780,42 @@ Cette section consigne les impacts techniques précis des arbitrages D1 à D12 v
 - La table `service_declarations` inclut `service_date = Column(Date, nullable=False)` saisie par le partenaire.
 - Gardes-fous côté serveur :
   - `service_date <= utcnow().date()` (date obligatoirement passée ou du jour).
-  - Contrôle de cohérence temporelle : si la date déclarée est trop éloignée de la réservation (ex. écart supérieur au seuil configurable dans `Tenant.config["max_declaration_delay_days"]`, défaut 7 jours), le système ne valide pas silencieusement la déclaration mais positionne le drapeau `needs_review = Column(Boolean, default=False, nullable=False)` à `True`. Ce drapeau est consultable en CLI sans bloquer arbitrairement la saisie.
+  - Contrôle de cohérence temporelle : si la date déclarée présente un écart supérieur au seuil configurable dans `Tenant.config["max_declaration_delay_days"]` (défaut 7 jours) par rapport à la date prévue de la réservation (`booking_data["date"]`), le système ne valide pas silencieusement la déclaration mais positionne le statut d'anomalie `status = "needs_review"` avec `review_reason` et horodatage `flagged_at = utcnow()`. Ce dossier est consultable en CLI sans bloquer arbitrairement la saisie.
+- **Requête SQL d'audit statistique de la date prévue (Point bloquant P2) :**  
+  *Statut :* NON EXÉCUTÉE, à exécuter par le propriétaire sur la base de production (agrégats seuls, sans PII) :
+  ```sql
+  SELECT 
+      b.tenant_id,
+      b.poi_id,
+      COUNT(*) AS total_manual_confirm,
+      COUNT(*) FILTER (WHERE b.booking_data IS NOT NULL AND b.booking_data::jsonb != '{}'::jsonb) AS count_has_data,
+      COUNT(*) FILTER (WHERE (b.booking_data::jsonb)->>'date' IS NOT NULL) AS count_has_date_key,
+      COUNT(*) FILTER (WHERE (b.booking_data::jsonb)->>'date' IS NULL) AS count_missing_date,
+      COUNT(*) FILTER (
+          WHERE (b.booking_data::jsonb)->>'date' IS NOT NULL 
+            AND (b.booking_data::jsonb)->>'date' ~ '^\d{4}-\d{2}-\d{2}$'
+            AND CASE 
+                  WHEN (b.booking_data::jsonb)->>'date' ~ '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$' 
+                  THEN is_valid_date((b.booking_data::jsonb)->>'date')
+                  ELSE FALSE 
+                END
+      ) AS count_valid_real_date,
+      COUNT(*) FILTER (
+          WHERE (b.booking_data::jsonb)->>'date' IS NOT NULL 
+            AND (
+                (b.booking_data::jsonb)->>'date' !~ '^\d{4}-\d{2}-\d{2}$'
+                OR CASE 
+                     WHEN (b.booking_data::jsonb)->>'date' ~ '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$' 
+                     THEN NOT is_valid_date((b.booking_data::jsonb)->>'date')
+                     ELSE TRUE 
+                   END
+            )
+      ) AS count_malformed_date
+  FROM bookings b
+  WHERE b.booking_mode = 'manual_confirm'
+  GROUP BY b.tenant_id, b.poi_id;
+  ```
+  *(Le canal de réservation est non mesurable car aucune colonne de canal n'existe sur `Booking`, `backend/app/models.py:332-364`)*.
 
 ### 12.5 Statuts du cycle de confirmation financière (D5/E2)
 - Le cycle financier de `service_declarations.status` adopte les états fermés : `"declared"`, `"confirmed"`, `"disputed"`, `"expired_unconfirmed"`, `"superseded"`.
@@ -802,25 +859,30 @@ Chaque type étant unique par `booking_id`, aucun conflit d'insertion silencieux
   - Le script refuse tout paramètre fiscal sensible en argument direct de ligne de commande (pas de `--tax-id` en clair dans l'historique shell ou la table des processus `ps`) : la saisie s'effectue via un prompt masqué interactif (`getpass.getpass`) ou via un fichier de configuration temporaire à permissions restrictives (`chmod 600`), selon le modèle éprouvé de `backend/app/create_tenant.py:80-82`.
   - Chaque opération génère un enregistrement dans `financial_audit_log` avec `action = "provision_partner"`, consignant l'identité vérifiée, la référence du ticket, la date/heure UTC, et les identifiants créés, sans jamais écrire de donnée fiscale en clair.
   - Le mécanisme d'identification technique exact dépend de l'environnement d'exécution (Point bloquant P1).
+- **Comparatif des options d'exécution pour P1 :**
+  - *Option A (Machine d'administration dédiée) :* Authentification nominative de l'opérateur sur le poste d'admin (compte OS / clé SSH nominative). Accès réseau sécurisé vers PostgreSQL. Logs de session locaux. Limite : contournable en cas d'accès SQL direct.
+  - *Option B (Conteneur backend via `kubectl exec`) :* Authentification OIDC / certificat X.509 utilisateur avec RBAC Kubernetes et journaux d'audit de l'API Server. Limite : complexité et absence de filtrage natif des arguments de script par Kubernetes.
+  - *Option C (Déclencheur d'administration externe) :* Absent du dépôt examiné (aucun workflow de déploiement en production n'est configuré dans `.github/workflows/ci.yml:1-114`).
+  - *Question pour le propriétaire :* Comment accède-t-il au serveur de production et qui d'autre y a accès ? (Non visible dans le dépôt).
 
 ### 12.12 Cycle de vie des versions de déclaration et confirmation atomique (D14)
 - **Versionnement strict :** Chaque déclaration possède `id` (`UUID`) et `version_number = Column(Integer, default=1, nullable=False)`. Une correction crée un nouvel enregistrement portant `version_number = 2` et `supersedes_declaration_id = old_id`, tandis que l'ancienne déclaration passe à `is_current = False` et `status = "superseded"`.
 - **Point de départ unique du délai de 72 h :** L'échéance `confirmation_deadline` est recalculée à partir de `created_at` de la **nouvelle version** et stockée sur celle-ci.
-- **Vérification atomique lors de la confirmation voyageur :**  
-  L'endpoint `POST /api/v1/bookings/{booking_id}/confirm-service` exige dans le corps de requête l'identifiant exact de la version consultée (`declaration_id` ou `version_number`). La requête s'exécute sous verrou de ligne pessimiste (`select ... for update`) et valide atomiquement :
-  1. Que la déclaration ciblée existe et est rattachée au `booking_id`.
-  2. Que son statut est `declared` (dossier confirmable).
-  3. Que `is_current == True` (version courante active). Si le voyageur tente de confirmer une version antérieure déjà remplacée, le serveur rejette la requête avec HTTP 409 (`"Declaration version is superseded"`).
-  4. Que `utcnow() <= confirmation_deadline` (délai de 72 h non échu).
-- **Idempotence de confirmation :** La confirmation répétée d'une même version courante renvoie HTTP 200 de façon idempotente sans dupliquer la créance (protégée par `UniqueConstraint("tenant_id", "declaration_id")` sur `service_completions`).
+- **Ordre explicite des contrôles atomiques lors de la confirmation voyageur :**  
+  L'endpoint `POST /api/v1/bookings/{booking_id}/confirm-service` exige dans le corps de requête l'identifiant exact de la version consultée (`declaration_id` ou `version_number`). La requête s'exécute sous verrou de ligne pessimiste (`select ... for update`) et applique les contrôles dans l'ordre séquentiel strict suivant :
+  1. **Contrôle d'idempotence immédiat (Même version déjà confirmée) :** Si la déclaration visée est déjà sous statut `status == "confirmed"`, et qu'elle correspond à la version courante `is_current == True` de cette réservation, le serveur renvoie immédiatement une réponse HTTP 200 avec la confirmation existante. **Aucune seconde créance** n'est créée dans `commission_receivables` (unicité garantie par contrainte SQL).
+  2. **Existence et rattachement :** Vérifier que la déclaration ciblée existe et est bien rattachée au `booking_id` de la réservation du voyageur authentifié.
+  3. **Vérification de statut confirmable :** Vérifier que son statut est strictement `status == "declared"`. Si le dossier est sous statut `disputed`, `needs_review` ou `expired_unconfirmed`, la confirmation est refusée avec HTTP 409.
+  4. **Contrôle de version courante :** Vérifier que `is_current == True`. Si le voyageur tente de confirmer une version antérieure déjà remplacée par une correction partenaire, le serveur rejette la requête avec HTTP 409 (`"Declaration version is superseded"`).
+  5. **Contrôle d'échéance :** Vérifier que `utcnow() <= confirmation_deadline` (délai de 72 h non échu). Si le délai est dépassé, la déclaration bascule en `expired_unconfirmed` et la confirmation est refusée avec HTTP 409.
 - **Contestation d'une version périmée :** Une tentative de contester une déclaration avec `is_current == False` renvoie également une HTTP 409 (`"Cannot dispute a superseded declaration"`).
 
 ### 12.13 Traitement d'anomalie `needs_review` et blocage de flux (D15)
-- **Définition de `needs_review` :** Ce statut ou drapeau constitue un **blocage ferme d'anomalie** et non une simple information consultative.
+- **Représentation unique et cohérente :** Conformément à la recommandation d'architecture unifiée, le dossier d'anomalie est modélisé par la valeur de statut `status = "needs_review"` et la colonne explicative `review_reason = Column(Text, nullable=True)`, sans recourir à un booléen séparé redondant. Tant que la déclaration est sous ce statut, `confirmation_deadline` reste `NULL` (aucun compte à rebours de 72 h n'est enclenché).
 - **Déclencheurs :** Date de prestation déclarée absente, invalide, ou présentant un écart supérieur à 7 jours calendaires par rapport à la date prévue de la réservation (`booking_data["date"]`).
 - **Comportement :**
   - Aucun repli silencieux sur `Booking.created_at`.
-  - Le dossier est consigné avec son motif interne d'anomalie dans `service_declarations.status = "needs_review"` (ou `needs_review = True`), consultable par les opérateurs via le script CLI.
+  - Le dossier est consigné avec son motif interne d'anomalie (`review_reason`), horodaté dans `flagged_at = utcnow()`, consultable par les opérateurs via le script CLI.
   - Aucune notification n'est transmise au voyageur.
   - Aucun délai de 72 h ne commence à courir (aucun rappel n'est émis).
   - Le dossier ne peut jamais basculer automatiquement en `expired_unconfirmed`.

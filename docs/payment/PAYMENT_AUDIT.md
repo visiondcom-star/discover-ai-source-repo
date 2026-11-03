@@ -1,6 +1,6 @@
 # Audit du Dépôt — Domaine Réservation, Architecture Technique & Prérequis Paiement
 
-> **Document de référence :** Point de contrôle 1 du chantier paiement (conforme à `PAYMENT_ARCHITECTURE_V3.md`, section 5).  
+> **Document de référence :** Point de contrôle 1 du chantier paiement (conforme à `PAYMENT_ARCHITECTURE_V3.md` (document externe non versionné, non joint à cette PR), section 5).    
 > **Date de réalisation :** 30 octobre 2026.  
 > **Branche de travail :** `docs/payment-audit`.  
 > **Statut :** Travail d'audit en lecture seule du dépôt `discover-ai-source-repo`. Aucun code applicatif, aucune migration et aucune dépendance n'ont été modifiés.
@@ -109,7 +109,7 @@
   - **Conséquence directe :** Dans l'état actuel de l'application, **`confirmed` n'implique absolument pas que la réservation a été payée**. Une réservation `confirmed` signifie uniquement que la disponibilité a été validée (automatiquement ou par le partenaire).
   - `completed` : **N'EXISTE PAS** dans `Booking.status`. Le backend n'a pas d'état matérialisant la fin de la prestation touristique (cela devra faire l'objet de la table `service_completions` en V1).
   - `rejected` : **N'EXISTE PAS** sous ce nom. Le statut réel en base est `declined` (`backend/app/api/v1/endpoints/partner.py:325`).
-- **Conclusion d'architecture :** Conformément à la règle 2.1 de `PAYMENT_ARCHITECTURE_V3.md`, les statuts réels `("pending", "requested", "confirmed", "declined", "expired", "cancelled")` sont immuables. Le domaine Payment aura sa propre machine d'états sans modifier ces valeurs.
+- **Conclusion d'architecture :** Conformément à la règle 2.1 de `PAYMENT_ARCHITECTURE_V3.md` (document externe non versionné, non joint à cette PR), les statuts réels `("pending", "requested", "confirmed", "declined", "expired", "cancelled")` sont immuables. Le domaine Payment aura sa propre machine d'états sans modifier ces valeurs.
 
 ---
 
@@ -192,7 +192,7 @@
 - **Constat dans le modèle :**
   - `Booking.price` existe dans `backend/app/models.py:344` sous le type `Column(Float, nullable=True)`.
   - `Booking.currency` existe dans `backend/app/models.py:345` sous le type `Column(String(10))`.
-  - **Inadéquation du type Float :** La présence de `Column(Float)` contredit frontalement la règle 2.4 de `PAYMENT_ARCHITECTURE_V3.md` (« All monetary amounts must be stored as integers in the currency's minor units. Never use floating-point values »). **`Booking.price` ne doit en aucun cas être réutilisé pour les calculs financiers, commissions ou transactions**. Tout montant financier devra être stocké en centimes/unités mineures entières dans les tables financières dédiées.
+  - **Inadéquation du type Float :** La présence de `Column(Float)` contredit frontalement la règle 2.4 de `PAYMENT_ARCHITECTURE_V3.md` (document externe non versionné, non joint à cette PR) (« All monetary amounts must be stored as integers in the currency's minor units. Never use floating-point values »). **`Booking.price` ne doit en aucun cas être réutilisé pour les calculs financiers, commissions ou transactions**. Tout montant financier devra être stocké en centimes/unités mineures entières dans les tables financières dédiées.
 - **Réalité de l'alimentation au runtime :**
   - `Booking.currency` est systématiquement alimenté depuis `tenant.default_currency` à la création (`backend/app/api/v1/endpoints/bookings.py:120`).
   - **`Booking.price` N'EST JAMAIS ALIMENTÉ.** Lors de la création (`POST /api/v1/bookings/`), le champ `price` n'est pas passé au constructeur `Booking(...)` (`backend/app/api/v1/endpoints/bookings.py:113-126`). Il reste donc toujours `NULL` en base de données.
@@ -327,7 +327,7 @@ Puisqu'aucun montant fiable n'est stocké à ce jour, aucune commission ni trans
   - Colonnes : `id`, `tenant_id`, `user_id`, `type`, `booking_id`, `payload` (JSON), `locale`, `email_status`, `read_at`, `created_at`.
 - **Gabarits de notifications :** `backend/app/services/notification_templates.py:8-49` (`NOTIFICATION_TEMPLATES`).
   - Dictionnaire bilingue FR/EN structuré par type.
-- **Service d'émission :** `create_notification` dans `backend/app/services/notification_service.py:35-82`.
+- **Service d'émission :** `create_notification` dans `backend/app/services/notification_service.py:35-81`.
   - Prend en charge la résolution de langue (`resolve_locale`), la déduplication par savepoint SQL (`begin_nested()`), et le statut e-mail.
 
 ### 10.2 Où et comment ajouter les événements financiers
@@ -494,7 +494,7 @@ Afin de respecter le principe de non-régression et de préserver le fonctionnem
 ### 🔴 Urgence 4 (Structurant V1 / Politiques d'annulation) : Annulation d'une réservation confirmée
 
 - **Arbitrage requis :** Dans le code actuel, l'endpoint officiel `/cancel` interdit avec HTTP 409 toute annulation d'une réservation `confirmed` (constats §1.2 et §17.2). Faut-il ouvrir un flux explicite d'annulation d'une réservation confirmée (côté voyageur, partenaire ou administrateur), et selon quelles règles (délai de prévenance, motif, pénalités) ?
-- _Impact :_ Indispensable pour implémenter les politiques d'annulation versionnées (section 2.6 de `PAYMENT_ARCHITECTURE_V3.md`), déterminer si la commission Discover AI reste due en cas de désistement ou de no-show en V1, et piloter les remboursements en V2.
+- _Impact :_ Indispensable pour implémenter les politiques d'annulation versionnées (section 2.6 de `PAYMENT_ARCHITECTURE_V3.md` (document externe non versionné, non joint à cette PR)), déterminer si la commission Discover AI reste due en cas de désistement ou de no-show en V1, et piloter les remboursements en V2.
 
 ### 🟡 Urgence 5 (Moyen terme - Préparation V2) : Choix du pays de l'entité européenne et premier PSP
 
@@ -603,14 +603,14 @@ Cet addendum consigne les conclusions critiques issues de la relecture approfond
     ```
   - Une réservation `confirmed` **ne peut pas être annulée par le voyageur via le endpoint normal `/cancel`**.
 - **Conséquences majeures pour le projet Paiement :**
-  - Les politiques d'annulation (section 2.6 de `PAYMENT_ARCHITECTURE_V3.md` : délai d'annulation gratuite, heure limite, remboursement partiel/total) s'appliquent typiquement à des réservations qui ont été **confirmées**.
+  - Les politiques d'annulation (section 2.6 de `PAYMENT_ARCHITECTURE_V3.md` (document externe non versionné, non joint à cette PR) : délai d'annulation gratuite, heure limite, remboursement partiel/total) s'appliquent typiquement à des réservations qui ont été **confirmées**.
   - Or, dans l'architecture actuelle, une fois qu'une réservation est `confirmed`, le voyageur est totalement bloqué pour annuler via l'API officielle.
   - Pour supporter des politiques d'annulation et d'éventuels remboursements (V2/V3), le domaine Payment et les endpoints de réservation devront définir un nouveau flux d'annulation post-confirmation contrôlé par les règles financières de la politique d'annulation associée, sans rupture du contrat existant.
 
 ### 17.3 Inadéquation absolue de `Booking.price` (Float) pour la finance
 - Dans `backend/app/models.py:344`, `price = Column(Float, nullable=True)` utilise le type virgule flottante (`FLOAT`/`REAL` SQL).
 - Outre le fait qu'il n'est jamais alimenté par l'API actuelle (section 4), l'usage de nombres à virgule flottante présente des risques d'imprécision binaire inacceptables pour un grand livre financier (ex. `0.1 + 0.2 != 0.3`).
-- **Recommandation (à valider) :** `Booking.price` reste un champ dormant non exploité. Toutes les futures tables financières (`service_completions`, `commission_receivables`, `partner_ledger_entries`, `payment_transactions`) utiliseront exclusivement des entiers en unités mineures (centimes) avec métadonnées d'exposant de devise, conformément à la règle 2.4.
+- **Recommandation (à valider) :** `Booking.price` reste un champ dormant non exploité. Toutes les futures tables financières (`service_completions`, `commission_receivables`, `partner_ledger_entries`, `payment_transactions`) utiliseront exclusivement des entiers en unités mineures (centimes) avec métadonnées d'exposant de devise, conformément à la règle 2.4 (`PAYMENT_ARCHITECTURE_V3.md` (document externe non versionné, non joint à cette PR)).
 
 ### 17.4 Définition de la partie contractante partenaire : ambiguïté `User` vs `POI` vs `Organisation`
 - Dans la structure actuelle (`backend/app/models.py:366-389`), la relation partenaire est modélisée par `POIManager` liant un `user_id` à un `poi_id`.
@@ -706,7 +706,7 @@ Analyse des contrôles d'accès réels dans le code backend :
   - **Données financières et fiscales :** Le modèle actuel ne comporte aucune table financière, fiscale ou de facturation. Les permissions actuelles ne distinguent pas encore la gestion opérationnelle du POI de la déclaration financière (point souligné par `PAYMENT_DECISIONS_V1.md` §3 et §5, qui préconise l'introduction ultérieure du rôle `finance_operator`).
 
 ### 18.4 Scripts CLI existants : structure et authentification
-- **Script de référence :** `backend/app/create_tenant.py:1-104`.
+- **Script de référence :** `backend/app/create_tenant.py:1-103`.
 - **Structure d'exécution :**
   - Module Python autonome exécutable via `python -m app.create_tenant` (`backend/app/create_tenant.py:102-103`).
   - Analyse des arguments en ligne de commande via la bibliothèque standard `argparse` (`backend/app/create_tenant.py:27-40`).
@@ -778,7 +778,7 @@ Analyse des contrôles d'accès réels dans le code backend :
   - Le tenant "morocco" opère en devise `MAD` (`backend/app/initial_data.py:41`). Conformément à la règle de sécurité métier du §8, en l'absence d'entité juridique Discover AI au Maroc, aucune commission ne doit être activée pour les partenaires de ce tenant en V1.
 
 ### 18.7 Mécanisme AES-GCM existant (`CredentialCrypto`) : gestion des clés et réutilisabilité
-- **Implémentation :** `backend/app/services/credential_crypto.py:25-113`.
+- **Implémentation :** `backend/app/services/credential_crypto.py:25-112`.
 - **Caractéristiques cryptographiques :**
   - Algorithme : Chiffrement symétrique authentifié **AES-256-GCM** via la bibliothèque `cryptography.hazmat.primitives.ciphers.aead.AESGCM` (`backend/app/services/credential_crypto.py:84-86, 97`).
   - Clés : Clés maîtres de 32 octets (256 bits), fournies en hexadécimal (64 caractères hex) (`KEY_SIZE = 32`, ligne 37).

@@ -1,6 +1,6 @@
 # Architecture & Design Technique — Domaine Paiement & Fondation Financière V1
 
-> **Document de référence :** Point de contrôle 2 du chantier paiement (conforme à `PAYMENT_ARCHITECTURE_V3.md` section 4 et 5, et `PAYMENT_DECISIONS_V1.md` §1 à §16 intégrant les amendements A1 à A14).  
+> **Document de référence :** Point de contrôle 2 du chantier paiement (conforme à `PAYMENT_ARCHITECTURE_V3.md` (document externe non versionné, non joint à cette PR) section 4 et 5, et `docs/payment/PAYMENT_DECISIONS_V1.md` §1 à §16 intégrant les amendements A1 à A14).    
 > **Date de rédaction :** 1er novembre 2026.  
 > **Branche de travail :** `docs/payment-decisions-v1`.  
 > **Statut :** DOCUMENTATION TECHNIQUE DE CONCEPTION (DESIGN). Aucun code applicatif, aucune migration Alembic, aucune dépendance et aucun test n'ont été modifiés sur le dépôt. Aucune conclusion juridique ou fiscale n'est formulée (les aspects réglementaires et légaux sont consignés dans `PAYMENT_COMPLIANCE.md`).
@@ -29,7 +29,7 @@ Conformément à `PAYMENT_DECISIONS_V1.md` §14, la fondation financière repose
 | Délai de réponse de 72 h configurable par tenant et rappels périodiques | **V1a** | Tâche d'arrière-plan / worker périodique (`backend/app/services/notification_worker.py:91-105`) |
 | Calcul et snapshot immuable de la commission (`service_completions`, `commission_receivables`) | **V1a** | Uniquement après confirmation du voyageur |
 | Journal d'audit financier append-only (`financial_audit_log`)                                                                 | **V1a** | Immuabilité et traçabilité des opérations                                              |
-| Script CLI de consultation financière en lecture seule                                                                        | **V1a** | Modèle `backend/app/create_tenant.py:1-104`                                            |
+| Script CLI de consultation financière en lecture seule                                                                        | **V1a** | Modèle `backend/app/create_tenant.py:1-103`                                            |
 | Rôle nominatif `finance_operator` et matrice de permissions fines                                                             | **V1b** | V1a validée                                                                            |
 | Cycle complet de contestation et résolution humaine (6 étapes, justifications)                                                | **V1b** | Rôle `finance_operator` (`PAYMENT_DECISIONS_V1.md` §5, A2)                             |
 | Relevés de commission Discover AI et saisie des références de factures externes                                               | **V1b** | `commission_receivables` V1a (`PAYMENT_DECISIONS_V1.md` §11, A7)                       |
@@ -57,7 +57,7 @@ Sont formellement exclus de la version V1 (`PAYMENT_DECISIONS_V1.md` §1, §10, 
 - Aucune collecte ni stockage de coordonnées bancaires partenaires (RIB, IBAN, cartes) : Discover AI n'effectue aucun versement aux partenaires en V1 (`PAYMENT_DECISIONS_V1.md` §10, A6).
 - Aucune émission de facture fiscale officielle : seuls des relevés de commission internes sont produits, avec enregistrement facultatif du numéro de facture externe (`PAYMENT_DECISIONS_V1.md` §11, A7).
 - Aucune conversion de devises : chaque opération est libellée et conservée dans la devise déclarée (`PAYMENT_DECISIONS_V1.md` §9).
-- Aucun rôle de « super-administrateur » global de plateforme : l'isolation multi-tenant demeure absolue (`backend/app/core/tenant.py:1-25`, `backend/app/dependencies.py:144-155`).
+- Aucun rôle de « super-administrateur » global de plateforme : l'isolation multi-tenant demeure absolue (`backend/app/core/tenant.py:1-24`, `backend/app/dependencies.py:144-155`).
 
 ---
 
@@ -211,7 +211,7 @@ Par ailleurs, un POI peut avoir 3 gérants distincts, et un même professionnel 
     *Avantages :* Évite la duplication si plusieurs tenants partagent la même entité juridique.  
     *Risques :* Contrevient au principe architectural non négociable 2 de `CLAUDE.md:59` (*« tenant_id auf allen Kernentitäten »* [tenant_id sur toutes les entités clés]) ainsi qu'à la section *Tenant-Administration* de `CLAUDE.md:79` (*« Es gibt bewusst keinen Super-Admin auf Plattformebene »* [Il n'y a délibérément aucun super-admin au niveau plateforme]), et complique les filtres de requêtes multi-tenant.
   - **Option B (Scoping strict par tenant, une ligne par tenant — Recommandation) :** Chaque tenant déclare formellement son entité juridique responsable dans `legal_entities` avec clé étrangère `tenant_id`. En V1, seul le tenant `algeria` possède une entité active (`country_code="DZ"`).  
-    *Avantages :* Respecte à 100 % l'isolation multi-tenant stricte (`backend/app/core/tenant.py:1-25`), simplifie les contrôles de sécurité et les cascades de suppression.  
+    *Avantages :* Respecte à 100 % l'isolation multi-tenant stricte (`backend/app/core/tenant.py:1-24`), simplifie les contrôles de sécurité et les cascades de suppression.    
     *Risques :* Duplication de métadonnées si plusieurs tenants partagent une structure juridique future.
   - > **DÉCISION PROPRIÉTAIRE REQUISE :** Valider l'Option B (scoping strict par tenant avec `tenant_id` sur `legal_entities`, alignée sur le principe 2 de CLAUDE.md) ou l'Option A (entité plateforme globale liée par configuration).
 - **Colonnes :**
@@ -233,7 +233,7 @@ Par ailleurs, un POI peut avoir 3 gérants distincts, et un même professionnel 
   - `tenant_id` : `UUID`, Clé Étrangère vers `tenants.id`, non nulle, indexée.
   - `legal_name` : `String(200)`, raison sociale contractante.
   - `trade_register_number` : `String(100)`, numéro de registre du commerce (chiffré au repos ou texte selon sensibilité).
-  - `tax_identification_number` : `String(100)`, numéro d'identification fiscale (chiffré via `CredentialCrypto`, `backend/app/services/credential_crypto.py:25-113`).
+  - `tax_identification_number` : `String(100)`, numéro d'identification fiscale (chiffré via `CredentialCrypto`, `backend/app/services/credential_crypto.py:25-112`).
   - `country_code` : `String(2)`, code ISO 3166-1 alpha-2 du partenaire (utilisé pour la vérification pays/entité).
   - `billing_address` : `JSON`, coordonnées postales et administratives.
   - `billing_contact_user_id` : `UUID`, Clé Étrangère vers `users.id` (contact principal habilité pour la finance).
@@ -543,7 +543,7 @@ L'identifiant externe `Booking.external_id` (format `EXT-{str(booking.id)[:8]}`,
 
 ### Recommandation
 
-Pour la V1a, **l'Option A est vivement recommandée** : elle offre la friction minimale, réutilise intégralement l'infrastructure de notifications in-app existante (`mobile/lib/screens/bookings_screen.dart:292-328` et `backend/app/services/notification_service.py:35-82`), et s'adapte parfaitement au cycle de notification prévu. L'Option B ou C pourra être introduite en V1b ou V2 comme couche de contrôle renforcée sur échantillon.
+Pour la V1a, **l'Option A est vivement recommandée** : elle offre la friction minimale, réutilise intégralement l'infrastructure de notifications in-app existante (`mobile/lib/screens/bookings_screen.dart:292-328` et `backend/app/services/notification_service.py:35-81`), et s'adapte parfaitement au cycle de notification prévu. L'Option B ou C pourra être introduite en V1b ou V2 comme couche de contrôle renforcée sur échantillon.
 
 > **DÉCISION PROPRIÉTAIRE REQUISE :** Valider l'Option A (déclaration partenaire + confirmation in-app voyageur) pour la livraison autonome V1a.
 
@@ -553,7 +553,7 @@ Pour la V1a, **l'Option A est vivement recommandée** : elle offre la friction m
 
 ### 7.1 Nouveaux Endpoints Backend (FastAPI)
 
-Tous les endpoints sont montés avec isolation stricte par tenant via `x_tenant_slug: str = Header(...)` et résolution par `get_tenant_from_header` (`backend/app/core/tenant.py:1-25`).
+Tous les endpoints sont montés avec isolation stricte par tenant via `x_tenant_slug: str = Header(...)` et résolution par `get_tenant_from_header` (`backend/app/core/tenant.py:1-24`).
 
 1. `POST /api/v1/partner/bookings/{booking_id}/declare` :
    - **Acteur :** Partenaire rattaché au POI (`_require_partner`, `backend/app/api/v1/endpoints/partner.py:89`).
@@ -618,12 +618,12 @@ Conformément à `PAYMENT_DECISIONS_V1.md` §4 et A14, le voyageur dispose d'un 
 1. **Infrastructure réutilisée :** Le worker d'arrière-plan existant (`backend/app/services/notification_worker.py:91-105`) implémente déjà l'acquisition atomique par lots sans contention via `SELECT FOR UPDATE SKIP LOCKED` (`claim_batch`), les politiques de baux expirables (`locked_until`), et les relances cadencées (`RETRY_DELAYS`, `next_attempt_at`, lignes 19-25).
 2. **Balayage cadencé :**
    - Une fonction périodique `dispatch_pending_confirmation_reminders(db: AsyncSession)` inspecte les déclarations actives dans `service_declarations` avec `status == "declared"`.
-   - Si le délai restant avant `confirmation_deadline` est compris entre 24 h et 25 h (soit 48 h après la déclaration initiale), et qu'aucune notification de relance n'a encore été envoyée pour cette réservation, le système émet une notification `service_confirmation_reminder` au voyageur via `create_notification` (`backend/app/services/notification_service.py:35-82`).
+   - Si le délai restant avant `confirmation_deadline` est compris entre 24 h et 25 h (soit 48 h après la déclaration initiale), et qu'aucune notification de relance n'a encore été envoyée pour cette réservation, le système émet une notification `service_confirmation_reminder` au voyageur via `create_notification` (`backend/app/services/notification_service.py:35-81`).
    - L'idempotence de la relance est garantie par l'index `uq_notifications_booking_unique` sur le type `service_confirmation_reminder`.
 
 ### 7.4 Script CLI de reporting financier (`app/reporting_finance.py`)
 
-- Développé selon le standard strict de `backend/app/create_tenant.py:1-104`.
+- Développé selon le standard strict de `backend/app/create_tenant.py:1-103`.
 - **Usage :** `python -m app.reporting_finance --tenant-slug algeria --format csv --output /tmp/commissions_algeria.csv`.
 - **Fonctionnalités :** Lecture seule, extraction des déclarations, des prestations confirmées et des créances de commission, sans aucune dépendance HTTP ni exposition réseau.
 
@@ -639,7 +639,7 @@ Conformément à `PAYMENT_DECISIONS_V1.md` §4 et A14, le voyageur dispose d'un 
 
 ### 8.2 Ordre de succession des révisions Alembic
 
-La dernière révision en date sur `main` est `0016_backfill_skipped_notifs.py` (`backend/alembic/versions/0016_backfill_skipped_notifs.py:1-30`).
+La dernière révision en date sur `main` est `0016_backfill_skipped_notifs.py` (`backend/alembic/versions/0016_backfill_skipped_notifs.py:1-29`).
 
 1. **Révision `0017_financial_foundation_entities` :** Création des tables `legal_entities`, `partner_profiles`, `partner_poi_assignments`, `commission_rules`.
 2. **Révision `0018_service_declarations_receivables` :** Création des tables `service_declarations`, `service_completions`, `commission_receivables`, `financial_audit_log` (avec trigger d'immuabilité).

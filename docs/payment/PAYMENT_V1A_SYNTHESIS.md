@@ -35,7 +35,7 @@ La fondation financière V1a requiert strictement les 8 tables suivantes :
 
 ## 3. Endpoints à créer ou modifier
 
-Tous les endpoints respectent l'en-tête obligatoire `X-Tenant-Slug` (`backend/app/core/tenant.py:1-25`).
+Tous les endpoints respectent l'en-tête obligatoire `X-Tenant-Slug` (`backend/app/core/tenant.py:1-24`).
 
 1. `POST /api/v1/partner/bookings/{booking_id}/declare` :
    - **Acteur :** Partenaire lié au POI (`_require_declaring_partner`, excluant `is_admin == True`, vérifiant `POIManager` et `partner_poi_assignments`).
@@ -72,7 +72,7 @@ Tous les endpoints respectent l'en-tête obligatoire `X-Tenant-Slug` (`backend/a
 - `backend/tests/test_booking_modes.py:23-52` : Défense des modes de réservation (`test_info_only_poi_cannot_be_booked`, `test_unsupported_mode_is_rejected_defensively`, `test_booking_freezes_mode_and_sets_sla_only_for_manual_confirm`).
 - `backend/tests/test_partner_manual_confirm.py:194-284` : Cycle partenaire `manual_confirm` (`test_partner_confirms_booking_sets_metadata_and_external_id`, `test_partner_declines_booking`, etc.).
 - `backend/tests/test_notifications_emission.py:41-260` : Émissions de notifications et isolation tenant (`test_expire_overdue_requests_notifies_both_once_and_respects_tenant_isolation`).
-- `backend/tests/test_tenant_defaults.py:1-20` : Test de repli des paramètres par défaut (`test_tenant_default_primary_color`, à étendre).
+- `backend/tests/test_tenant_defaults.py:1-19` : Test de repli des paramètres par défaut (`test_tenant_default_primary_color`, à étendre).
 - `mobile/test/models/booking_statuses_test.dart:9` et `mobile/test/booking_flow_test.dart:113, 134`.
 
 ### 5.2 Nouveaux tests à introduire en V1a
@@ -89,7 +89,7 @@ Tous les endpoints respectent l'en-tête obligatoire `X-Tenant-Slug` (`backend/a
 
 1. **Isolation multi-tenant étanche :** Chaque table financière (à l'exception de l'entité plateforme globale) porte `tenant_id` avec clé étrangère non nulle. Toute requête filtre par `tenant_id` ; toute tentative cross-tenant renvoie HTTP 404 (`backend/app/dependencies.py:144-155`).
 2. **Règle pays/entité côté serveur :** La vérification `partner_profile.country_code == legal_entity.country_code` est exécutée au cœur du service métier, empêchant toute facturation transfrontalière en V1a.
-3. **Sécurité cryptographique :** Les numéros d'identification fiscale sont chiffrés au repos via AES-256-GCM (`CredentialCrypto`, `backend/app/services/credential_crypto.py:25-113`).
+3. **Sécurité cryptographique :** Les numéros d'identification fiscale sont chiffrés au repos via AES-256-GCM (`CredentialCrypto`, `backend/app/services/credential_crypto.py:25-112`).
 4. **Arithmétique entière exacte :** Aucun type `Float` n'est employé ; tous les montants sont en centimes (`BigInteger`) et les taux en points de base (`Integer`).
 5. **Immuabilité du journal d'audit :** Protégée au niveau applicatif et par un trigger PostgreSQL interdisant formellement `UPDATE` et `DELETE`.
 

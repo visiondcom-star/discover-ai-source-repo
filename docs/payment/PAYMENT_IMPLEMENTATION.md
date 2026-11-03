@@ -165,7 +165,7 @@ Deux options sont soumises à l'arbitrage du propriétaire (Dépendance **D12**)
   - `backend/app/initial_data.py` (alimentation explicite de `country_code` pour les nouvelles bases).
   - `backend/tests/test_tenant_defaults.py` (fichier existant créé par la PR #47, à étendre).
 - **Migration :** Révision Alembic de données (ex. `0017_backfill_tenant_country_codes.py` ou intégrée à la migration de schéma V1a).
-- **Tests à étendre :** Le fichier `backend/tests/test_tenant_defaults.py:1-20` existe déjà et protège actuellement `test_tenant_default_primary_color`. Il sera étendu avec :
+- **Tests à étendre :** Le fichier `backend/tests/test_tenant_defaults.py:1-19` existe déjà et protège actuellement `test_tenant_default_primary_color`. Il sera étendu avec :
   - `test_tenant_seed_populates_country_code_dz`
   - `test_tenant_config_contains_service_confirmation_sla_hours`
 - **Critère d'acceptation :** Tous les tenants ont un `country_code` non nul à 2 lettres et un SLA de confirmation à 72 heures.
@@ -241,7 +241,7 @@ Deux options sont soumises à l'arbitrage du propriétaire (Dépendance **D12**)
 ### Étape 1.7 — Script CLI de reporting financier en lecture seule
 - **Objectif :** Développer le module d'administration autonome `app.reporting_finance` pour extraire les créances et déclarations par tenant en format CSV.
 - **Fichiers à modifier / créer :**
-  - `backend/app/reporting_finance.py` (architecture CLI calquée sur `backend/app/create_tenant.py:1-104`).
+  - `backend/app/reporting_finance.py` (architecture CLI calquée sur `backend/app/create_tenant.py:1-103`).
 - **Tests à écrire :** `backend/tests/test_reporting_finance_cli.py` :
   - `test_cli_exports_tenant_receivables_csv`
   - `test_cli_respects_tenant_isolation`

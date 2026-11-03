@@ -461,7 +461,7 @@ Par conséquent, une condition d'éligibilité du type `end_date <= utcnow().dat
        *Avantages :* Conforme au principe de prudence et au §4 de `PAYMENT_DECISIONS_V1.md` (*« L'absence de réponse n'est pas une preuve de réalisation et aucune facturation automatique n'est déclenchée »*).  
        *Risques :* Nécessite une intervention humaine pour débloquer les créances.
 
-> **DÉCISION PROPRIÉTAIRE REQUISE :** Trancher formellement entre l'Option A (confirmation tacite après 72 h) et l'Option B (mise en attente `expired_unconfirmed` sans calcul automatique, conforme au §4).
+> **STATUT : TRANCHÉ PAR D5/E2** (`docs/payment/PAYMENT_DECISIONS_V1.md:229`). L'Option B est formellement retenue : après 72 h sans confirmation voyageur, la déclaration bascule en `expired_unconfirmed` ; aucune commission n'est calculée ni exigible à ce stade ; aucune facturation automatique n'est déclenchée. Le dossier est soumis au contrôle humain d'un opérateur financier en V1b.
 
 ### 4.3 Formule de calcul de la commission et politique d'arrondi
 
@@ -695,18 +695,22 @@ Ces constats sont consignés à titre d'information architecturale et **ne doive
 
 ---
 
-## 11. Risques et questions ouvertes (Décisions Propriétaire Requises)
+## 11. Risques et questions ouvertes (Statut des décisions après arbitrage du point de contrôle 2)
 
-1. **DÉCISION PROPRIÉTAIRE REQUISE 1 :** Confirmer que seul le mode de réservation `manual_confirm` est éligible à la déclaration de prestation et au calcul de commission en V1a, les modes `request` et `pay_on_site` étant exclus jusqu'à réévaluation en V1b (§2).
-2. **DÉCISION PROPRIÉTAIRE REQUISE 2 :** Valider la création des tables autonomes `partner_profiles` et `partner_poi_assignments` pour isoler la relation contractuelle financière sans dénaturer la table opérationnelle `poi_managers` (§3.1).
-3. **DÉCISION PROPRIÉTAIRE REQUISE 3 :** Arbitrer le modèle d'attachement de `legal_entities` entre l'Option A (entité globale de plateforme sans `tenant_id`) et l'Option B (scoping strict par tenant avec `tenant_id`, alignée sur le principe 2 de CLAUDE.md) (§3.2).
-4. **DÉCISION PROPRIÉTAIRE REQUISE 4 :** Arbitrer la source de la date de prestation entre l'Option A (saisie par le partenaire à la déclaration, bornée au présent/passé), l'Option B (colonne dédiée ajoutée sur `Booking`), et l'Option C (clé obligatoire dans `booking_data`) (§4.1).
-5. **DÉCISION PROPRIÉTAIRE REQUISE 5 :** Arbitrer le traitement de l'expiration du délai de 72 h alloué au voyageur entre l'Option A (confirmation tacite automatique) et l'Option B (mise en attente `expired_unconfirmed` sans calcul de commission, recommandée par `PAYMENT_DECISIONS_V1.md` §4) (§4.2).
-6. **DÉCISION PROPRIÉTAIRE REQUISE 6 :** Valider la politique d'arrondi explicite de la commission entre l'Option A (arrondi à l'unité mineure inférieure / floor) et l'Option B (arrondi bancaire demi-pair) (§4.3).
-7. **DÉCISION PROPRIÉTAIRE REQUISE 7 :** Arbitrer le rôle de l'administrateur du tenant pour la déclaration de prestation entre l'Option A (interdiction stricte réservée aux gestionnaires de POI) et l'Option B (autorisation en secours avec motif d'audit obligatoire) (§5).
-8. **DÉCISION PROPRIÉTAIRE REQUISE 8 :** Valider l'Option A pour la gestion de l'unicité des notifications (types d'événements distincts sans toucher à l'index partiel `uq_notifications_booking_unique` en base) (§7.3).
-9. **DÉCISION PROPRIÉTAIRE REQUISE 9 :** Valider l'Option A pour le mécanisme de preuve de prestation en V1a (déclaration partenaire couplée à une confirmation in-app du voyageur), écartant les contraintes matérielles des justificatifs papiers ou scanners QR sur place (§6).
-10. **DÉCISION PROPRIÉTAIRE REQUISE 10 :** Confirmer le gel complet des commissions sur le tenant `morocco` en V1 en application stricte de la règle de sécurité métier pays/entité (§3.3).
+Les décisions initiales listées ci-dessous ont été formellement arbitrées par le propriétaire du projet lors du point de contrôle 2 (renvoi vers `docs/payment/PAYMENT_DECISIONS_V1.md:224-241` et section 12) :
+
+1. **DÉCISION 1 (Modes éligibles) : TRANCHÉE PAR D1.** Seul le mode `manual_confirm` est éligible en V1a. Les modes `request` et `pay_on_site` restent hors commission V1a.
+2. **DÉCISION 2 (Tables partenaire) : TRANCHÉE PAR D2.** Deux tables dédiées sont créées : `partner_profiles` et `partner_poi_assignments`.
+3. **DÉCISION 3 (Entité juridique) : TRANCHÉE PAR D3/E3.** Une seule entité Discover AI en V1 (algérienne, sans `tenant_id`), référencée par une table de configuration par tenant `tenant_legal_entity_configs`.
+4. **DÉCISION 4 (Date de prestation) : TRANCHÉE PAR D4.** Date `service_date` saisie par le partenaire (bornée au présent/passé), sans modification de `bookings`. Contrôle d'anomalie (`needs_review`) si la date est trop éloignée.
+5. **DÉCISION 5 (Expiration 72 h) : TRANCHÉE PAR D5/E2.** Statut `expired_unconfirmed` sans calcul automatique ni commission exigible. Résolution en V1b.
+6. **DÉCISION 6 (Arrondi) : TRANCHÉE PAR D6.** Calcul exact sur entiers et taux en points de base (`rate_bps`), aucun float. Résultat et mode d'arrondi conservés ; convention d'arrondi à valider par l'expert-comptable avant facturation.
+7. **DÉCISION 7 (Rôle de l'administrateur tenant) : TRANCHÉE PAR D7/E4.** L'administrateur du tenant ne peut pas déclarer de prestation en V1a ni accéder aux profils fiscaux.
+8. **DÉCISION 8 (Unicité des notifications) : TRANCHÉE PAR D8.** Sept types de notifications distincts compatibles avec l'index partiel `uq_notifications_booking_unique`.
+9. **DÉCISION 9 (Preuve de prestation) : TRANCHÉE PAR D9.** Confirmation in-app par le voyageur authentifié. QR code non obligatoire en V1a.
+10. **DÉCISION 10 (Tenant Maroc) : TRANCHÉE PAR D10.** Commission strictement désactivée par la règle de sécurité pays/entité côté serveur.
+
+*(Les nouvelles questions ouvertes D13 à D16 sont consignées dans `docs/payment/PAYMENT_DECISIONS_V1.md:243-268` et `docs/payment/PAYMENT_IMPLEMENTATION.md`).*
 
 
 ---
@@ -750,7 +754,7 @@ Cette section consigne les impacts techniques précis des arbitrages D1 à D12 v
 - La table `service_declarations` inclut `service_date = Column(Date, nullable=False)` saisie par le partenaire.
 - Gardes-fous côté serveur :
   - `service_date <= utcnow().date()` (date obligatoirement passée ou du jour).
-  - Contrôle de cohérence temporelle : si la date déclarée est trop éloignée de la réservation (ex. écart supérieur au seuil configurable dans `Tenant.config["max_declaration_delay_days"]`, défaut 30 jours), le système ne valide pas silencieusement la déclaration mais positionne le drapeau `needs_review = Column(Boolean, default=False, nullable=False)` à `True`. Ce drapeau est consultable en CLI sans bloquer arbitrairement la saisie.
+  - Contrôle de cohérence temporelle : si la date déclarée est trop éloignée de la réservation (ex. écart supérieur au seuil configurable dans `Tenant.config["max_declaration_delay_days"]`, défaut 7 jours), le système ne valide pas silencieusement la déclaration mais positionne le drapeau `needs_review = Column(Boolean, default=False, nullable=False)` à `True`. Ce drapeau est consultable en CLI sans bloquer arbitrairement la saisie.
 
 ### 12.5 Statuts du cycle de confirmation financière (D5/E2)
 - Le cycle financier de `service_declarations.status` adopte les états fermés : `"declared"`, `"confirmed"`, `"disputed"`, `"expired_unconfirmed"`, `"superseded"`.

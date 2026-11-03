@@ -8,7 +8,7 @@
 
 ## 1. Tables réellement nécessaires en V1a (Liste minimale)
 
-La fondation financière V1a requiert strictement les 8 tables suivantes :
+La fondation financière V1a requiert strictement les 9 tables suivantes :
 
 1. `legal_entities` : Modélise la société Discover AI au niveau plateforme (sans `tenant_id`, une seule ligne en V1 : Algérie, `country_code = "DZ"`).
 2. `tenant_legal_entity_configs` : Table d'association associant chaque tenant à son entité légale (`tenant_id` UNIQUE, `legal_entity_id`, `created_at`).
@@ -25,11 +25,11 @@ La fondation financière V1a requiert strictement les 8 tables suivantes :
 ## 2. Migrations Alembic proposées
 
 - **Révision 0017 (`0017_financial_foundation_entities.py`) :**  
-  Création des tables de structure : `legal_entities`, `tenant_legal_entity_configs`, `partner_profiles`, `partner_poi_assignments`, `commission_rules`. Réversible par suppression dans l'ordre inverse (`alembic downgrade 0016`).
-- **Révision 0017-bis (`0017_backfill_tenant_country_codes.py`) :**  
-  Migration de données idempotente alimentant `Tenant.country_code` (`algeria` -> `"DZ"`, `morocco` -> `"MA"`) et initialisant `Tenant.config["service_confirmation_sla_hours"] = 72`.
-- **Révision 0018 (`0018_service_declarations_receivables.py`) :**  
-  Création des tables opérationnelles : `service_declarations`, `service_completions`, `commission_receivables`, `financial_audit_log`, et du trigger PostgreSQL interdisant tout `UPDATE` ou `DELETE` sur le journal d'audit. Réversible par `alembic downgrade 0017`.
+  Création des tables de structure : `legal_entities`, `tenant_legal_entity_configs`, `partner_profiles`, `partner_poi_assignments`, `commission_rules`. Réversible par suppression dans l'ordre inverse (`alembic downgrade 0016`). Identifiant de révision unique : `0017_financial_foundation_entities`.
+- **Révision 0018 (`0018_backfill_tenant_country_codes.py`) :**  
+  Migration de données idempotente avec identifiant de révision unique distinct (`0018_backfill_tenant_country_codes`, révisant `0017_financial_foundation_entities`), alimentant `Tenant.country_code` (`algeria` -> `"DZ"`, `morocco` -> `"MA"`) et initialisant `Tenant.config["service_confirmation_sla_hours"] = 72`.
+- **Révision 0019 (`0019_service_declarations_receivables.py`) :**  
+  Création des tables opérationnelles (révisant `0018_backfill_tenant_country_codes`) : `service_declarations`, `service_completions`, `commission_receivables`, `financial_audit_log`, et du trigger PostgreSQL interdisant tout `UPDATE` ou `DELETE` sur le journal d'audit. Réversible par `alembic downgrade 0018`. L'unicité stricte de chaque identifiant de révision évite tout conflit de nommage (pas de doublon 0017/0017-bis).
 
 ---
 
@@ -42,7 +42,7 @@ Tous les endpoints respectent l'en-tête obligatoire `X-Tenant-Slug` (`backend/a
    - **Contrôles :** `Booking.status == "confirmed"`, mode `manual_confirm`, `service_date <= utcnow().date()`, plafond d'une seule correction (`correction_count < 1`), détection d'anomalie de date (`needs_review`). Fige `legal_entity_id` et `applied_rate_bps`.
 2. `POST /api/v1/bookings/{booking_id}/confirm-service` :
    - **Acteur :** Voyageur propriétaire authentifié (`current_user.id == Booking.user_id`).
-   - **Contrôles :** Déclaration active en statut `declared`. Crée `service_completions` et `commission_receivables`, émet la notification `service_confirmed`.
+   - **Contrôles :** Déclaration active en statut `declared`. Le voyageur transmet et confirme explicitement la version précise de la déclaration acceptée (`declaration_id` et numéro de version/correction). Crée `service_completions` et `commission_receivables`, émet la notification `service_confirmed`.
 3. `POST /api/v1/bookings/{booking_id}/dispute-service` :
    - **Acteur :** Voyageur propriétaire authentifié.
    - **Contrôles :** Délai de 72 h non échu. Saisie obligatoire de `dispute_reason`. Bascule la déclaration à `disputed` et gèle tout calcul de commission.
@@ -58,7 +58,7 @@ Tous les endpoints respectent l'en-tête obligatoire `X-Tenant-Slug` (`backend/a
 | ----------------------------------------- | -------------------------- | -------------------------------------------------- | ---------------------------------- | --------------------------------- |
 | Déclarer une prestation                   | Non                        | **Oui** (si rattaché au POI et affectation active) | **Non** (exclu en V1a, D7)         | Non (maintenance V1b)             |
 | Confirmer / contester une prestation      | **Oui** (ses réservations) | Non                                                | Non                                | Non                               |
-| Consulter les déclarations                | Ses réservations           | Ses POI                                            | Tout le tenant                     | Tout le tenant                    |
+| Consulter les déclarations                | Ses réservations           | Ses POI                                            | Tout le tenant (compatible avec D7 : consultation opérationnelle des réservations et montants déclarés sans accès aux données fiscales) | Tout le tenant                    |
 | Consulter les profils fiscaux partenaires | Non                        | Non                                                | **Non** (exclu en V1a, D7)         | **Oui** (CLI direct)              |
 | Reporting financier (CSV)                 | Non                        | Non                                                | Non                                | **Oui** (`app.reporting_finance`) |
 
@@ -91,7 +91,7 @@ Tous les endpoints respectent l'en-tête obligatoire `X-Tenant-Slug` (`backend/a
 2. **Règle pays/entité côté serveur :** La vérification `partner_profile.country_code == legal_entity.country_code` est exécutée au cœur du service métier, empêchant toute facturation transfrontalière en V1a.
 3. **Sécurité cryptographique :** Les numéros d'identification fiscale sont chiffrés au repos via AES-256-GCM (`CredentialCrypto`, `backend/app/services/credential_crypto.py:25-112`).
 4. **Arithmétique entière exacte :** Aucun type `Float` n'est employé ; tous les montants sont en centimes (`BigInteger`) et les taux en points de base (`Integer`).
-5. **Immuabilité du journal d'audit :** Protégée au niveau applicatif et par un trigger PostgreSQL interdisant formellement `UPDATE` et `DELETE`.
+5. **Immuabilité et confidentialité du journal d'audit :** Protégée au niveau applicatif et par un trigger PostgreSQL interdisant formellement `UPDATE` et `DELETE`. Le journal d'audit `financial_audit_log` ne contient **jamais de donnée fiscale en clair** : les numéros d'identification fiscale (`tax_identification_number`) et données sensibles sont formellement exclus des payloads JSON (`payload_before` / `payload_after`) ou masqués.
 
 ---
 

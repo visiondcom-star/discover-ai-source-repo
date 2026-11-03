@@ -262,7 +262,7 @@ Le propriétaire du projet a formellement tranché les décisions D1 à D12 lors
 - **D15 — Confirmation voyageur après `expired_unconfirmed` et seuil de date éloignée (D4) :**
   - *Option A :* La confirmation voyageur reste acceptée après expiration des 72 h et réactive le calcul de commission.
   - *Option B :* La confirmation est refusée après expiration et le dossier est définitivement renvoyé vers V1b.
-  - *Définition du contrôle de date éloignée (D4) :* Fixation du seuil configurable (ex. 30 jours après la date de réservation) et qualification du contrôle en V1a (drapeau `needs_review = True` visible en CLI sans acceptation silencieuse).
+  - *Définition du contrôle de date éloignée (D4) :* Fixation du seuil configurable (ex. 7 jours après la date de réservation) et qualification du contrôle en V1a (drapeau `needs_review = True` visible en CLI sans acceptation silencieuse).
   - > **DÉCISION PROPRIÉTAIRE REQUISE (D15).**
 - **D16 — Cas d'un utilisateur cumulatif (Admin du tenant et `POIManager` du POI) :**
   - *Option A :* L'utilisateur peut déclarer en tirant son autorité exclusivement de son rattachement `POIManager` au POI.

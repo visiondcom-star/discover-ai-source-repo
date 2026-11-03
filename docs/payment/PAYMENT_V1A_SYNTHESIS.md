@@ -91,7 +91,7 @@ Tous les endpoints respectent l'en-tête obligatoire `X-Tenant-Slug` (`backend/a
 2. **Règle pays/entité côté serveur :** La vérification `partner_profile.country_code == legal_entity.country_code` est exécutée au cœur du service métier, empêchant toute facturation transfrontalière en V1a.
 3. **Sécurité cryptographique :** Les numéros d'identification fiscale sont chiffrés au repos via AES-256-GCM (`CredentialCrypto`, `backend/app/services/credential_crypto.py:25-112`).
 4. **Arithmétique entière exacte :** Aucun type `Float` n'est employé ; tous les montants sont en centimes (`BigInteger`) et les taux en points de base (`Integer`).
-5. **Immuabilité et confidentialité du journal d'audit :** Protégée au niveau applicatif et par un trigger PostgreSQL interdisant formellement `UPDATE` et `DELETE`. Le journal d'audit `financial_audit_log` ne contient **jamais de donnée fiscale en clair** : les numéros d'identification fiscale (`tax_identification_number`) et données sensibles sont formellement exclus des payloads JSON (`payload_before` / `payload_after`) ou masqués.
+5. **Immuabilité et confidentialité du journal d'audit :** Protégée au niveau applicatif et par un trigger PostgreSQL interdisant formellement `UPDATE` et `DELETE`. Le journal d'audit `financial_audit_log` ne contient **jamais de donnée fiscale en clair** : aucun numéro fiscal (`tax_identification_number`) ni donnée sensible ne figure en clair dans `payload_before` / `payload_after`, ni dans les logs (règle absolue sans exception).
 
 ---
 

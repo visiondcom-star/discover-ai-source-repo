@@ -789,3 +789,48 @@ Chaque type étant unique par `booking_id`, aucun conflit d'insertion silencieux
 
 ### 12.10 Gel des contestations en V1a (D12/E1)
 - Une déclaration passant à `status = "disputed"` fige immédiatement le dossier. Aucun recalcul de commission n'est déclenché. Le script CLI `app.reporting_finance` permet uniquement d'extraire ces dossiers sous statut contesté pour revue en V1b, sans modification manuelle en V1a.
+
+
+### 12.11 Provisionnement des partenaires par script CLI sécurisé (D13)
+- Un script d'administration distinct `app/provision_partner.py` (séparé du script de consultation `app/reporting_finance.py`) est conçu pour créer et associer :
+  - `partner_profiles` (raison sociale, identifiant fiscal chiffré au repos via `CredentialCrypto`).
+  - `partner_poi_assignments` (rattachement daté à un POI existant du tenant).
+  - `commission_rules` (règle par défaut 1 000 bps = 10 % ou dérogation négociée).
+  - Rattachement légal à l'entité Discover AI via `tenant_legal_entity_configs`.
+- **Règles d'identification et de sécurité :**
+  - Exécution réservée à un opérateur habilité. La traçabilité exige la fourniture d'une référence de ticket ou d'opération obligatoire (`--ticket-ref`).
+  - Le script refuse tout paramètre fiscal sensible en argument direct de ligne de commande (pas de `--tax-id` en clair dans l'historique shell ou la table des processus `ps`) : la saisie s'effectue via un prompt masqué interactif (`getpass.getpass`) ou via un fichier de configuration temporaire à permissions restrictives (`chmod 600`), selon le modèle éprouvé de `backend/app/create_tenant.py:80-82`.
+  - Chaque opération génère un enregistrement dans `financial_audit_log` avec `action = "provision_partner"`, consignant l'identité vérifiée, la référence du ticket, la date/heure UTC, et les identifiants créés, sans jamais écrire de donnée fiscale en clair.
+  - Le mécanisme d'identification technique exact dépend de l'environnement d'exécution (Point bloquant P1).
+
+### 12.12 Cycle de vie des versions de déclaration et confirmation atomique (D14)
+- **Versionnement strict :** Chaque déclaration possède `id` (`UUID`) et `version_number = Column(Integer, default=1, nullable=False)`. Une correction crée un nouvel enregistrement portant `version_number = 2` et `supersedes_declaration_id = old_id`, tandis que l'ancienne déclaration passe à `is_current = False` et `status = "superseded"`.
+- **Point de départ unique du délai de 72 h :** L'échéance `confirmation_deadline` est recalculée à partir de `created_at` de la **nouvelle version** et stockée sur celle-ci.
+- **Vérification atomique lors de la confirmation voyageur :**  
+  L'endpoint `POST /api/v1/bookings/{booking_id}/confirm-service` exige dans le corps de requête l'identifiant exact de la version consultée (`declaration_id` ou `version_number`). La requête s'exécute sous verrou de ligne pessimiste (`select ... for update`) et valide atomiquement :
+  1. Que la déclaration ciblée existe et est rattachée au `booking_id`.
+  2. Que son statut est `declared` (dossier confirmable).
+  3. Que `is_current == True` (version courante active). Si le voyageur tente de confirmer une version antérieure déjà remplacée, le serveur rejette la requête avec HTTP 409 (`"Declaration version is superseded"`).
+  4. Que `utcnow() <= confirmation_deadline` (délai de 72 h non échu).
+- **Idempotence de confirmation :** La confirmation répétée d'une même version courante renvoie HTTP 200 de façon idempotente sans dupliquer la créance (protégée par `UniqueConstraint("tenant_id", "declaration_id")` sur `service_completions`).
+- **Contestation d'une version périmée :** Une tentative de contester une déclaration avec `is_current == False` renvoie également une HTTP 409 (`"Cannot dispute a superseded declaration"`).
+
+### 12.13 Traitement d'anomalie `needs_review` et blocage de flux (D15)
+- **Définition de `needs_review` :** Ce statut ou drapeau constitue un **blocage ferme d'anomalie** et non une simple information consultative.
+- **Déclencheurs :** Date de prestation déclarée absente, invalide, ou présentant un écart supérieur à 7 jours calendaires par rapport à la date prévue de la réservation (`booking_data["date"]`).
+- **Comportement :**
+  - Aucun repli silencieux sur `Booking.created_at`.
+  - Le dossier est consigné avec son motif interne d'anomalie dans `service_declarations.status = "needs_review"` (ou `needs_review = True`), consultable par les opérateurs via le script CLI.
+  - Aucune notification n'est transmise au voyageur.
+  - Aucun délai de 72 h ne commence à courir (aucun rappel n'est émis).
+  - Le dossier ne peut jamais basculer automatiquement en `expired_unconfirmed`.
+  - La confirmation financière reste totalement bloquée en V1a jusqu'à examen en V1b.
+
+### 12.14 Garde-fous d'anti-auto-confirmation et limites de gérance (D16)
+- **Garde-fou serveur :** Lors de l'appel à `/declare`, le service vérifie que `Booking.user_id != current_user.id` et que `Booking.user_id` n'appartient pas à l'ensemble des `user_id` rattachés au même POI dans `POIManager` (`backend/app/models.py:381-386`) au moment du contrôle.
+- **Limites connues documentées :**
+  - Ce contrôle est ponctuel à l'instant de la soumission de la déclaration.
+  - La table `poi_managers` supprimant ses lignes en cascade (`ondelete="CASCADE"`, `backend/app/models.py:382-384`) sans colonne d'historisation de date de fin, le système ne peut pas détecter si le voyageur était un ancien gérant dont le compte a été retiré de `poi_managers` avant la réservation.
+  - Le système ne détecte pas deux comptes distincts complices non rattachés au même POI.
+  - « Actif » signifie que la ligne existe en base à cet instant.
+- **Option de traçabilité proposée (non imposée) :** Stocker dans `service_declarations.active_managers_snapshot` la liste des `user_id` des gérants du POI présents au moment de la déclaration, à titre d'élément d'audit en cas de litige ultérieur.

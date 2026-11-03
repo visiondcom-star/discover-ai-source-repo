@@ -105,3 +105,27 @@ Suite à l'intégration des décisions D13 à D16, le démarrage effectif de la 
 - **P4 (Limites de détection des anciens gérants et comptes complices, D16) :** Prise d'acte des limites structurelles de `poi_managers` et décision éventuelle sur le snapshot des gérants actifs à la déclaration.
 - **Validation D6 (Convention d'arrondi) :** Confirmation par l'expert-comptable de l'arrondi (floor vs half to even) avant facturation.
 - **Approbation finale :** Accord formel et distinct du propriétaire avant toute ligne de code.
+
+
+---
+
+## 8. Tableau final des décisions et points ouverts
+
+| Identifiant | Règle métier | Constat technique sur le dépôt | Statut | Décision encore nécessaire | Impact V1a |
+|---|---|---|---|---|---|
+| **D1** | Seul `manual_confirm` est éligible en V1a ; confirmation immédiate non probante | `backend/app/constants.py:87` définit les 4 modes | **DÉCIDÉ** | Aucune | `service_declarations` restreint à `manual_confirm` |
+| **D2** | Deux tables dédiées : `partner_profiles` et `partner_poi_assignments` avec snapshots | `backend/app/models.py:366-389` ne contient que `POIManager` | **DÉCIDÉ** | Aucune | Création des deux tables relationnelles |
+| **D3 / E3** | Une seule entité juridique Discover AI (algérienne, sans `tenant_id`) + table config | `legal_entities` plateforme et `tenant_legal_entity_configs` | **DÉCIDÉ** | Aucune | Migration 0017 |
+| **D4** | Date de prestation saisie bornée au passé ; contrôle de cohérence à 7 jours | Absence de colonne de date native sur `Booking` (`backend/app/models.py:332-364`) | **DÉCIDÉ** | Aucune | Colonne `service_date`, drapeau `status = "needs_review"` |
+| **D5 / E2** | Après 72 h sans confirmation : `expired_unconfirmed`, pas de commission exigible | `Booking.status` ne change pas | **DÉCIDÉ** | Aucune | Statut financier de clôture d'échéance sans calcul |
+| **D6** | Calcul exact sur entiers (centimes) et points de base ; convention d'arrondi | Pas de float pour les flux financiers | **BLOQUANT AVANT CODE** | Validation formelle de la convention d'arrondi par l'expert-comptable | Utilisation de `BigInteger` et `Integer` bps |
+| **D7 / E4** | L'administrateur du tenant ne peut pas déclarer de prestation en V1a | `backend/app/api/v1/endpoints/partner.py:89-96` admet l'admin | **DÉCIDÉ** | Aucune | Dépendance `_require_declaring_partner` dédiée |
+| **D8** | Sept types de notifications distincts compatibles avec l'index partiel | `backend/app/models.py:460-469` index partiel unique | **DÉCIDÉ** | Aucune | Définition des templates dans `backend/app/services/notification_templates.py:8-49` |
+| **D9** | Preuve = confirmation in-app par le voyageur authentifié | Écran de confirmation de prestation absent du dépôt examiné (à créer) | **DÉCIDÉ** | Aucune | Ajout du composant de confirmation in-app mobile |
+| **D10** | Règle pays/entité côté serveur interdisant la facturation transfrontalière | `backend/app/initial_data.py:36-47` seed Maroc en `MAD` | **DÉCIDÉ** | Aucune | Blocage HTTP 422 si pays différent |
+| **D11 / D14** | Plafond strict d'une seule correction par réservation avant confirmation voyageur | `correction_count = Column(Integer)` sur `service_declarations` | **DÉCIDÉ** | Aucune | Verrou de ligne pessimiste, 409 si version périmée |
+| **D12 / E1** | Dossiers contestés en V1a : consultation CLI seule, gel du calcul | Script CLI en lecture seule stricte | **DÉCIDÉ** | Aucune | Aucun recalcul ni modification manuelle en V1a |
+| **D13 / P1** | Script CLI de provisionnement distinct `provision_partner.py` | Modèle de prompt masqué dans `backend/app/create_tenant.py:80-82` | **BLOQUANT AVANT CODE** | Choix du mécanisme d'authentification opérateur P1 | Script `provision_partner.py` |
+| **D15 / P2** | Mesure d'exploitabilité de la date prévue `booking_data["date"]` | `Booking.booking_data` est de type JSON (`backend/app/models.py:346`) | **BLOQUANT AVANT CODE** | Exécution de la requête SQL d'audit P2 par le propriétaire | Évaluation du volume réel de `needs_review` |
+| **D16 / P4** | Anti-auto-confirmation et limites structurelles de `POIManager` | `backend/app/models.py:381-386` cascade `ondelete="CASCADE"` | **DÉCIDÉ** | Prise d'acte des limites structurelles P4 | Contrôle serveur `Booking.user_id != gérants` |
+| **Approbation** | Accord écrit formel du propriétaire avant tout commencement de code | Branche documentaire sous PR #48 | **BLOQUANT AVANT CODE** | Accord formel explicite du propriétaire | Aucun code tant que non approuvé |

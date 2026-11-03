@@ -213,7 +213,7 @@ Par ailleurs, un POI peut avoir 3 gérants distincts, et un même professionnel 
   - **Option B (Scoping strict par tenant, une ligne par tenant — Recommandation) :** Chaque tenant déclare formellement son entité juridique responsable dans `legal_entities` avec clé étrangère `tenant_id`. En V1, seul le tenant `algeria` possède une entité active (`country_code="DZ"`).  
     *Avantages :* Respecte à 100 % l'isolation multi-tenant stricte (`backend/app/core/tenant.py:1-24`), simplifie les contrôles de sécurité et les cascades de suppression.    
     *Risques :* Duplication de métadonnées si plusieurs tenants partagent une structure juridique future.
-  - > **DÉCISION PROPRIÉTAIRE REQUISE :** Valider l'Option B (scoping strict par tenant avec `tenant_id` sur `legal_entities`, alignée sur le principe 2 de CLAUDE.md) ou l'Option A (entité plateforme globale liée par configuration).
+  - > **TRANCHÉ PAR D3/E3 :** Entité unique sans `tenant_id` + table `tenant_legal_entity_configs` (`tenant_id` -> `legal_entity_id`) reliant chaque destination à l'entité unique algérienne (`docs/payment/PAYMENT_DECISIONS_V1.md:229` et section 12.1).
 - **Colonnes :**
   - `id` : `UUID`, Clé Primaire (`default=uuid.uuid4`).
   - `tenant_id` : `UUID`, Clé Étrangère vers `tenants.id`, non nulle, indexée (sous Option B).
@@ -641,12 +641,16 @@ Conformément à `PAYMENT_DECISIONS_V1.md` §4 et A14, le voyageur dispose d'un 
 
 La dernière révision en date sur `main` est `0016_backfill_skipped_notifs.py` (`backend/alembic/versions/0016_backfill_skipped_notifs.py:1-29`).
 
-1. **Révision `0017_financial_foundation_entities` :** Création des tables `legal_entities`, `partner_profiles`, `partner_poi_assignments`, `commission_rules`.
-2. **Révision `0018_service_declarations_receivables` :** Création des tables `service_declarations`, `service_completions`, `commission_receivables`, `financial_audit_log` (avec trigger d'immuabilité).
+1. **Révision `0017_financial_foundation_entities` :** Création des tables de structure : `legal_entities`, `tenant_legal_entity_configs`, `partner_profiles`, `partner_poi_assignments`, `commission_rules`. Réversible par `alembic downgrade 0016`.
+2. **Révision `0018_backfill_tenant_country_codes` :** Migration de données idempotente alimentant `Tenant.country_code` (`algeria` -> `"DZ"`, `morocco` -> `"MA"`) et initialisant `Tenant.config["service_confirmation_sla_hours"] = 72`. Réversible par `alembic downgrade 0017`.
+3. **Révision `0019_service_declarations_receivables` :** Création des tables opérationnelles : `service_declarations`, `service_completions`, `commission_receivables`, `financial_audit_log` (avec trigger d'immuabilité). Réversible par `alembic downgrade 0018`.
+4. **Révision `0020_user_finance_operator_role` (V1b) :** Ajout de la colonne `is_finance_operator` sur `users`. Réversible par `alembic downgrade 0019`.
+5. **Révision `0021_commission_statements` (V1b) :** Création de la table `commission_statements`. Réversible par `alembic downgrade 0020`.
+6. **Révision `0022_cancellation_policies` (V1c) :** Création de la table `cancellation_policies` et ajout de `cancellation_policy_version_id` sur `bookings`. Réversible par `alembic downgrade 0021`.
 
 ### 8.3 Date de bascule et gestion du seed existant
 
-- **Date de bascule (Cutover date) :** Seules les réservations créées après l'application de la révision `0018` sont éligibles à la déclaration de prestation. Les réservations historiques antérieures demeurent en lecture seule dans leur état terminal.
+- **Date de bascule (Cutover date) :** Seules les réservations créées après l'application de la révision `0019` sont éligibles à la déclaration de prestation. Les réservations historiques antérieures demeurent en lecture seule dans leur état terminal.
 - **Traitement du seed sur bases existantes :**  
   Dans `backend/app/initial_data.py:20-22` :
   ```python

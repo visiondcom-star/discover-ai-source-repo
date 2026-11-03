@@ -806,3 +806,66 @@ Analyse des contrôles d'accès réels dans le code backend :
    - Dans le schéma actuel (`backend/app/models.py:192-205, 366-389`), il n'existe **strictement aucun lien direct** entre un `User` et une entité partenaire autre que la relation `POIManager` reliant `user_id` à `poi_id`. La modélisation de la partie contractante financière nécessite donc formellement la création d'un profil contractuel autonome `partner_profiles`.
 3. **Absence d'historique des gestionnaires de POI :**
    - Dans `backend/app/models.py:381-386`, la table `poi_managers` supprime ses liaisons en cascade (`ondelete="CASCADE"` sur `pois.id` et `users.id`) et ne comporte aucune colonne d'historisation de date de fin (`valid_to`). La suppression ou le départ d'un gestionnaire efface définitivement la ligne. L'immuabilité de l'imputation financière exige donc que chaque déclaration fige un snapshot immuable du partenaire et du gestionnaire déclarant.
+
+
+4. **Audit de l'environnement d'exécution du script de provisionnement (Point bloquant P1) :**
+   - *Constat dans le dépôt :* Le script de référence `backend/app/create_tenant.py:1-103` est un script Python autonome CLI. Le fichier `.github/workflows/ci.yml:1-114` définit un workflow de test et de build d'images Docker sans aucun pipeline de déploiement continu en production (les déploiements automatisés vers une infrastructure cible sont absents du dépôt examiné). Le dossier `deploy/k8s/` contient des manifestes Kubernetes déclaratifs (Deployment, Service, ConfigMap), mais aucun outil d'orchestration de tâches de provisionnement nominatives n'y est configuré.
+   - *Options comparées pour l'exécution de `provision_partner.py` :*
+     - **Option A (Exécution sur machine / poste d'administration dédié) :**  
+       *Preuve d'identité :* Authentification nominative de l'opérateur sur la machine d'administration (compte OS / clé SSH nominative).  
+       *Conditions de déploiement :* Accès réseau sécurisé (VPN / bastion) vers PostgreSQL en écoute protégée.  
+       *Journalisation :* Logs locaux de session et audit SQL PostgreSQL.  
+       *Contournements possibles :* Aucun contrôle applicatif si l'opérateur accède directement à la base via `psql`.  
+       *Complexité :* Faible.  
+       *Limites :* Nécessite la gestion des accès distants sécurisés à PostgreSQL.
+     - **Option B (Exécution dans le conteneur backend via Kubernetes `kubectl exec`) :**  
+       *Preuve d'identité :* Certificat X.509 utilisateur ou jeton OIDC lié au cluster Kubernetes, soumis au RBAC Kubernetes (`RoleBinding` restreint).  
+       *Conditions de déploiement :* Cluster Kubernetes actif avec API Server accessible et audit logging activé.  
+       *Journalisation :* `Audit Policy` de l'API Server Kubernetes consignant les appels `pods/exec` avec l'identité de l'utilisateur (`user.username`).  
+       *Contournements possibles :* Partage de comptes de service de cluster à privilèges élevés.  
+       *Complexité :* Moyenne à élevée.  
+       *Limites :* `kubectl exec` fournit un accès interactif au pod mais ne contraint pas nativement les arguments internes du script sans surcouche.
+     - **Option C (Déclencheur CI/CD d'administration) :**  
+       *Constat :* Absent du dépôt examiné (aucun workflow `workflow_dispatch` d'administration n'existe dans `.github/workflows/ci.yml:1-114`).
+   - *Question pour le propriétaire :* Comment accède-t-il au serveur de production et qui d'autre y a accès ? (Cette information n'est pas visible dans le dépôt).
+   - *Limite globale :* Tout outil CLI apporte une traçabilité logicielle de ses propres opérations mais n'offre aucune protection contre un opérateur disposant d'un accès suffisant direct à PostgreSQL.
+
+5. **Requête SQL de mesure d'exploitabilité de la date prévue de réservation (Point bloquant P2) :**
+   - *Statut :* **NON EXÉCUTÉE, à exécuter par le propriétaire sur la base de production (agrégats seulement, aucune donnée personnelle).**
+   - *Constat technique :* `Booking.booking_data` est stocké sous le type SQLAlchemy `JSON` (`backend/app/models.py:346`), équivalent à `json` natif PostgreSQL. Tout test de contenu JSON exige donc un cast explicite en `jsonb`. De plus, aucune colonne de canal de réservation (ex. web vs mobile) n'existe sur `Booking` (`backend/app/models.py:332-364`) : la répartition par canal est donc **non mesurable** (absente du dépôt examiné).
+   - *Requête SQL corrigée :*
+     ```sql
+     -- Requête d'audit statistique d'exploitabilité de booking_data["date"]
+     -- À exécuter sur la base de production par le propriétaire (lecture seule pure)
+     SELECT 
+         b.tenant_id,
+         b.poi_id,
+         COUNT(*) AS total_manual_confirm,
+         COUNT(*) FILTER (WHERE b.booking_data IS NOT NULL AND b.booking_data::jsonb != '{}'::jsonb) AS count_has_data,
+         COUNT(*) FILTER (WHERE (b.booking_data::jsonb)->>'date' IS NOT NULL) AS count_has_date_key,
+         COUNT(*) FILTER (WHERE (b.booking_data::jsonb)->>'date' IS NULL) AS count_missing_date,
+         COUNT(*) FILTER (
+             WHERE (b.booking_data::jsonb)->>'date' IS NOT NULL 
+               AND (b.booking_data::jsonb)->>'date' ~ '^\d{4}-\d{2}-\d{2}$'
+               AND CASE 
+                     WHEN (b.booking_data::jsonb)->>'date' ~ '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$' 
+                     THEN is_valid_date((b.booking_data::jsonb)->>'date')
+                     ELSE FALSE 
+                   END
+         ) AS count_valid_real_date,
+         COUNT(*) FILTER (
+             WHERE (b.booking_data::jsonb)->>'date' IS NOT NULL 
+               AND (
+                   (b.booking_data::jsonb)->>'date' !~ '^\d{4}-\d{2}-\d{2}$'
+                   OR CASE 
+                        WHEN (b.booking_data::jsonb)->>'date' ~ '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$' 
+                        THEN NOT is_valid_date((b.booking_data::jsonb)->>'date')
+                        ELSE TRUE 
+                      END
+               )
+         ) AS count_malformed_date
+     FROM bookings b
+     WHERE b.booking_mode = 'manual_confirm'
+     GROUP BY b.tenant_id, b.poi_id;
+     ```
+     *(Note : `is_valid_date` représente une fonction de validation de calendrier PostgreSQL ou un bloc `TRY / CATCH` équivalent pour éliminer des dates inexistantes comme le 31 février).*

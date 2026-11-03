@@ -226,7 +226,7 @@ Mécanisme de preuve retenu (A8) ; point de départ exact du délai de 72 h ; r�
 
 ## Annexe C : Décisions du point de contrôle 2 (02/11/2026)
 
-Le propriétaire du projet a formellement tranché les décisions D1 à D12 lors de la revue du point de contrôle 2 :
+Le propriétaire du projet a formellement tranché les décisions D1 à D16 lors de la revue du point de contrôle 2 :
 
 - **D1 (Modes éligibles) :** Seul `manual_confirm` est éligible en V1a. Les autres modes restent hors commission V1a, même s'ils apparaissent dans l'espace partenaire : la confirmation immédiate n'est pas une preuve suffisante de réalisation.
 - **D2 (Structure partenaire) :** Deux tables dédiées : `partner_profiles` (identité contractuelle, informations fiscales nécessaires, profil de facturation) et `partner_poi_assignments` (rattachement daté partenaire-POI). Chaque prestation conserve un snapshot du partenaire responsable à la déclaration. Un changement ultérieur de gérant ou de rattachement ne modifie jamais rétroactivement l'historique.
@@ -240,31 +240,31 @@ Le propriétaire du projet a formellement tranché les décisions D1 à D12 lors
 - **D10 (Règle pays/entité) :** Commission activable seulement si le pays du partenaire = pays de l'entité juridique responsable ; V1 : entité algérienne, partenaire marocain exclu de la facturation de commission ; contrôle côté serveur, pas seulement dans l'interface.
 - **D11 (Plafond de correction) :** Une seule correction par réservation en V1a ; conserver la déclaration initiale, identifier l'auteur, enregistrer le motif, conserver ancienne et nouvelle valeur, recalculer au taux historique applicable sans toucher aux autres prestations ; une deuxième correction est bloquée et orientée vers une revue ultérieure.
 - **D12/E1 (Dossiers contestés en V1a) :** Dossiers contestés avant V1b : consultation CLI uniquement ; aucune résolution manuelle en V1a ; aucun changement silencieux de montant ; aucun recalcul de commission ; calcul gelé ; dossier conservé pour V1b.
+- **D13 (Provisionnement des partenaires et règles) :** Script CLI de provisionnement DISTINCT du CLI de consultation, en écriture, journalisé, réservé à un opérateur habilité. Crée `partner_profiles`, `partner_poi_assignments`, règles de commission (10 % initial), liens entité juridique et tenant. Conditions impératives : identification de l'opérateur ; journalisation de chaque création/modification ; vérification tenant, POI, entité ; compatibilité pays partenaire/entité ; prévention des doublons et rattachements incohérents ; aucune coordonnée bancaire ; aucun accès de l'admin du tenant aux informations fiscales.  
+  *Complément d'identification :* `operator_identifier` ne prouve jamais l'identité à lui seul. Trois niveaux exigés : identité technique (ce qui exécute le script), identité humaine (personne autorisée), traçabilité métier (ticket + historique). Référence de ticket obligatoire à chaque exécution ; journal minimal : identité vérifiée, ticket, date/heure, type d'opération, entité et tenant, partenaire et POI, résultat. Données sensibles (numéro fiscal, etc.) : jamais en argument de ligne de commande ; saisie masquée ou fichier à permissions restrictives ; rien dans les logs, l'historique du shell ni les processus (modèle étudié : `backend/app/create_tenant.py:80-82` avec prompt interactif `getpass.getpass` et variable d'environnement). Le mécanisme d'identification précis est conditionné à l'audit de l'environnement (§3 du BRIEF) et reste une décision propriétaire (Point bloquant P1).
+- **D14 (Cadre strict de la correction) :** Une seule correction par réservation, uniquement avant la confirmation du voyageur ; strictement interdite si le dossier est `disputed`, `needs_review`, `expired_unconfirmed` ou `confirmed` ; jamais une résolution de contestation, ne contourne pas D12. Chaque déclaration porte un identifiant et un numéro de version ; conserver version initiale, auteur, date/heure, motif, ancienne et nouvelle valeur, taux historique. Une correction crée une nouvelle version, l'ancienne n'est plus confirmable. Point de départ UNIQUE du délai de 72 h : horodatage d'enregistrement de la version, stocké sur la version. La confirmation porte l'identifiant de version consultée ; contrôle atomique avec verrou de ligne (déclaration existante, dossier confirmable, version courante, délai non échu) ; 409 si version périmée ; confirmation répétée de la même version idempotente avec contrainte d'unicité empêchant une seconde commission ; contestation d'une version périmée renvoie 409 ; aucune commission créée par une confirmation périmée. Commission calculée uniquement APRÈS confirmation valide de la version courante, au taux historique ; aucun recalcul en V1a ; réconciliation explicite avec D11. Aucune demande de correction dans l'application en V1a (ni endpoint, ni table, ni modification de créance) ; traitement reporté en V1b ; un canal de support externe peut être mentionné comme possibilité opérationnelle, sans modifier de donnée financière.
+- **D15 (Statuts financiers et cohérence de date) :**  
+  (A) Après `expired_unconfirmed`, la confirmation est définitivement expirée, aucune commission n'est exigible, dossier visible en CLI, régularisation en V1b, pas de réouverture automatique.  
+  (B) Seuil de cohérence 7 jours calendaires (règle métier proposée, configurable par tenant), appliqué seulement si la date prévue de la réservation ET la date de prestation déclarée sont exploitables ; écart > 7 jours : `needs_review` ; période de prestation comparée seulement si le modèle la contient réellement (ne pas l'inventer).  
+  (C) `needs_review` : date absente/invalide/inexploitable, ou écart > 7 jours ; AUCUN repli sur `created_at` ; le dossier est enregistré avec motif interne, visible en CLI, non notifié au voyageur, sans délai de 72 h, sans rappel, ne devient jamais automatiquement `expired_unconfirmed`, bloque la confirmation financière, reste bloqué en V1a (aucune résolution humaine).
+- **D16 (Contrôle d'éligibilité et anti-auto-confirmation) :** `is_admin = true` exclut formellement la déclaration, même si l'utilisateur est gérant de POI. Conditions cumulatives requises pour déclarer : utilisateur authentifié ; `is_admin = false` ; `POIManager` sur le POI ; `partner_poi_assignments` actif ; profil partenaire éligible ; cohérence partenaire/POI/tenant/réservation. Refus côté serveur si `Booking.user_id` est le déclarant ou un autre `POIManager` du même POI au moment du contrôle.  
+  *Limites connues :* contrôle ponctuel à la soumission ; ancien gérant supprimé de `poi_managers` non détecté (cascade `ondelete="CASCADE"`, `backend/app/models.py:381-386`, absence d'historique de gérance) ; deux comptes complices non détectés ; « actif » = la ligne existe en base sans période de validité sur `poi_managers`. Comptes de test/pilote : `is_admin = false`, `POIManager` valide, rattachement actif, profil éligible ; test spécifique : un admin, même gérant, ne peut pas déclarer. Ne pas modifier les comptes existants.
+
+### Trois distinctions conceptuelles fondamentales
+1. `needs_review` est un blocage d'anomalie, pas une simple information consultative.
+2. `expired_unconfirmed` n'est ni `disputed` ni `needs_review` (échéance temporelle sans contestation ni anomalie initiale de date).
+3. Une correction avant confirmation crée une nouvelle version à confirmer et ne touche à aucune commission calculée (aucune créance n'existant avant confirmation).
 
 ### Périmètre V1a validé (conception uniquement)
-- **Inclus dans la V1a :** Profil partenaire et rattachement aux POI ; taux 10 % (1 000 bps) ; déclaration du montant après prestation ; confirmation in-app voyageur ; expiration 72 h (`expired_unconfirmed`) ; calcul et snapshot de la commission ; consultation CLI en lecture seule ; contrôles de pays et de permissions côté serveur.
+- **Inclus dans la V1a :** Profil partenaire et rattachement aux POI ; taux 10 % (1 000 bps) ; déclaration du montant après prestation ; confirmation in-app voyageur ; expiration 72 h (`expired_unconfirmed`) ; calcul et snapshot de la commission ; consultation CLI en lecture seule ; contrôles de pays et de permissions côté serveur ; provisionnement CLI sécurisé (D13 sous réserve P1).
 - **Hors V1a :** Résolution humaine des contestations ; facturation fiscale dans Discover AI ; paiement en ligne ; remboursements ; annulation après confirmation et nouveau consentement ; reporting transversal par interface.
 
 ---
 
-## Annexe D : Questions ouvertes D13-D16 (à trancher par le propriétaire)
+## Annexe D : Questions D17 à D20 (Résolues par les compléments D13 à D16)
 
-- **D13 — Chemin de création des profils partenaires, rattachements et règles de commission en V1a :**
-  - Sachant que l'admin du tenant n'a pas accès au profil fiscal (D7) et que le CLI de reporting est en lecture seule (D12).
-  - *Option A :* Script CLI de provisionnement distinct, en écriture, journalisé (`operator_identifier`), calqué sur `backend/app/create_tenant.py`.
-  - *Option B :* Saisie par le partenaire lui-même via un endpoint dédié d'auto-enregistrement.
-  - *Option C :* Provisionnement manuel hors application directement en base de données.
-  - > **DÉCISION PROPRIÉTAIRE REQUISE (D13).**
-- **D14 — Possibilité de correction après la confirmation du voyageur :**
-  - *Option A :* Correction possible après confirmation voyageur : exige une nouvelle confirmation de la version corrigée par le voyageur (D9), ajustement de la créance déjà générée, en l'absence de grand livre en V1a.
-  - *Option B :* Correction strictement autorisée avant confirmation voyageur uniquement ; toute correction après confirmation est renvoyée à la revue manuelle en V1b.
-  - > **DÉCISION PROPRIÉTAIRE REQUISE (D14).**
-- **D15 — Confirmation voyageur après `expired_unconfirmed` et seuil de date éloignée (D4) :**
-  - *Option A :* La confirmation voyageur reste acceptée après expiration des 72 h et réactive le calcul de commission.
-  - *Option B :* La confirmation est refusée après expiration et le dossier est définitivement renvoyé vers V1b.
-  - *Définition du contrôle de date éloignée (D4) :* Fixation du seuil configurable (ex. 7 jours après la date de réservation) et qualification du contrôle en V1a (drapeau `needs_review = True` visible en CLI sans acceptation silencieuse).
-  - > **DÉCISION PROPRIÉTAIRE REQUISE (D15).**
-- **D16 — Cas d'un utilisateur cumulatif (Admin du tenant et `POIManager` du POI) :**
-  - *Option A :* L'utilisateur peut déclarer en tirant son autorité exclusivement de son rattachement `POIManager` au POI.
-  - *Option B :* Exclusion stricte de tout utilisateur portant `is_admin == True` de la faculté de déclarer, même s'il est par ailleurs listé dans `POIManager`.
-  - > **DÉCISION PROPRIÉTAIRE REQUISE (D16).**
+Les questions précédemment identifiées dans les versions antérieures de travail sont formellement résolues et absorbées par les compléments D13 à D16 :
+- **D17 (Identité de l'opérateur de provisionnement) :** Résolue par D13 (trois niveaux d'identification, ticket obligatoire, point bloquant P1).
+- **D18 (Moment et portée de la correction) :** Résolue par D14 (correction unique avant confirmation, versionnée, horodatage renouvelé, réconciliation D11).
+- **D19 (Nature et comportement de needs_review) :** Résolue par D15 (blocage de confirmation, pas de notification voyageur, pas d'expiration automatique, seuil 7 jours).
+- **D20 (Anti-auto-confirmation et exclusion admin) :** Résolue par D16 (exclusion stricte si `is_admin == True` ou si le voyageur est gérant du POI).

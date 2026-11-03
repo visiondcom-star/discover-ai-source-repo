@@ -95,11 +95,13 @@ Tous les endpoints respectent l'en-tête obligatoire `X-Tenant-Slug` (`backend/a
 
 ---
 
-## 7. Points encore bloquants avant codage (Dépendances D13 à D16)
+## 7. Points bloquants avant codage (P1 à P4 et validation D6)
 
-Le démarrage effectif de la phase de développement logiciel reste conditionné à l'arbitrage par le propriétaire des quatre questions ouvertes :
+Suite à l'intégration des décisions D13 à D16, le démarrage effectif de la phase de développement logiciel reste conditionné à l'arbitrage préalable des points bloquants d'audit et de validation suivants :
 
-- **D13 :** Chemin de provisionnement des profils partenaires et règles de commission en V1a (script CLI dédié en écriture vs saisie partenaire vs base).
-- **D14 :** Possibilité technique d'émettre une correction après la confirmation du voyageur (ouverte avec réapprobation vs renvoyée à V1b).
-- **D15 :** Possibilité d'approbation voyageur après `expired_unconfirmed` et seuil de contrôle temporel pour `needs_review`.
-- **D16 :** Admissibilité à la déclaration d'un utilisateur cumulant le rôle d'administrateur de tenant et de gestionnaire `POIManager`.
+- **P1 (Audit d'accès et identité de l'opérateur CLI, D13) :** Choix du mécanisme d'authentification de la personne physique exécutant le script de provisionnement `provision_partner.py` (Option A sur poste d'administration vs Option B dans Kubernetes/conteneur vs Option C).
+- **P2 (Mesure d'exploitabilité de la date prévue de réservation, D15) :** Exécution par le propriétaire de la requête SQL d'audit statistique sur `booking_data["date"]` sur la base de production pour vérifier la part de dates renseignées et valides.
+- **P3 (Concurrence confirmation voyageur / correction partenaire, D14) :** Validation de la spécification de rejet 409 sous verrou de ligne pessimiste lors de tentatives simultanées.
+- **P4 (Limites de détection des anciens gérants et comptes complices, D16) :** Prise d'acte des limites structurelles de `poi_managers` et décision éventuelle sur le snapshot des gérants actifs à la déclaration.
+- **Validation D6 (Convention d'arrondi) :** Confirmation par l'expert-comptable de l'arrondi (floor vs half to even) avant facturation.
+- **Approbation finale :** Accord formel et distinct du propriétaire avant toute ligne de code.

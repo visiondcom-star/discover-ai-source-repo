@@ -248,3 +248,10 @@ Les arbitrages D1 à D12 rendus par le propriétaire du projet le 02/11/2026 tra
 5. **Force probante de la confirmation in-app et valeur du consentement (liée à D9) :**
    - *Renvoi :* Questions **Q6.1**, **Q7.1**, **Q7.2** (`docs/payment/PAYMENT_COMPLIANCE.md:88, 96-97`).
    - L'opposabilité de l'approbation in-app du voyageur comme acte de preuve matérielle de l'exécution du service doit être formellement confirmée.
+
+6. **Modalités d'identification de l'opérateur du script de provisionnement (liée à D13 / P1) :**
+   - *Renvoi :* Questions **Q8.1**, **Q8.2** (`docs/payment/PAYMENT_COMPLIANCE.md:105-106`).
+   - L'auditeur interne et l'auditeur informatique doivent valider le niveau d'authentification exigé (Option A poste d'administration vs Option B conteneur/OIDC) pour l'exécution d'un script en écriture modifiant les profils partenaires et règles de commission.
+7. **Couverture de la date prévue et forclusion de signalement (liée à D15 / P2) :**
+   - *Renvoi :* Questions **Q7.2**, **Q7.3** (`docs/payment/PAYMENT_COMPLIANCE.md:97-98`).
+   - L'avocat doit valider si l'absence de date structurée dans la réservation justifie le blocage sous statut d'anomalie `needs_review` sans notification voyageur.

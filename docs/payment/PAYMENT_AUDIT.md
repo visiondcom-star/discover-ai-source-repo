@@ -825,7 +825,14 @@ Analyse des contrôles d'accès réels dans le code backend :
        *Contournements possibles :* Partage de comptes de service de cluster à privilèges élevés.  
        *Complexité :* Moyenne à élevée.  
        *Limites :* `kubectl exec` fournit un accès interactif au pod mais ne contraint pas nativement les arguments internes du script sans surcouche.
-     - **Option C (Déclencheur CI/CD d'administration) :**  
+     - **Option C (Compte SSH nominatif sur machine hôte + `docker compose exec backend`) :**  
+       *Preuve d'identité :* Clé SSH nominative sur le système d'exploitation de la machine hôte hébergeant la pile Docker. Il s'agit de la commande de référence documentée dans `CLAUDE.md:11, 14, 81` (`docker compose exec backend python -m app....`).  
+       *Identité du processus du conteneur :* Non nominative (l'interpréteur Python s'exécute typiquement sous le compte générique ou root configuré dans le conteneur Docker).  
+       *Traçabilité :* Repose exclusivement sur les journaux d'accès et d'élévation de privilèges du système hôte (`sshd`, `sudo`, `auth.log`, `auditd`) [À VÉRIFIER, absent du dépôt].  
+       *Contournements possibles :* Usage d'un compte SSH partagé ou élévation sans journalisation dédiée.  
+       *Complexité :* Faible (alignée sur la pratique opérationnelle documentée du projet).  
+       *Limites :* Aucune corrélation native entre l'utilisateur SSH hôte et le contexte d'exécution interne du conteneur ; dépendance absolue envers la politique de journalisation de la machine hôte.
+     - **Option D (Déclencheur CI/CD d'administration) :**  
        *Constat :* Absent du dépôt examiné (aucun workflow `workflow_dispatch` d'administration n'existe dans `.github/workflows/ci.yml:1-114`).
    - *Question pour le propriétaire :* Comment accède-t-il au serveur de production et qui d'autre y a accès ? (Cette information n'est pas visible dans le dépôt).
    - *Limite globale :* Tout outil CLI apporte une traçabilité logicielle de ses propres opérations mais n'offre aucune protection contre un opérateur disposant d'un accès suffisant direct à PostgreSQL.
@@ -833,9 +840,12 @@ Analyse des contrôles d'accès réels dans le code backend :
 5. **Requête SQL de mesure d'exploitabilité de la date prévue de réservation (Point bloquant P2) :**
    - *Statut :* **NON EXÉCUTÉE, à exécuter par le propriétaire sur la base de production (agrégats seulement, aucune donnée personnelle).**
    - *Constat technique :* `Booking.booking_data` est stocké sous le type SQLAlchemy `JSON` (`backend/app/models.py:346`), équivalent à `json` natif PostgreSQL. Tout test de contenu JSON exige donc un cast explicite en `jsonb`. De plus, aucune colonne de canal de réservation (ex. web vs mobile) n'existe sur `Booking` (`backend/app/models.py:332-364`) : la répartition par canal est donc **non mesurable** (absente du dépôt examiné).
-   - *Requête SQL corrigée :*
+   - *Validation de syntaxe sur base PostgreSQL de TEST locale :* Syntaxe validée sur conteneur de test local Docker `pgvector/pgvector:pg16` (PostgreSQL 16.15, image identique à la CI `.github/workflows/ci.yml:14`) ; résultat fonctionnel vérifié sur jeu de test en lecture seule pure ; version de production = [À VÉRIFIER].
+   - *Requête SQL de référence (PostgreSQL 16) :*
+     Utilise `pg_input_is_valid(valeur, 'date')` (fonction introduite dans PostgreSQL 16 ; la CI utilise `pgvector/pgvector:pg16`, `.github/workflows/ci.yml:14` ; version de production = [À VÉRIFIER]).
      ```sql
      -- Requête d'audit statistique d'exploitabilité de booking_data["date"]
+     -- PostgreSQL 16+ (utilise pg_input_is_valid)
      -- À exécuter sur la base de production par le propriétaire (lecture seule pure)
      SELECT 
          b.tenant_id,
@@ -849,7 +859,7 @@ Analyse des contrôles d'accès réels dans le code backend :
                AND (b.booking_data::jsonb)->>'date' ~ '^\d{4}-\d{2}-\d{2}$'
                AND CASE 
                      WHEN (b.booking_data::jsonb)->>'date' ~ '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$' 
-                     THEN is_valid_date((b.booking_data::jsonb)->>'date')
+                     THEN pg_input_is_valid((b.booking_data::jsonb)->>'date', 'date')
                      ELSE FALSE 
                    END
          ) AS count_valid_real_date,
@@ -859,7 +869,7 @@ Analyse des contrôles d'accès réels dans le code backend :
                    (b.booking_data::jsonb)->>'date' !~ '^\d{4}-\d{2}-\d{2}$'
                    OR CASE 
                         WHEN (b.booking_data::jsonb)->>'date' ~ '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$' 
-                        THEN NOT is_valid_date((b.booking_data::jsonb)->>'date')
+                        THEN NOT pg_input_is_valid((b.booking_data::jsonb)->>'date', 'date')
                         ELSE TRUE 
                       END
                )
@@ -868,4 +878,55 @@ Analyse des contrôles d'accès réels dans le code backend :
      WHERE b.booking_mode = 'manual_confirm'
      GROUP BY b.tenant_id, b.poi_id;
      ```
-     *(Note : `is_valid_date` représente une fonction de validation de calendrier PostgreSQL ou un bloc `TRY / CATCH` équivalent pour éliminer des dates inexistantes comme le 31 février).*
+   - *Variante pour versions antérieures de PostgreSQL (< 16) :*
+     Si la base de production utilise une version de PostgreSQL antérieure à 16 (où `pg_input_is_valid` n'existe pas), la validation du calendrier s'effectue par décomposition de motifs regex (mois à 31 jours, mois à 30 jours, février hors bissextile jusqu'au 28, et règle grégorienne des années bissextiles pour le 29 février : divisible par 4 hors centenaires non divisibles par 400). Syntaxe également validée sur la base locale de test PostgreSQL :
+     ```sql
+     -- Variante PostgreSQL < 16 (validation du calendrier par motif : mois à 30 jours, février, bissextiles)
+     -- À exécuter sur la base de production par le propriétaire (lecture seule pure)
+     SELECT 
+         b.tenant_id,
+         b.poi_id,
+         COUNT(*) AS total_manual_confirm,
+         COUNT(*) FILTER (WHERE b.booking_data IS NOT NULL AND b.booking_data::jsonb != '{}'::jsonb) AS count_has_data,
+         COUNT(*) FILTER (WHERE (b.booking_data::jsonb)->>'date' IS NOT NULL) AS count_has_date_key,
+         COUNT(*) FILTER (WHERE (b.booking_data::jsonb)->>'date' IS NULL) AS count_missing_date,
+         COUNT(*) FILTER (
+             WHERE (b.booking_data::jsonb)->>'date' IS NOT NULL 
+               AND (b.booking_data::jsonb)->>'date' ~ '^\d{4}-\d{2}-\d{2}$'
+               AND CASE 
+                     WHEN (b.booking_data::jsonb)->>'date' !~ '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$' THEN FALSE
+                     WHEN (b.booking_data::jsonb)->>'date' ~ '^\d{4}-(0[13578]|1[02])-(0[1-9]|[12]\d|3[01])$' THEN TRUE
+                     WHEN (b.booking_data::jsonb)->>'date' ~ '^\d{4}-(0[469]|11)-(0[1-9]|[12]\d|30)$' THEN TRUE
+                     WHEN (b.booking_data::jsonb)->>'date' ~ '^\d{4}-02-(0[1-9]|1\d|2[0-8])$' THEN TRUE
+                     WHEN (b.booking_data::jsonb)->>'date' ~ '^\d{4}-02-29$' THEN (
+                       (substring((b.booking_data::jsonb)->>'date' from 1 for 4)::int % 4 = 0 
+                        AND substring((b.booking_data::jsonb)->>'date' from 1 for 4)::int % 100 != 0)
+                       OR (substring((b.booking_data::jsonb)->>'date' from 1 for 4)::int % 400 = 0)
+                     )
+                     ELSE FALSE 
+                   END
+         ) AS count_valid_real_date,
+         COUNT(*) FILTER (
+             WHERE (b.booking_data::jsonb)->>'date' IS NOT NULL 
+               AND (
+                   (b.booking_data::jsonb)->>'date' !~ '^\d{4}-\d{2}-\d{2}$'
+                   OR NOT (
+                     CASE 
+                       WHEN (b.booking_data::jsonb)->>'date' !~ '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$' THEN FALSE
+                       WHEN (b.booking_data::jsonb)->>'date' ~ '^\d{4}-(0[13578]|1[02])-(0[1-9]|[12]\d|3[01])$' THEN TRUE
+                       WHEN (b.booking_data::jsonb)->>'date' ~ '^\d{4}-(0[469]|11)-(0[1-9]|[12]\d|30)$' THEN TRUE
+                       WHEN (b.booking_data::jsonb)->>'date' ~ '^\d{4}-02-(0[1-9]|1\d|2[0-8])$' THEN TRUE
+                       WHEN (b.booking_data::jsonb)->>'date' ~ '^\d{4}-02-29$' THEN (
+                         (substring((b.booking_data::jsonb)->>'date' from 1 for 4)::int % 4 = 0 
+                          AND substring((b.booking_data::jsonb)->>'date' from 1 for 4)::int % 100 != 0)
+                         OR (substring((b.booking_data::jsonb)->>'date' from 1 for 4)::int % 400 = 0)
+                       )
+                       ELSE FALSE 
+                     END
+                   )
+               )
+         ) AS count_malformed_date
+     FROM bookings b
+     WHERE b.booking_mode = 'manual_confirm'
+     GROUP BY b.tenant_id, b.poi_id;
+     ```

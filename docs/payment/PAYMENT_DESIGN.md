@@ -782,8 +782,13 @@ Cette section consigne les impacts techniques précis des arbitrages D1 à D12 v
   - `service_date <= utcnow().date()` (date obligatoirement passée ou du jour).
   - Contrôle de cohérence temporelle : si la date déclarée présente un écart supérieur au seuil configurable dans `Tenant.config["max_declaration_delay_days"]` (défaut 7 jours) par rapport à la date prévue de la réservation (`booking_data["date"]`), le système ne valide pas silencieusement la déclaration mais positionne le statut d'anomalie `status = "needs_review"` avec `review_reason` et horodatage `flagged_at = utcnow()`. Ce dossier est consultable en CLI sans bloquer arbitrairement la saisie.
 - **Requête SQL d'audit statistique de la date prévue (Point bloquant P2) :**  
-  *Statut :* NON EXÉCUTÉE, à exécuter par le propriétaire sur la base de production (agrégats seuls, sans PII) :
+  *Statut :* NON EXÉCUTÉE, à exécuter par le propriétaire sur la base de production (agrégats seuls, sans PII).  
+  *Validation de syntaxe sur base PostgreSQL de TEST locale :* Syntaxe validée sur conteneur de test local Docker `pgvector/pgvector:pg16` (PostgreSQL 16.15, image identique à la CI `.github/workflows/ci.yml:14`) ; résultat fonctionnel vérifié sur jeu de test en lecture seule pure ; version de production = [À VÉRIFIER].  
+  *Requête SQL de référence (PostgreSQL 16, utilise `pg_input_is_valid`) :*
   ```sql
+  -- Requête d'audit statistique d'exploitabilité de booking_data["date"]
+  -- PostgreSQL 16+ (utilise pg_input_is_valid)
+  -- À exécuter sur la base de production par le propriétaire (lecture seule pure)
   SELECT 
       b.tenant_id,
       b.poi_id,
@@ -796,7 +801,7 @@ Cette section consigne les impacts techniques précis des arbitrages D1 à D12 v
             AND (b.booking_data::jsonb)->>'date' ~ '^\d{4}-\d{2}-\d{2}$'
             AND CASE 
                   WHEN (b.booking_data::jsonb)->>'date' ~ '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$' 
-                  THEN is_valid_date((b.booking_data::jsonb)->>'date')
+                  THEN pg_input_is_valid((b.booking_data::jsonb)->>'date', 'date')
                   ELSE FALSE 
                 END
       ) AS count_valid_real_date,
@@ -806,7 +811,7 @@ Cette section consigne les impacts techniques précis des arbitrages D1 à D12 v
                 (b.booking_data::jsonb)->>'date' !~ '^\d{4}-\d{2}-\d{2}$'
                 OR CASE 
                      WHEN (b.booking_data::jsonb)->>'date' ~ '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$' 
-                     THEN NOT is_valid_date((b.booking_data::jsonb)->>'date')
+                     THEN NOT pg_input_is_valid((b.booking_data::jsonb)->>'date', 'date')
                      ELSE TRUE 
                    END
             )
@@ -816,6 +821,59 @@ Cette section consigne les impacts techniques précis des arbitrages D1 à D12 v
   GROUP BY b.tenant_id, b.poi_id;
   ```
   *(Le canal de réservation est non mesurable car aucune colonne de canal n'existe sur `Booking`, `backend/app/models.py:332-364`)*.
+
+  *Variante pour versions antérieures de PostgreSQL (< 16) :*  
+  Si la base de production utilise une version de PostgreSQL antérieure à 16 (où `pg_input_is_valid` n'existe pas), la validation du calendrier s'effectue par décomposition de motifs regex (mois à 31 jours, mois à 30 jours, février hors bissextile jusqu'au 28, et règle grégorienne des années bissextiles pour le 29 février : divisible par 4 hors centenaires non divisibles par 400). Syntaxe également validée sur la base locale de test PostgreSQL :
+  ```sql
+  -- Variante PostgreSQL < 16 (validation du calendrier par motif : mois à 30 jours, février, bissextiles)
+  -- À exécuter sur la base de production par le propriétaire (lecture seule pure)
+  SELECT 
+      b.tenant_id,
+      b.poi_id,
+      COUNT(*) AS total_manual_confirm,
+      COUNT(*) FILTER (WHERE b.booking_data IS NOT NULL AND b.booking_data::jsonb != '{}'::jsonb) AS count_has_data,
+      COUNT(*) FILTER (WHERE (b.booking_data::jsonb)->>'date' IS NOT NULL) AS count_has_date_key,
+      COUNT(*) FILTER (WHERE (b.booking_data::jsonb)->>'date' IS NULL) AS count_missing_date,
+      COUNT(*) FILTER (
+          WHERE (b.booking_data::jsonb)->>'date' IS NOT NULL 
+            AND (b.booking_data::jsonb)->>'date' ~ '^\d{4}-\d{2}-\d{2}$'
+            AND CASE 
+                  WHEN (b.booking_data::jsonb)->>'date' !~ '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$' THEN FALSE
+                  WHEN (b.booking_data::jsonb)->>'date' ~ '^\d{4}-(0[13578]|1[02])-(0[1-9]|[12]\d|3[01])$' THEN TRUE
+                  WHEN (b.booking_data::jsonb)->>'date' ~ '^\d{4}-(0[469]|11)-(0[1-9]|[12]\d|30)$' THEN TRUE
+                  WHEN (b.booking_data::jsonb)->>'date' ~ '^\d{4}-02-(0[1-9]|1\d|2[0-8])$' THEN TRUE
+                  WHEN (b.booking_data::jsonb)->>'date' ~ '^\d{4}-02-29$' THEN (
+                    (substring((b.booking_data::jsonb)->>'date' from 1 for 4)::int % 4 = 0 
+                     AND substring((b.booking_data::jsonb)->>'date' from 1 for 4)::int % 100 != 0)
+                    OR (substring((b.booking_data::jsonb)->>'date' from 1 for 4)::int % 400 = 0)
+                  )
+                  ELSE FALSE 
+                END
+      ) AS count_valid_real_date,
+      COUNT(*) FILTER (
+          WHERE (b.booking_data::jsonb)->>'date' IS NOT NULL 
+            AND (
+                (b.booking_data::jsonb)->>'date' !~ '^\d{4}-\d{2}-\d{2}$'
+                OR NOT (
+                  CASE 
+                    WHEN (b.booking_data::jsonb)->>'date' !~ '^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$' THEN FALSE
+                    WHEN (b.booking_data::jsonb)->>'date' ~ '^\d{4}-(0[13578]|1[02])-(0[1-9]|[12]\d|3[01])$' THEN TRUE
+                    WHEN (b.booking_data::jsonb)->>'date' ~ '^\d{4}-(0[469]|11)-(0[1-9]|[12]\d|30)$' THEN TRUE
+                    WHEN (b.booking_data::jsonb)->>'date' ~ '^\d{4}-02-(0[1-9]|1\d|2[0-8])$' THEN TRUE
+                    WHEN (b.booking_data::jsonb)->>'date' ~ '^\d{4}-02-29$' THEN (
+                      (substring((b.booking_data::jsonb)->>'date' from 1 for 4)::int % 4 = 0 
+                       AND substring((b.booking_data::jsonb)->>'date' from 1 for 4)::int % 100 != 0)
+                      OR (substring((b.booking_data::jsonb)->>'date' from 1 for 4)::int % 400 = 0)
+                    )
+                    ELSE FALSE 
+                  END
+                )
+            )
+      ) AS count_malformed_date
+  FROM bookings b
+  WHERE b.booking_mode = 'manual_confirm'
+  GROUP BY b.tenant_id, b.poi_id;
+  ```
 
 ### 12.5 Statuts du cycle de confirmation financière (D5/E2)
 - Le cycle financier de `service_declarations.status` adopte les états fermés : `"declared"`, `"confirmed"`, `"disputed"`, `"expired_unconfirmed"`, `"superseded"`.
@@ -862,7 +920,8 @@ Chaque type étant unique par `booking_id`, aucun conflit d'insertion silencieux
 - **Comparatif des options d'exécution pour P1 :**
   - *Option A (Machine d'administration dédiée) :* Authentification nominative de l'opérateur sur le poste d'admin (compte OS / clé SSH nominative). Accès réseau sécurisé vers PostgreSQL. Logs de session locaux. Limite : contournable en cas d'accès SQL direct.
   - *Option B (Conteneur backend via `kubectl exec`) :* Authentification OIDC / certificat X.509 utilisateur avec RBAC Kubernetes et journaux d'audit de l'API Server. Limite : complexité et absence de filtrage natif des arguments de script par Kubernetes.
-  - *Option C (Déclencheur d'administration externe) :* Absent du dépôt examiné (aucun workflow de déploiement en production n'est configuré dans `.github/workflows/ci.yml:1-114`).
+  - *Option C (Compte SSH nominatif sur machine hôte + `docker compose exec backend`) :* Clé SSH nominative sur le système d'exploitation de la machine hôte. Il s'agit de la commande de référence documentée dans `CLAUDE.md:11, 14, 81` (`docker compose exec backend python -m app....`). Identité du processus du conteneur non nominative (compte générique/root Docker). Traçabilité par les journaux d'accès et d'élévation de privilèges de l'hôte (`sshd`, `sudo`, `auth.log`) [À VÉRIFIER, absent du dépôt]. Limites : aucune liaison native entre l'utilisateur SSH hôte et le contexte interne du conteneur.
+  - *Option D (Déclencheur d'administration externe) :* Absent du dépôt examiné (aucun workflow de déploiement en production n'est configuré dans `.github/workflows/ci.yml:1-114`).
   - *Question pour le propriétaire :* Comment accède-t-il au serveur de production et qui d'autre y a accès ? (Non visible dans le dépôt).
 
 ### 12.12 Cycle de vie des versions de déclaration et confirmation atomique (D14)
@@ -874,7 +933,13 @@ Chaque type étant unique par `booking_id`, aucun conflit d'insertion silencieux
   2. **Existence et rattachement :** Vérifier que la déclaration ciblée existe et est bien rattachée au `booking_id` de la réservation du voyageur authentifié.
   3. **Vérification de statut confirmable :** Vérifier que son statut est strictement `status == "declared"`. Si le dossier est sous statut `disputed`, `needs_review` ou `expired_unconfirmed`, la confirmation est refusée avec HTTP 409.
   4. **Contrôle de version courante :** Vérifier que `is_current == True`. Si le voyageur tente de confirmer une version antérieure déjà remplacée par une correction partenaire, le serveur rejette la requête avec HTTP 409 (`"Declaration version is superseded"`).
-  5. **Contrôle d'échéance :** Vérifier que `utcnow() <= confirmation_deadline` (délai de 72 h non échu). Si le délai est dépassé, la déclaration bascule en `expired_unconfirmed` et la confirmation est refusée avec HTTP 409.
+  5. **Contrôle d'échéance :** Vérifier que `utcnow() <= confirmation_deadline` (délai de 72 h non échu). Si le délai est dépassé, la confirmation est formellement refusée avec HTTP 409 (`"Confirmation deadline has expired"`).  
+     *Traitement du passage à `expired_unconfirmed` (à valider) :*  
+     Il est **strictement interdit** de compter sur une écriture en base qui serait implicitement annulée (rollback) par la levée d'une réponse d'erreur HTTP 409. Le passage à l'état `expired_unconfirmed` doit impérativement être garanti selon l'un des deux modes suivants :
+     - **Mode 1 (Tâche de fond périodique / worker asynchrone) [RECOMMANDÉ, à valider] :** Le passage en `expired_unconfirmed` est exécuté de manière décorrélée par une tâche de fond périodique dédiée, conçue exactement sur le modèle existant de `expire_overdue_requests` (`backend/app/services/booking_lifecycle.py:23-100`). Ce worker balaye les déclarations échues sous `status == "declared"`, positionne atomiquement `status = "expired_unconfirmed"` avec `expired_at = utcnow()`, émet les notifications associées et valide la transaction (`commit`). Dans ce schéma, l'endpoint HTTP vérifie simplement `utcnow() <= confirmation_deadline` et lève une exception 409 en lecture seule si le délai est dépassé, sans altérer l'état de la base lors de l'appel voyageur.
+     - **Mode 2 (Écriture validée explicitement avant la réponse 409) :** La transaction métier applique la mutation `status = "expired_unconfirmed"` sous verrou, valide explicitement l'écriture en base (`await db.commit()`), puis retourne la réponse d'erreur HTTP 409.
+     
+     *Choix de conception retenu :* Le **Mode 1 (Tâche de fond sur le modèle `expire_overdue_requests`, `backend/app/services/booking_lifecycle.py:23-100`)** est retenu comme recommandation nominale [à valider]. Il préserve l'idempotence des requêtes d'interrogation, évite tout effet de bord d'écriture non isolé en cas de requêtes concurrentes rejetées, et sépare nettement le traitement asynchrone des expirations de la réponse d'erreur synchrone aux clients.
 - **Contestation d'une version périmée :** Une tentative de contester une déclaration avec `is_current == False` renvoie également une HTTP 409 (`"Cannot dispute a superseded declaration"`).
 
 ### 12.13 Traitement d'anomalie `needs_review` et blocage de flux (D15)

@@ -481,16 +481,16 @@ Le passage effectif au développement logiciel ne pourra intervenir que lorsque 
 Cette section consigne la réaffectation des étapes et la résolution des dépendances suite aux arbitrages du 02/11/2026 :
 
 ### 11.1 Statut des dépendances et résolution des écarts E1 à E4
-- **D1 à D12 :** Formellement **TRANCHÉES** par le propriétaire du projet (renvoi exhaustif vers `docs/payment/PAYMENT_DECISIONS_V1.md:224-241`, Annexe C).
+- **D1 à D12 :** Formellement **TRANCHÉES** par le propriétaire du projet (renvoi exhaustif vers `docs/payment/PAYMENT_DECISIONS_V1.md:227-242`, Annexe C).
 - **Écarts E1 à E4 :** Entièrement **RÉSOLUS** par les arbitrages D1 à D12 :
   - **E1 (CLI V1a) :** Résolu par **D12** (lecture seule stricte en V1a ; aucune modification manuelle par CLI).
   - **E2 (Délai 72 h) :** Résolu par **D5** (statut `expired_unconfirmed`, pas de facturation automatique en V1a).
   - **E3 (Entité légale) :** Résolu par **D3** (entité unique algérienne, table de configuration `tenant_legal_entity_configs`).
   - **E4 (Admin tenant) :** Résolu par **D7** (exclusion stricte de l'administrateur de tenant de la faculté de déclarer).
-- **D13 à D16 :** Formellement intégrées comme décisions techniques du propriétaire (`docs/payment/PAYMENT_DECISIONS_V1.md:250-270`), assorties des points bloquants P1 à P4 avant développement.
+- **D13 à D16 :** Formellement intégrées comme décisions techniques du propriétaire (`docs/payment/PAYMENT_DECISIONS_V1.md:243-255`), assorties des points bloquants P1 à P4 avant développement.
 
 ### 11.2 Réaffectation des étapes techniques de la sous-livraison V1a
-1. **Étape 1.0-bis (Script CLI de provisionnement partenaire — NON FERME tant que P1 n'est pas décidé) :** Script distinct `app/provision_partner.py` créant `partner_profiles`, `partner_poi_assignments` et `commission_rules` sous contrôle d'un ticket et saisie masquée (modèle `backend/app/create_tenant.py:80-82`). Cette étape reste conditionnée à l'arbitrage du point bloquant P1 sur l'identification de l'opérateur.
+1. **Étape 1.0-bis (Script CLI de provisionnement partenaire — DÉCIDÉ SOUS RÉSERVE selon P1) :** Script distinct `app/provision_partner.py` créant `partner_profiles`, `partner_poi_assignments` et `commission_rules`. Le propriétaire étant la seule personne accédant au serveur sous Docker Compose, l'exécution est cadrée par P1 : compte SSH nominatif sur l'hôte (clé uniquement, ni root ni compte partagé) + `docker compose exec backend python -m app.provision_partner ...`. Saisie masquée obligatoire du numéro fiscal (`getpass.getpass`, modèle `backend/app/create_tenant.py:80-82`) ou fichier temporaire restrictif (`chmod 600`), référence de ticket obligatoire (`--ticket-ref`), et écriture dans `financial_audit_log` à chaque opération avec identité observée ou déclarée, non vérifiée par l'application (l'application n'authentifiant pas l'opérateur, sans protection contre un accès direct à PostgreSQL ; condition de révision : accès d'une seconde personne).
 2. **Étape 1.1 (Modèles et migration 0017) :** Modifiée selon D3. La table `legal_entities` est créée sans colonne `tenant_id` ; une table d'association `tenant_legal_entity_configs` (`tenant_id` UNIQUE -> `legal_entity_id`) gère le rattachement par tenant.
 3. **Étape 1.2-bis (Backfill de country_code et SLA 72h) :** Migration de données Alembic dédiée `0018_backfill_tenant_country_codes.py` (succédant à `0017_financial_foundation_entities.py`).
 4. **Étape 1.3 (Déclaration partenaire) :** Modifiée selon D4, D7, D11, D14, D15, D16. Migration Alembic `0019_service_declarations_receivables.py`. La dépendance de sécurité est `_require_declaring_partner` (excluant `is_admin == True`, exigeant une liaison active dans `POIManager` et `partner_poi_assignments`, refusant si `Booking.user_id` est gestionnaire du POI). Contrôle de cohérence de date à 7 jours calendaires (D15). Le plafond technique est fixé à **une seule correction** par réservation (`correction_count < 1`).

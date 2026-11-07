@@ -284,7 +284,7 @@ function HomeTab({
       {/* Greeting Banner */}
       <div className="bg-white rounded-2xl p-6 shadow-xs border border-gray-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-ink">
+          <h2 className="font-display text-2xl sm:text-3xl font-semibold text-ink">
             Bonjour, {firstName} 👋
           </h2>
           <p className="text-xs sm:text-sm text-ink-soft mt-1">

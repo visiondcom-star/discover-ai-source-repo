@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Loisirs : voilier en mer"><defs><clipPath id="clip"><rect width="120" height="120" rx="30"/></clipPath></defs><g clip-path="url(#clip)">
+            <defs><linearGradient id="gl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#73CBF0"/><stop offset="1" stop-color="#DDF4FF"/></linearGradient></defs>
+            <rect width="120" height="120" fill="url(#gl)"/>
+            <circle cx="24" cy="26" r="10" fill="#FFE08A"/>
+            <path d="M60 22v58H34z" fill="#FFFFFF"/>
+            <path d="M65 34v46h24z" fill="#FFC857"/>
+            <path d="M28 84h64l-10 14H40z" fill="#E0504A"/>
+            <path d="M0 100c15-6 25 6 40 0s25 6 40 0 25 6 40 0v20H0z" fill="#2F8FBF"/>
+          </g></svg>

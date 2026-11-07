@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Culture : médina blanche face à la mer"><defs><clipPath id="clip"><rect width="120" height="120" rx="30"/></clipPath></defs><g clip-path="url(#clip)">
+            <defs><linearGradient id="gc" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8FD0F2"/><stop offset="1" stop-color="#E6F6FF"/></linearGradient></defs>
+            <rect width="120" height="120" fill="url(#gc)"/>
+            <circle cx="96" cy="26" r="11" fill="#FFE08A"/>
+            <rect y="92" width="120" height="28" fill="#3E9FC6"/>
+            <rect x="14" y="62" width="38" height="32" fill="#FFFFFF"/>
+            <rect x="46" y="48" width="32" height="46" fill="#F6F1E6"/>
+            <rect x="74" y="66" width="32" height="28" fill="#FFFFFF"/>
+            <path d="M50 48a12 12 0 0124 0z" fill="#2F6FD0"/>
+            <path d="M54 94V78a8 8 0 0116 0v16z" fill="#2E7BA6"/>
+            <rect x="22" y="72" width="8" height="10" rx="4" fill="#2E7BA6"/>
+            <rect x="82" y="76" width="8" height="10" rx="4" fill="#2E7BA6"/>
+          </g></svg>

@@ -109,7 +109,7 @@ export function POICard({
           <Heart
             size={20}
             strokeWidth={1.75}
-            className="fill-white text-white"
+            className={favorite ? "fill-white text-white" : "fill-transparent text-white"}
           />
         </button>
 

@@ -158,18 +158,18 @@ export function AppShell({ onLogout }: { onLogout?: () => void }) {
 // 1. Écran d'Accueil (Screen 1 du Blueprint)
 // ----------------------------------------------------------------------------
 const TRAVEL_TYPES = [
-  { id: "culture", label: "Culture & Médinas", icon: Landmark, bg: "bg-amber-50 text-amber-900 border-amber-200/70" },
-  { id: "historical", label: "Histoire & Antiquité", icon: Castle, bg: "bg-yellow-50 text-yellow-900 border-yellow-200/70" },
-  { id: "nature", label: "Nature & Parcs", icon: Trees, bg: "bg-emerald-50 text-emerald-900 border-emerald-200/70" },
-  { id: "desert", label: "Sahara & Oasis", icon: Sun, bg: "bg-orange-50 text-orange-900 border-orange-200/70" },
-  { id: "adventure", label: "Aventure & Trekking", icon: Mountain, bg: "bg-stone-50 text-stone-900 border-stone-200/70" },
-  { id: "food", label: "Gastronomie & Terroir", icon: Utensils, bg: "bg-rose-50 text-rose-900 border-rose-200/70" },
-  { id: "beaches", label: "Plages & Littoral", icon: Palmtree, bg: "bg-sky-50 text-sky-900 border-sky-200/70" },
-  { id: "monuments", label: "Monuments & Sites", icon: Compass, bg: "bg-indigo-50 text-indigo-900 border-indigo-200/70" },
-  { id: "crafts", label: "Artisanat & Souks", icon: ShoppingBag, bg: "bg-purple-50 text-purple-900 border-purple-200/70" },
-  { id: "thermal", label: "Thermalisme & Eaux", icon: Waves, bg: "bg-teal-50 text-teal-900 border-teal-200/70" },
-  { id: "wellness", label: "Détente & Hammams", icon: Sparkles, bg: "bg-pink-50 text-pink-900 border-pink-200/70" },
-  { id: "more", label: "Toutes les activités", icon: PlusCircle, bg: "bg-gray-50 text-gray-900 border-gray-200/70" },
+  { id: "culture", label: "Culture & Médinas", icon: Landmark, bg: "bg-amber-50 text-amber-900 border-amber-200/70", svgSlug: "culture" },
+  { id: "historical", label: "Histoire & Antiquité", icon: Castle, bg: "bg-yellow-50 text-yellow-900 border-yellow-200/70", svgSlug: "history" },
+  { id: "nature", label: "Nature & Parcs", icon: Trees, bg: "bg-emerald-50 text-emerald-900 border-emerald-200/70", svgSlug: "nature" },
+  { id: "desert", label: "Sahara & Oasis", icon: Sun, bg: "bg-orange-50 text-orange-900 border-orange-200/70", svgSlug: "desert" },
+  { id: "adventure", label: "Aventure & Trekking", icon: Mountain, bg: "bg-stone-50 text-stone-900 border-stone-200/70", svgSlug: "adventure" },
+  { id: "food", label: "Gastronomie & Terroir", icon: Utensils, bg: "bg-rose-50 text-rose-900 border-rose-200/70", svgSlug: "food" },
+  { id: "beaches", label: "Plages & Littoral", icon: Palmtree, bg: "bg-sky-50 text-sky-900 border-sky-200/70", svgSlug: "beaches" },
+  { id: "monuments", label: "Monuments & Sites", icon: Compass, bg: "bg-indigo-50 text-indigo-900 border-indigo-200/70", svgSlug: "monuments" },
+  { id: "crafts", label: "Artisanat & Souks", icon: ShoppingBag, bg: "bg-purple-50 text-purple-900 border-purple-200/70", svgSlug: "crafts" },
+  { id: "thermal", label: "Thermalisme & Eaux", icon: Waves, bg: "bg-teal-50 text-teal-900 border-teal-200/70", svgSlug: "thermal" },
+  { id: "wellness", label: "Détente & Hammams", icon: Sparkles, bg: "bg-pink-50 text-pink-900 border-pink-200/70", svgSlug: "wellness" },
+  { id: "more", label: "Toutes les activités", icon: PlusCircle, bg: "bg-gray-50 text-gray-900 border-gray-200/70", svgSlug: undefined },
 ];
 
 const ICON_SUGGESTION_MAP: Record<string, LucideIcon> = {
@@ -252,17 +252,32 @@ function HomeTab({
 
   const displayTypes =
     categories.length > 0
-      ? categories.map((cat) => ({
-          id: cat.slug,
-          label: cat.label,
-          icon:
-            (cat.icon_suggestion && ICON_SUGGESTION_MAP[cat.icon_suggestion]) ||
-            Compass,
-          bg:
-            (cat.parent_family && FAMILY_BG_MAP[cat.parent_family]) ||
-            "bg-emerald-50 text-emerald-900 border-emerald-200/70",
-        }))
-      : TRAVEL_TYPES;
+      ? categories.map((cat) => {
+          const svgSlug = SVG_CATEGORY_SLUGS.has(cat.slug)
+            ? cat.slug
+            : cat.parent_family && SVG_CATEGORY_SLUGS.has(cat.parent_family)
+            ? cat.parent_family
+            : undefined;
+          return {
+            id: cat.slug,
+            label: cat.label,
+            icon:
+              (cat.icon_suggestion && ICON_SUGGESTION_MAP[cat.icon_suggestion]) ||
+              Compass,
+            bg:
+              (cat.parent_family && FAMILY_BG_MAP[cat.parent_family]) ||
+              "bg-emerald-50 text-emerald-900 border-emerald-200/70",
+            svgSlug,
+          };
+        })
+      : TRAVEL_TYPES.map((t) => ({
+          ...t,
+          svgSlug: SVG_CATEGORY_SLUGS.has(t.id)
+            ? t.id
+            : t.svgSlug !== undefined
+            ? t.svgSlug
+            : undefined,
+        }));
 
   return (
     <div className="space-y-6">
@@ -297,7 +312,7 @@ function HomeTab({
         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
           {displayTypes.map((type) => {
             const Icon = type.icon;
-            const hasSvg = SVG_CATEGORY_SLUGS.has(type.id);
+            const hasSvg = Boolean(type.svgSlug);
             return (
               <button
                 key={type.id}
@@ -307,7 +322,7 @@ function HomeTab({
                 <div className="w-[80px] h-[80px] rounded-[22px] bg-white/90 flex items-center justify-center mb-2 shadow-card group-hover:scale-105 transition-transform">
                   {hasSvg ? (
                     <img
-                      src={`/icons/categories/${type.id}.svg`}
+                      src={`/icons/categories/${type.svgSlug}.svg`}
                       alt=""
                       aria-hidden="true"
                       className="w-12 h-12 object-contain"

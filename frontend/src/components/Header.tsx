@@ -21,23 +21,23 @@ export function Header({ tenant }: { tenant: Tenant | null }) {
         <nav className="hidden md:flex items-center gap-2">
           <Link
             href="/pois"
-            className="px-4 py-2 rounded-full text-xs font-semibold text-ink-soft hover:text-brand hover:bg-brand-tint/50 transition"
+            className="px-4 py-2 rounded-full text-sm font-semibold text-ink-soft hover:text-brand hover:bg-brand-tint/50 transition"
           >
             Sites
           </Link>
           <Link
             href="/trips"
-            className="px-4 py-2 rounded-full text-xs font-semibold text-ink-soft hover:text-brand hover:bg-brand-tint/50 transition"
+            className="px-4 py-2 rounded-full text-sm font-semibold text-ink-soft hover:text-brand hover:bg-brand-tint/50 transition"
           >
             Voyages
           </Link>
           <Link
             href="/chat"
-            className="px-4 py-2 rounded-full text-xs font-semibold bg-brand text-white shadow-xs hover:bg-brand-dark transition"
+            className="px-4 py-2 rounded-full text-sm font-semibold text-ink-soft hover:text-brand hover:bg-brand-tint/50 transition"
           >
             Guide IA
           </Link>
-          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-ink-soft hover:text-brand border border-gray-200 ml-2">
+          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold text-ink-soft hover:text-brand border border-gray-200 ml-2">
             <Globe size={15} strokeWidth={1.75} />
             <span>FR</span>
           </button>
@@ -56,7 +56,7 @@ export function Header({ tenant }: { tenant: Tenant | null }) {
         <div className="md:hidden border-t border-gray-200/80 bg-white px-4 py-4 space-y-2">
           <Link href="/pois" className="block px-4 py-2 rounded-full text-sm font-semibold text-ink-soft hover:bg-brand-tint/50">Sites</Link>
           <Link href="/trips" className="block px-4 py-2 rounded-full text-sm font-semibold text-ink-soft hover:bg-brand-tint/50">Voyages</Link>
-          <Link href="/chat" className="block px-4 py-2 rounded-full text-sm font-semibold bg-brand text-white">Guide IA</Link>
+          <Link href="/chat" className="block px-4 py-2 rounded-full text-sm font-semibold text-ink-soft hover:bg-brand-tint/50">Guide IA</Link>
         </div>
       )}
     </header>

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Aventure : sommet et drapeau"><defs><clipPath id="clip"><rect width="120" height="120" rx="30"/></clipPath></defs><g clip-path="url(#clip)">
+            <defs><linearGradient id="ga" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFC48A"/><stop offset="1" stop-color="#FFF0DA"/></linearGradient></defs>
+            <rect width="120" height="120" fill="url(#ga)"/>
+            <circle cx="90" cy="30" r="11" fill="#FFF3C4"/>
+            <path d="M6 104L50 38l26 38 14-18 24 46z" fill="#D9763B"/>
+            <path d="M50 38l-10 16 10-5 9 7z" fill="#FFFFFF"/>
+            <path d="M50 38V20" stroke="#5E2F19" stroke-width="3" stroke-linecap="round"/>
+            <path d="M50 20h16l-5 5 5 5H50z" fill="#E63946"/>
+            <path d="M0 104h120v16H0z" fill="#9C4A22"/>
+          </g></svg>

@@ -59,7 +59,7 @@ export function POICard({
   return (
     <div
       onClick={() => onSelect?.(poi)}
-      className="group bg-white rounded-2xl border border-gray-100/80 overflow-hidden shadow-sm hover:shadow-card hover:-translate-y-1 transition-all duration-300 flex flex-col cursor-pointer"
+      className="group bg-white rounded-[28px] border border-gray-100/80 overflow-hidden shadow-card hover:-translate-y-1 transition-all duration-300 flex flex-col cursor-pointer"
     >
       {/* Image container */}
       <div className="relative h-48 w-full overflow-hidden bg-gray-100">
@@ -104,11 +104,12 @@ export function POICard({
             setFavorite(!favorite);
           }}
           aria-label="Ajouter aux favoris"
-          className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/80 hover:bg-white backdrop-blur-md flex items-center justify-center text-gray-700 hover:text-red-500 transition shadow-sm"
+          className="absolute top-3 right-3 w-[44px] h-[44px] rounded-[14px] bg-gradient-to-br from-[#FF7A8C] to-[#E63B52] shadow-sm flex items-center justify-center text-white hover:scale-105 active:scale-95 transition-all"
         >
           <Heart
-            size={16}
-            className={favorite ? "fill-red-500 text-red-500" : ""}
+            size={20}
+            strokeWidth={1.75}
+            className={favorite ? "fill-white text-white" : "fill-transparent text-white"}
           />
         </button>
 
@@ -135,7 +136,7 @@ export function POICard({
             </div>
           </div>
 
-          <h3 className="font-bold text-base text-ink mb-1 group-hover:text-brand transition-colors line-clamp-1">
+          <h3 className="font-display font-semibold text-base text-ink mb-1 group-hover:text-brand transition-colors line-clamp-1">
             {poi.name}
           </h3>
 

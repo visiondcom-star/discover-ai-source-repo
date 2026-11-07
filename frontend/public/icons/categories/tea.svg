@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Thé à la menthe : verre et plateau"><defs><clipPath id="clip"><rect width="120" height="120" rx="30"/></clipPath></defs><g clip-path="url(#clip)">
+            <defs><linearGradient id="gt" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F7A44E"/><stop offset="1" stop-color="#FFD98F"/></linearGradient></defs>
+            <rect width="120" height="120" fill="url(#gt)"/>
+            <ellipse cx="60" cy="92" rx="44" ry="10" fill="#C98A2B"/>
+            <ellipse cx="60" cy="90" rx="38" ry="7" fill="#E7B04E"/>
+            <path d="M44 42h32l-4 46H48z" fill="#D8F2DF" fill-opacity="0.9"/>
+            <path d="M46 56h28l-2 32H48z" fill="#7CC38C"/>
+            <path d="M76 52c10 0 10 20 0 20" stroke="#D8F2DF" stroke-width="4" fill="none" stroke-linecap="round"/>
+            <path d="M54 42c-8-6-4-14 2-14 0 6 4 8 4 14zM64 42c8-6 4-14-2-14 0 6-4 8-4 14z" fill="#2F8A4F"/>
+          </g></svg>

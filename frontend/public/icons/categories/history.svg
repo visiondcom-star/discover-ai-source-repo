@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Ruines romaines : colonnes"><defs><clipPath id="clip"><rect width="120" height="120" rx="30"/></clipPath></defs><g clip-path="url(#clip)">
+            <defs><linearGradient id="gr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F6E2B8"/><stop offset="1" stop-color="#FFF4DA"/></linearGradient></defs>
+            <rect width="120" height="120" fill="url(#gr)"/>
+            <rect y="96" width="120" height="24" fill="#D8B56F"/>
+            <rect x="20" y="44" width="16" height="52" fill="#EAD0A0"/>
+            <rect x="16" y="40" width="24" height="7" fill="#DDBE86"/>
+            <rect x="52" y="30" width="16" height="66" fill="#EAD0A0"/>
+            <rect x="48" y="26" width="24" height="7" fill="#DDBE86"/>
+            <rect x="84" y="58" width="16" height="38" fill="#EAD0A0"/>
+            <path d="M82 58h20l-4-6H86z" fill="#DDBE86"/>
+            <path d="M16 96h88" stroke="#C79D55" stroke-width="3"/>
+          </g></svg>

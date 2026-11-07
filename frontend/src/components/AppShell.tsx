@@ -158,18 +158,18 @@ export function AppShell({ onLogout }: { onLogout?: () => void }) {
 // 1. Écran d'Accueil (Screen 1 du Blueprint)
 // ----------------------------------------------------------------------------
 const TRAVEL_TYPES = [
-  { id: "culture", label: "Culture & Médinas", icon: Landmark, bg: "bg-amber-50 text-amber-900 border-amber-200/70" },
-  { id: "historical", label: "Histoire & Antiquité", icon: Castle, bg: "bg-yellow-50 text-yellow-900 border-yellow-200/70" },
-  { id: "nature", label: "Nature & Parcs", icon: Trees, bg: "bg-emerald-50 text-emerald-900 border-emerald-200/70" },
-  { id: "desert", label: "Sahara & Oasis", icon: Sun, bg: "bg-orange-50 text-orange-900 border-orange-200/70" },
-  { id: "adventure", label: "Aventure & Trekking", icon: Mountain, bg: "bg-stone-50 text-stone-900 border-stone-200/70" },
-  { id: "food", label: "Gastronomie & Terroir", icon: Utensils, bg: "bg-rose-50 text-rose-900 border-rose-200/70" },
-  { id: "beaches", label: "Plages & Littoral", icon: Palmtree, bg: "bg-sky-50 text-sky-900 border-sky-200/70" },
-  { id: "monuments", label: "Monuments & Sites", icon: Compass, bg: "bg-indigo-50 text-indigo-900 border-indigo-200/70" },
-  { id: "crafts", label: "Artisanat & Souks", icon: ShoppingBag, bg: "bg-purple-50 text-purple-900 border-purple-200/70" },
-  { id: "thermal", label: "Thermalisme & Eaux", icon: Waves, bg: "bg-teal-50 text-teal-900 border-teal-200/70" },
-  { id: "wellness", label: "Détente & Hammams", icon: Sparkles, bg: "bg-pink-50 text-pink-900 border-pink-200/70" },
-  { id: "more", label: "Toutes les activités", icon: PlusCircle, bg: "bg-gray-50 text-gray-900 border-gray-200/70" },
+  { id: "culture", label: "Culture & Médinas", icon: Landmark, bg: "bg-amber-50 text-amber-900 border-amber-200/70", svgSlug: "culture" },
+  { id: "historical", label: "Histoire & Antiquité", icon: Castle, bg: "bg-yellow-50 text-yellow-900 border-yellow-200/70", svgSlug: "history" },
+  { id: "nature", label: "Nature & Parcs", icon: Trees, bg: "bg-emerald-50 text-emerald-900 border-emerald-200/70", svgSlug: "nature" },
+  { id: "desert", label: "Sahara & Oasis", icon: Sun, bg: "bg-orange-50 text-orange-900 border-orange-200/70", svgSlug: "desert" },
+  { id: "adventure", label: "Aventure & Trekking", icon: Mountain, bg: "bg-stone-50 text-stone-900 border-stone-200/70", svgSlug: "adventure" },
+  { id: "food", label: "Gastronomie & Terroir", icon: Utensils, bg: "bg-rose-50 text-rose-900 border-rose-200/70", svgSlug: "food" },
+  { id: "beaches", label: "Plages & Littoral", icon: Palmtree, bg: "bg-sky-50 text-sky-900 border-sky-200/70", svgSlug: "beaches" },
+  { id: "monuments", label: "Monuments & Sites", icon: Compass, bg: "bg-indigo-50 text-indigo-900 border-indigo-200/70", svgSlug: "monuments" },
+  { id: "crafts", label: "Artisanat & Souks", icon: ShoppingBag, bg: "bg-purple-50 text-purple-900 border-purple-200/70", svgSlug: "crafts" },
+  { id: "thermal", label: "Thermalisme & Eaux", icon: Waves, bg: "bg-teal-50 text-teal-900 border-teal-200/70", svgSlug: "thermal" },
+  { id: "wellness", label: "Détente & Hammams", icon: Sparkles, bg: "bg-pink-50 text-pink-900 border-pink-200/70", svgSlug: "wellness" },
+  { id: "more", label: "Toutes les activités", icon: PlusCircle, bg: "bg-gray-50 text-gray-900 border-gray-200/70", svgSlug: undefined },
 ];
 
 const ICON_SUGGESTION_MAP: Record<string, LucideIcon> = {
@@ -200,6 +200,21 @@ const FAMILY_BG_MAP: Record<string, string> = {
   thermal: "bg-teal-50 text-teal-900 border-teal-200/70",
   wellness: "bg-pink-50 text-pink-900 border-pink-200/70",
 };
+
+const SVG_CATEGORY_SLUGS = new Set([
+  "culture",
+  "history",
+  "nature",
+  "desert",
+  "adventure",
+  "food",
+  "beaches",
+  "monuments",
+  "crafts",
+  "thermal",
+  "wellness",
+  "shopping",
+]);
 
 function formatExperience(exp: string): string {
   const map: Record<string, string> = {
@@ -237,24 +252,39 @@ function HomeTab({
 
   const displayTypes =
     categories.length > 0
-      ? categories.map((cat) => ({
-          id: cat.slug,
-          label: cat.label,
-          icon:
-            (cat.icon_suggestion && ICON_SUGGESTION_MAP[cat.icon_suggestion]) ||
-            Compass,
-          bg:
-            (cat.parent_family && FAMILY_BG_MAP[cat.parent_family]) ||
-            "bg-emerald-50 text-emerald-900 border-emerald-200/70",
-        }))
-      : TRAVEL_TYPES;
+      ? categories.map((cat) => {
+          const svgSlug = SVG_CATEGORY_SLUGS.has(cat.slug)
+            ? cat.slug
+            : cat.parent_family && SVG_CATEGORY_SLUGS.has(cat.parent_family)
+            ? cat.parent_family
+            : undefined;
+          return {
+            id: cat.slug,
+            label: cat.label,
+            icon:
+              (cat.icon_suggestion && ICON_SUGGESTION_MAP[cat.icon_suggestion]) ||
+              Compass,
+            bg:
+              (cat.parent_family && FAMILY_BG_MAP[cat.parent_family]) ||
+              "bg-emerald-50 text-emerald-900 border-emerald-200/70",
+            svgSlug,
+          };
+        })
+      : TRAVEL_TYPES.map((t) => ({
+          ...t,
+          svgSlug: SVG_CATEGORY_SLUGS.has(t.id)
+            ? t.id
+            : t.svgSlug !== undefined
+            ? t.svgSlug
+            : undefined,
+        }));
 
   return (
     <div className="space-y-6">
       {/* Greeting Banner */}
       <div className="bg-white rounded-2xl p-6 shadow-xs border border-gray-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-ink">
+          <h2 className="font-display text-2xl sm:text-3xl font-semibold text-ink">
             Bonjour, {firstName} 👋
           </h2>
           <p className="text-xs sm:text-sm text-ink-soft mt-1">
@@ -273,7 +303,7 @@ function HomeTab({
       {/* Grid of 12 Travel Types (Blueprint Screen 1) */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-base font-bold text-ink">
+          <h3 className="font-display text-base font-semibold text-ink">
             Sélectionnez votre type de séjour
           </h3>
           <span className="text-xs text-ink-soft">{displayTypes.length} catégories</span>
@@ -282,14 +312,24 @@ function HomeTab({
         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
           {displayTypes.map((type) => {
             const Icon = type.icon;
+            const hasSvg = Boolean(type.svgSlug);
             return (
               <button
                 key={type.id}
                 onClick={() => onSelectType(type.id)}
-                className={`flex flex-col items-center justify-center p-3 sm:p-4 rounded-2xl border ${type.bg} hover:shadow-card hover:-translate-y-0.5 transition-all duration-200 text-center group`}
+                className={`flex flex-col items-center justify-center p-3 sm:p-4 rounded-[22px] border ${type.bg} hover:shadow-card hover:-translate-y-0.5 transition-all duration-200 text-center group`}
               >
-                <div className="w-10 h-10 rounded-xl bg-white/90 flex items-center justify-center mb-2 shadow-xs group-hover:scale-110 transition-transform">
-                  <Icon size={20} />
+                <div className="w-[80px] h-[80px] rounded-[22px] bg-white/90 flex items-center justify-center mb-2 shadow-card group-hover:scale-105 transition-transform">
+                  {hasSvg ? (
+                    <img
+                      src={`/icons/categories/${type.svgSlug}.svg`}
+                      alt=""
+                      aria-hidden="true"
+                      className="w-12 h-12 object-contain"
+                    />
+                  ) : (
+                    <Icon size={24} strokeWidth={1.75} />
+                  )}
                 </div>
                 <span className="text-xs font-semibold">{type.label}</span>
               </button>

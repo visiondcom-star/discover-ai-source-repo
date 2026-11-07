@@ -8,34 +8,35 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        primary: 'var(--primary-color, #006233)',
+        primary: 'var(--primary-color, #0F4C3A)',
         secondary: 'var(--secondary-color, #FFFFFF)',
         brand: {
-          DEFAULT: '#006233',
-          dark: '#004D28',
+          DEFAULT: '#0F4C3A',
+          dark: '#063828',
           bright: '#1E8B52',
-          tint: '#E6F2EC',
+          tint: '#EAF3EE',
           50: '#F0F9F4',
           100: '#E1F3E9',
           500: '#1E8B52',
-          700: '#006233',
-          900: '#003B1E',
+          700: '#0F4C3A',
+          900: '#063828',
         },
         accent: {
           DEFAULT: '#F2A948',
           light: '#FDEED8',
           dark: '#D97706',
         },
-        canvas: '#F7F6F3',
+        canvas: '#FAF6EE',
         ink: {
-          DEFAULT: '#222222',
-          soft: '#6C757D',
+          DEFAULT: '#13221C',
+          soft: '#5A6B63',
           muted: '#9C9C9C',
         },
       },
       fontFamily: {
         sans: ['Poppins', 'system-ui', '-apple-system', 'sans-serif'],
         poppins: ['Poppins', 'sans-serif'],
+        display: ['Fraunces', 'Georgia', 'serif'],
       },
       boxShadow: {
         card: '0 4px 20px -2px rgba(0, 0, 0, 0.05)',

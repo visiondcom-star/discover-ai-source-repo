@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Plage : parasol"><defs><clipPath id="clip"><rect width="120" height="120" rx="30"/></clipPath></defs><g clip-path="url(#clip)">
+            <defs><linearGradient id="gp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7FD3F2"/><stop offset="1" stop-color="#E2F6FF"/></linearGradient></defs>
+            <rect width="120" height="120" fill="url(#gp)"/>
+            <rect y="70" width="120" height="22" fill="#38A6CF"/>
+            <path d="M0 94c30-10 70-10 120 0v26H0z" fill="#F6DDA3"/>
+            <path d="M62 40v62" stroke="#7A4A24" stroke-width="4" stroke-linecap="round"/>
+            <path d="M28 54a34 26 0 0168 0z" fill="#E0504A"/>
+            <path d="M46 54a16 26 0 0132 0z M62 54l-6-24h12z" fill="#FFFFFF" fill-opacity="0.9"/>
+            <circle cx="96" cy="26" r="9" fill="#FFE08A"/>
+          </g></svg>

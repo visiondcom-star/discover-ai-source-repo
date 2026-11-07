@@ -41,14 +41,6 @@ export function TripTimeline({ items }: { items: TripItem[] }) {
                   {item.notes && (
                     <p className="text-sm text-ink-soft mt-2 italic">{item.notes}</p>
                   )}
-                  <div className="mt-3">
-                    <button
-                      type="button"
-                      className="px-4 py-1.5 bg-brand-tint text-brand text-xs font-semibold rounded-full hover:bg-brand hover:text-white transition shadow-xs"
-                    >
-                      Voir détails
-                    </button>
-                  </div>
                 </div>
               </div>
             ))}

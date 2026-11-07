@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Shopping : tapis berbère"><defs><clipPath id="clip"><rect width="120" height="120" rx="30"/></clipPath></defs><g clip-path="url(#clip)">
+            <defs><linearGradient id="gs" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E8743B"/><stop offset="1" stop-color="#F6A04D"/></linearGradient></defs>
+            <rect width="120" height="120" fill="url(#gs)"/>
+            <rect x="22" y="22" width="76" height="76" rx="6" fill="#B5372C"/>
+            <rect x="28" y="28" width="64" height="64" rx="3" fill="none" stroke="#FFD58A" stroke-width="3"/>
+            <path d="M60 32l28 28-28 28-28-28z" fill="#F2A948"/>
+            <path d="M60 44l16 16-16 16-16-16z" fill="#2F6B8A"/>
+            <circle cx="60" cy="60" r="5" fill="#FFE9B8"/>
+            <path d="M22 98v8M34 98v8M46 98v8M58 98v8M70 98v8M82 98v8M94 98v8" stroke="#FFE9B8" stroke-width="3" stroke-linecap="round"/>
+          </g></svg>

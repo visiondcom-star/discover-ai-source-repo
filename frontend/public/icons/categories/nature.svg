@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Nature : montagnes et forêt"><defs><clipPath id="clip"><rect width="120" height="120" rx="30"/></clipPath></defs><g clip-path="url(#clip)">
+            <defs><linearGradient id="gn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#A6DCF0"/><stop offset="1" stop-color="#EAF7EE"/></linearGradient></defs>
+            <rect width="120" height="120" fill="url(#gn)"/>
+            <circle cx="92" cy="28" r="10" fill="#FFE9A8"/>
+            <path d="M0 92L36 40l24 34 20-24 40 44v26H0z" fill="#6FB48A"/>
+            <path d="M36 40l-9 13 9-4 8 6z" fill="#FFFFFF"/>
+            <path d="M0 104c30-14 60-6 120-12v28H0z" fill="#3F8F5D"/>
+            <path d="M28 108l10-26 10 26z M46 108l8-20 8 20z M84 110l10-24 10 24z" fill="#1F6B43"/>
+          </g></svg>

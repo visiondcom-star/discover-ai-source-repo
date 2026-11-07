@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Gastronomie : tajine"><defs><clipPath id="clip"><rect width="120" height="120" rx="30"/></clipPath></defs><g clip-path="url(#clip)">
+            <defs><linearGradient id="gg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F7A44E"/><stop offset="1" stop-color="#FFD98F"/></linearGradient></defs>
+            <rect width="120" height="120" fill="url(#gg)"/>
+            <ellipse cx="60" cy="96" rx="42" ry="9" fill="#B5502A"/>
+            <path d="M24 88h72l-6 12H30z" fill="#D9703A"/>
+            <path d="M34 88L54 42h12l20 46z" fill="#A5471F"/>
+            <path d="M44 88L58 52h4l14 36z" fill="#C0582A"/>
+            <circle cx="60" cy="38" r="6" fill="#7A3416"/>
+            <path d="M52 28c-3-5 3-8 0-13M68 28c-3-5 3-8 0-13" stroke="#FFFFFF" stroke-opacity="0.8" stroke-width="3" stroke-linecap="round" fill="none"/>
+          </g></svg>

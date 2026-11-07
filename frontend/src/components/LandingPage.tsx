@@ -84,13 +84,13 @@ export function LandingPage({ onLoginClick, onRegisterClick }: LandingPageProps)
         <div className="flex items-center gap-3">
           <button
             onClick={onLoginClick}
-            className="px-4 py-2 text-sm font-semibold text-brand hover:text-brand-dark transition"
+            className="px-5 py-2.5 text-sm font-semibold text-brand hover:text-brand-dark transition rounded-full"
           >
             Se connecter
           </button>
           <button
             onClick={onRegisterClick}
-            className="px-4 py-2 text-sm font-semibold bg-brand text-white rounded-xl hover:bg-brand-dark shadow-sm transition"
+            className="px-5 py-2.5 text-sm font-semibold bg-brand text-white rounded-full hover:bg-brand-dark shadow-sm transition"
           >
             Commencer
           </button>
@@ -112,7 +112,7 @@ export function LandingPage({ onLoginClick, onRegisterClick }: LandingPageProps)
               </div>
 
               {/* Blueprint title & subtitle */}
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-ink tracking-tight leading-[1.15] mb-6">
+              <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-semibold text-ink tracking-tight leading-[1.15] mb-6">
                 Votre voyage,{" "}
                 <span className="text-brand underline decoration-accent/60 decoration-wavy decoration-2">
                   réinventé par l&apos;IA
@@ -136,9 +136,9 @@ export function LandingPage({ onLoginClick, onRegisterClick }: LandingPageProps)
                   return (
                     <div
                       key={pill.label}
-                      className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-gray-200/80 shadow-xs text-xs font-medium text-ink"
+                      className="flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-gray-200/80 shadow-card text-xs font-medium text-ink"
                     >
-                      <Icon size={15} className="text-brand" />
+                      <Icon size={15} strokeWidth={1.75} className="text-brand" />
                       <span>{pill.label}</span>
                     </div>
                   );
@@ -146,8 +146,8 @@ export function LandingPage({ onLoginClick, onRegisterClick }: LandingPageProps)
               </div>
 
               {/* CTA Action Card (Preserves test: "Votre voyage commence ici", "Commencer l'aventure", "J'ai déjà un compte") */}
-              <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-gray-200/90 shadow-card p-6 sm:p-8 max-w-md mx-auto">
-                <h2 className="text-xl sm:text-2xl font-bold text-ink mb-2">
+              <div className="bg-white/95 backdrop-blur-md rounded-[28px] border border-gray-200/90 shadow-card p-6 sm:p-8 max-w-md mx-auto">
+                <h2 className="font-display text-xl sm:text-2xl font-semibold text-ink mb-2">
                   Votre voyage commence ici
                 </h2>
                 <p className="text-xs sm:text-sm text-ink-soft mb-6">
@@ -157,17 +157,18 @@ export function LandingPage({ onLoginClick, onRegisterClick }: LandingPageProps)
                 <div className="flex flex-col gap-3">
                   <button
                     onClick={onRegisterClick}
-                    className="w-full py-3.5 px-6 bg-brand text-white rounded-xl font-semibold hover:bg-brand-dark transition shadow-md flex items-center justify-center gap-2 group"
+                    className="w-full py-3.5 px-6 bg-brand text-white rounded-full font-semibold hover:bg-brand-dark transition shadow-card flex items-center justify-center gap-2 group min-h-[44px]"
                   >
                     <span>Commencer l&apos;aventure</span>
                     <ArrowRight
                       size={18}
+                      strokeWidth={1.75}
                       className="group-hover:translate-x-1 transition-transform"
                     />
                   </button>
                   <button
                     onClick={onLoginClick}
-                    className="w-full py-3.5 px-6 bg-brand-tint/60 text-brand rounded-xl font-semibold hover:bg-brand-tint transition border border-brand/20"
+                    className="w-full py-3.5 px-6 bg-brand-tint/60 text-brand rounded-full font-semibold hover:bg-brand-tint transition border border-brand/20 min-h-[44px]"
                   >
                     J&apos;ai déjà un compte
                   </button>
@@ -179,7 +180,7 @@ export function LandingPage({ onLoginClick, onRegisterClick }: LandingPageProps)
             <div className="mt-12">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-xl sm:text-2xl font-bold text-ink">
+                  <h3 className="font-display text-xl sm:text-2xl font-semibold text-ink">
                     Destinations à la une
                   </h3>
                   <p className="text-xs sm:text-sm text-ink-soft">
@@ -188,7 +189,7 @@ export function LandingPage({ onLoginClick, onRegisterClick }: LandingPageProps)
                 </div>
                 <button
                   onClick={onLoginClick}
-                  className="text-xs sm:text-sm font-semibold text-brand hover:underline flex items-center gap-1"
+                  className="text-xs sm:text-sm font-semibold text-brand hover:underline flex items-center gap-1 min-h-[44px]"
                 >
                   Tout explorer →
                 </button>
@@ -199,7 +200,7 @@ export function LandingPage({ onLoginClick, onRegisterClick }: LandingPageProps)
                   <div
                     key={dest.name}
                     onClick={onLoginClick}
-                    className="group bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-xs hover:shadow-card hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col"
+                    className="group bg-white rounded-[28px] border border-gray-100 overflow-hidden shadow-card hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col"
                   >
                     <div className="relative h-44 w-full overflow-hidden bg-gray-100">
                       <img
@@ -212,18 +213,18 @@ export function LandingPage({ onLoginClick, onRegisterClick }: LandingPageProps)
                         {dest.category}
                       </div>
                       <div className="absolute bottom-2 left-3 flex items-center gap-1 text-white text-xs font-medium drop-shadow-md">
-                        <MapPin size={13} className="text-accent" />
+                        <MapPin size={13} strokeWidth={1.75} className="text-accent" />
                         <span>{dest.city}</span>
                       </div>
                     </div>
                     <div className="p-4 flex-1 flex flex-col justify-between">
                       <div>
                         <div className="flex items-center gap-1 mb-1">
-                          <Star size={14} className="fill-accent text-accent" />
+                          <Star size={14} strokeWidth={1.75} className="fill-accent text-accent" />
                           <span className="text-xs font-bold text-ink">{dest.rating}</span>
                           <span className="text-xs text-ink-soft">({dest.reviews})</span>
                         </div>
-                        <h4 className="font-bold text-sm text-ink group-hover:text-brand transition-colors">
+                        <h4 className="font-display font-semibold text-sm text-ink group-hover:text-brand transition-colors">
                           {dest.name}
                         </h4>
                       </div>
@@ -285,13 +286,13 @@ export function LoginForm({ onSubmit, onBack, error, loading }: LoginFormProps) 
       {/* Decorative background circle */}
       <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-brand/5 blur-3xl -z-10 rounded-full" />
 
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-card border border-gray-100 p-8 sm:p-10">
+      <div className="w-full max-w-md bg-white rounded-[28px] shadow-card border border-gray-100 p-8 sm:p-10">
         {/* Brand logo header */}
         <div className="text-center mb-6">
           <div className="w-12 h-12 rounded-2xl bg-brand text-white mx-auto flex items-center justify-center font-bold text-2xl shadow-md mb-3">
             <span>D</span>
           </div>
-          <h2 className="text-2xl font-bold text-ink tracking-tight">Se connecter</h2>
+          <h2 className="font-display text-2xl font-semibold text-ink tracking-tight">Se connecter</h2>
           <p className="text-xs text-ink-soft mt-1">
             Accédez à votre espace Discover AI et vos voyages
           </p>
@@ -299,7 +300,7 @@ export function LoginForm({ onSubmit, onBack, error, loading }: LoginFormProps) 
 
         {/* Error banner preserving class .bg-red-50 for Playwright test */}
         {error && (
-          <div className="mb-5 p-3.5 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-medium flex items-center gap-2">
+          <div className="mb-5 p-3.5 bg-red-50 border border-red-200 text-red-700 rounded-2xl text-xs font-medium flex items-center gap-2">
             <span>{error}</span>
           </div>
         )}
@@ -315,7 +316,7 @@ export function LoginForm({ onSubmit, onBack, error, loading }: LoginFormProps) 
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full px-4 py-3 bg-canvas/50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-brand/30 focus:border-brand transition outline-hidden"
+              className="w-full px-4 py-3 bg-canvas/50 border border-gray-200 rounded-full text-sm focus:bg-white focus:ring-2 focus:ring-brand/30 focus:border-brand transition outline-hidden"
             />
           </div>
 
@@ -329,7 +330,7 @@ export function LoginForm({ onSubmit, onBack, error, loading }: LoginFormProps) 
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="w-full px-4 py-3 bg-canvas/50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-brand/30 focus:border-brand transition outline-hidden"
+              className="w-full px-4 py-3 bg-canvas/50 border border-gray-200 rounded-full text-sm focus:bg-white focus:ring-2 focus:ring-brand/30 focus:border-brand transition outline-hidden"
             />
           </div>
 
@@ -337,7 +338,7 @@ export function LoginForm({ onSubmit, onBack, error, loading }: LoginFormProps) 
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3.5 bg-brand text-white rounded-xl font-semibold hover:bg-brand-dark transition shadow-md disabled:opacity-50 text-sm flex items-center justify-center gap-2"
+              className="w-full py-3.5 bg-brand text-white rounded-full font-semibold hover:bg-brand-dark transition shadow-card disabled:opacity-50 text-sm flex items-center justify-center gap-2 min-h-[44px]"
             >
               {loading ? (
                 <>

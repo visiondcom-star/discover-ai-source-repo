@@ -112,7 +112,7 @@ export function LandingPage({ onLoginClick, onRegisterClick }: LandingPageProps)
               </div>
 
               {/* Blueprint title & subtitle */}
-              <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-semibold text-ink tracking-tight leading-[1.15] mb-6">
+              <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-semibold text-ink tracking-tight leading-[1.15] mb-6 [text-wrap:balance]">
                 Votre voyage,{" "}
                 <span className="text-brand underline decoration-accent/60 decoration-wavy decoration-2">
                   réinventé par l&apos;IA

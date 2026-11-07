@@ -201,6 +201,21 @@ const FAMILY_BG_MAP: Record<string, string> = {
   wellness: "bg-pink-50 text-pink-900 border-pink-200/70",
 };
 
+const SVG_CATEGORY_SLUGS = new Set([
+  "culture",
+  "history",
+  "nature",
+  "desert",
+  "adventure",
+  "food",
+  "beaches",
+  "monuments",
+  "crafts",
+  "thermal",
+  "wellness",
+  "shopping",
+]);
+
 function formatExperience(exp: string): string {
   const map: Record<string, string> = {
     visiter: "🏛️ Visiter",
@@ -273,7 +288,7 @@ function HomeTab({
       {/* Grid of 12 Travel Types (Blueprint Screen 1) */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-base font-bold text-ink">
+          <h3 className="font-display text-base font-semibold text-ink">
             Sélectionnez votre type de séjour
           </h3>
           <span className="text-xs text-ink-soft">{displayTypes.length} catégories</span>
@@ -282,14 +297,24 @@ function HomeTab({
         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
           {displayTypes.map((type) => {
             const Icon = type.icon;
+            const hasSvg = SVG_CATEGORY_SLUGS.has(type.id);
             return (
               <button
                 key={type.id}
                 onClick={() => onSelectType(type.id)}
-                className={`flex flex-col items-center justify-center p-3 sm:p-4 rounded-2xl border ${type.bg} hover:shadow-card hover:-translate-y-0.5 transition-all duration-200 text-center group`}
+                className={`flex flex-col items-center justify-center p-3 sm:p-4 rounded-[22px] border ${type.bg} hover:shadow-card hover:-translate-y-0.5 transition-all duration-200 text-center group`}
               >
-                <div className="w-10 h-10 rounded-xl bg-white/90 flex items-center justify-center mb-2 shadow-xs group-hover:scale-110 transition-transform">
-                  <Icon size={20} />
+                <div className="w-[80px] h-[80px] rounded-[22px] bg-white/90 flex items-center justify-center mb-2 shadow-card group-hover:scale-105 transition-transform">
+                  {hasSvg ? (
+                    <img
+                      src={`/icons/categories/${type.id}.svg`}
+                      alt=""
+                      aria-hidden="true"
+                      className="w-12 h-12 object-contain"
+                    />
+                  ) : (
+                    <Icon size={24} strokeWidth={1.75} />
+                  )}
                 </div>
                 <span className="text-xs font-semibold">{type.label}</span>
               </button>
